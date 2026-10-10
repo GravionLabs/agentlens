@@ -1,0 +1,134 @@
+{
+  "data": {
+    "report": {
+      "sessions": 2,
+      "first_event": "2026-07-15T04:00:01Z",
+      "last_event": "2026-10-02T09:00:30Z",
+      "requests_by_source": {
+        "claude-code": 3,
+        "copilot-cli": 1
+      },
+      "skills": [
+        {
+          "name": "demo",
+          "in_inventory": true,
+          "clients": [
+            "claude-code",
+            "opencode",
+            "copilot-cli",
+            "vscode-copilot"
+          ],
+          "invocations": 0,
+          "sessions": 0,
+          "projects": [],
+          "first_used": null,
+          "last_used": null,
+          "triggers": {
+            "model": 0,
+            "user": 0,
+            "nested": 0
+          },
+          "by_source": {},
+          "uses_by_day": {},
+          "load": {
+            "count": 0,
+            "measured": true
+          },
+          "unknown_loads": 0,
+          "carry": {
+            "requests": 0,
+            "tokens": 0,
+            "cache_read_tokens": 0,
+            "uncached_tokens": 0
+          },
+          "follow_on": {
+            "requests": 0,
+            "input": 0,
+            "output": 0,
+            "cache_read": 0,
+            "cache_write": 0
+          },
+          "attributed": {
+            "requests": 0,
+            "input": 0,
+            "output": 0,
+            "cache_read": 0,
+            "cache_write": 0
+          },
+          "baseline": {
+            "requests": 4,
+            "tokens": {
+              "count": 24,
+              "measured": false
+            }
+          }
+        },
+        {
+          "name": "demo-skill",
+          "in_inventory": false,
+          "clients": [],
+          "invocations": 1,
+          "sessions": 1,
+          "projects": [
+            "/work/demo"
+          ],
+          "first_used": "2026-07-15T04:00:05Z",
+          "last_used": "2026-07-15T04:00:05Z",
+          "triggers": {
+            "model": 1,
+            "user": 0,
+            "nested": 0
+          },
+          "by_source": {
+            "copilot-cli": 1
+          },
+          "uses_by_day": {
+            "2026-07-15": 1
+          },
+          "load": {
+            "count": 3,
+            "measured": false
+          },
+          "unknown_loads": 0,
+          "carry": {
+            "requests": 0,
+            "tokens": 0,
+            "cache_read_tokens": 0,
+            "uncached_tokens": 0
+          },
+          "follow_on": {
+            "requests": 0,
+            "input": 0,
+            "output": 0,
+            "cache_read": 0,
+            "cache_write": 0
+          },
+          "attributed": {
+            "requests": 0,
+            "input": 0,
+            "output": 0,
+            "cache_read": 0,
+            "cache_write": 0
+          },
+          "baseline": {
+            "requests": 0,
+            "tokens": {
+              "count": 0,
+              "measured": false
+            }
+          }
+        }
+      ],
+      "ignored_commands": [
+        {
+          "name": "typed-skill",
+          "count": 1
+        }
+      ]
+    },
+    "installed_skills": 1,
+    "duplicates": []
+  },
+  "warnings": 2,
+  "errors": []
+}

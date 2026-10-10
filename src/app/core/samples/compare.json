@@ -1,0 +1,38 @@
+{
+  "data": {
+    "sources": [
+      {
+        "source": "claude-code",
+        "sessions": 1,
+        "requests": 3,
+        "input_tokens": 2890,
+        "output_tokens": 15,
+        "cache_hit_rate": 0.3460207612456747,
+        "tool_calls": 0,
+        "tool_errors": 0,
+        "tool_error_rate": null,
+        "skill_invocations": 0,
+        "skill_overhead_tokens": 18,
+        "total_duration_ms": 30000,
+        "mean_session_ms": 30000
+      },
+      {
+        "source": "copilot-cli",
+        "sessions": 1,
+        "requests": 1,
+        "input_tokens": 99999,
+        "output_tokens": 9999,
+        "cache_hit_rate": null,
+        "tool_calls": 2,
+        "tool_errors": 1,
+        "tool_error_rate": 0.5,
+        "skill_invocations": 2,
+        "skill_overhead_tokens": 9,
+        "total_duration_ms": 9000,
+        "mean_session_ms": 9000
+      }
+    ]
+  },
+  "warnings": 2,
+  "errors": []
+}

@@ -1,0 +1,23 @@
+{
+  "data": {
+    "sessions": 1,
+    "items": [
+      {
+        "kind": "skill",
+        "name": "demo",
+        "project": null,
+        "clients": [
+          "claude-code",
+          "opencode",
+          "copilot-cli",
+          "vscode-copilot"
+        ],
+        "uses": 0,
+        "requests": 3,
+        "overhead_tokens": 18
+      }
+    ]
+  },
+  "warnings": 0,
+  "errors": []
+}

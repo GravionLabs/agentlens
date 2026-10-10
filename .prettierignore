@@ -12,3 +12,4 @@ docs
 *.md
 .github
 LICENSE
+src/app/core/samples
