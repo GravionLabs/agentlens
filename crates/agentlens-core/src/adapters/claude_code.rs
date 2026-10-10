@@ -88,14 +88,68 @@ impl Adapter for ClaudeCodeAdapter {
             Err(e) => return Box::new(std::iter::once(Err(e))),
         };
         Box::new(
-            files
+            dedupe(parse_all(&files))
                 .into_iter()
-                .filter_map(|f| match parse_session(&f.path, &f.subagents) {
-                    Ok(se) if se.events.is_empty() && se.warnings.is_empty() => None,
-                    other => Some(other),
-                }),
+                .filter(|r| !matches!(r, Ok(se) if se.events.is_empty() && se.warnings.is_empty())),
         )
     }
+}
+
+/// The same session can sit under two project directories (a moved or renamed
+/// project, a resumed session). It is one session: the copy with the most events
+/// is kept (the first one on a tie).
+fn dedupe(
+    results: Vec<Result<SessionEvents, AdapterError>>,
+) -> Vec<Result<SessionEvents, AdapterError>> {
+    let mut best: HashMap<String, (usize, usize)> = HashMap::new();
+    for (i, r) in results.iter().enumerate() {
+        if let Ok(se) = r {
+            let events = se.events.len();
+            let entry = best.entry(se.session.id.clone()).or_insert((i, events));
+            if events > entry.1 {
+                *entry = (i, events);
+            }
+        }
+    }
+    results
+        .into_iter()
+        .enumerate()
+        .filter(|(i, r)| match r {
+            Ok(se) => best[&se.session.id].0 == *i,
+            Err(_) => true,
+        })
+        .map(|(_, r)| r)
+        .collect()
+}
+
+/// Parses the session files on all cores; the order of `files` is kept.
+fn parse_all(files: &[SessionFile]) -> Vec<Result<SessionEvents, AdapterError>> {
+    let workers = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .min(files.len().max(1));
+    if workers <= 1 {
+        return files
+            .iter()
+            .map(|f| parse_session(&f.path, &f.subagents))
+            .collect();
+    }
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let mut slots: Vec<Option<Result<SessionEvents, AdapterError>>> =
+        (0..files.len()).map(|_| None).collect();
+    let results = std::sync::Mutex::new(&mut slots);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some(f) = files.get(i) else { break };
+                    let parsed = parse_session(&f.path, &f.subagents);
+                    results.lock().expect("results lock")[i] = Some(parsed);
+                }
+            });
+        }
+    });
+    slots.into_iter().flatten().collect()
 }
 
 struct SessionFile {
