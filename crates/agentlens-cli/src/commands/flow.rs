@@ -1,5 +1,7 @@
 use agentlens_core::adapter::{Registry, SessionFilter};
-use agentlens_core::analyzers::flow::{RetryLoop, SessionGrowth, ToolErrors};
+use agentlens_core::analyzers::flow::{
+    HookStats, HooksReport, RetryLoop, SessionGrowth, ToolErrors,
+};
 use agentlens_core::env::Env;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::{FlowRun, flow_run};
@@ -151,6 +153,105 @@ fn errors_table(tools: &[ToolErrors], loops: &[RetryLoop], top: usize) {
     }
 }
 
+fn seconds(ms: u64) -> String {
+    format!("{:.1}", ms as f64 / 1000.0)
+}
+
+fn hooks_table(r: &HooksReport, top: usize) {
+    println!("Hooks and permission prompts");
+    if !r.hooks.is_empty() {
+        let rows = r
+            .hooks
+            .iter()
+            .take(shown(top, r.hooks.len()))
+            .map(|h| {
+                vec![
+                    h.source.id().to_owned(),
+                    h.hook.clone(),
+                    output::number(h.runs),
+                    output::number(h.failures),
+                    output::number(h.unknown),
+                    seconds(h.total_ms),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            output::table(
+                &[
+                    "source",
+                    "hook",
+                    "runs",
+                    "failures",
+                    "no outcome",
+                    "runtime (s)"
+                ],
+                rows,
+                2
+            )
+        );
+        more(top, r.hooks.len());
+    }
+    if !r.permissions.is_empty() {
+        let rows = r
+            .permissions
+            .iter()
+            .map(|p| {
+                vec![
+                    p.source.id().to_owned(),
+                    output::number(p.prompts),
+                    output::number(p.answered),
+                    seconds(p.total_wait_ms),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            output::table(
+                &["source", "permission prompts", "answered", "wait (s)"],
+                rows,
+                1
+            )
+        );
+    }
+    if !r.permissions.is_empty() {
+        println!(
+            "Permission wait is the time until the answer, including the time the user was away."
+        );
+    }
+    for (source, n) in &r.unavailable {
+        println!(
+            "{}: not available, the client records neither hooks nor permission prompts ({n} sessions).",
+            source.id()
+        );
+    }
+}
+
+fn hooks_csv(hooks: &[HookStats]) -> Result<String> {
+    let header = [
+        "source",
+        "hook",
+        "runs",
+        "failures",
+        "no_outcome",
+        "total_ms",
+    ];
+    let rows = hooks
+        .iter()
+        .map(|h| {
+            vec![
+                h.source.id().to_owned(),
+                h.hook.clone(),
+                h.runs.to_string(),
+                h.failures.to_string(),
+                h.unknown.to_string(),
+                h.total_ms.to_string(),
+            ]
+        })
+        .collect();
+    output::csv(&header, rows)
+}
+
 fn growth_csv(growth: &[SessionGrowth]) -> Result<String> {
     let header = [
         "source",
@@ -225,7 +326,7 @@ pub fn run(
     format: Format,
 ) -> Result<()> {
     if format == Format::Csv && section == FlowSection::All {
-        bail!("--format csv holds one table; choose it with --section growth|errors");
+        bail!("--format csv holds one table; choose it with --section growth|errors|hooks");
     }
     let run: FlowRun = flow_run(registry, env, filter, only);
     let want = |s: FlowSection| section == FlowSection::All || section == s;
@@ -239,11 +340,15 @@ pub fn run(
             if want(FlowSection::Errors) {
                 v.insert("errors".into(), json!(run.tool_errors));
             }
+            if want(FlowSection::Hooks) {
+                v.insert("hooks".into(), json!(run.hooks));
+            }
             println!("{}", serde_json::to_string_pretty(&v)?);
         }
         Format::Csv => match section {
             FlowSection::Growth => print!("{}", growth_csv(&run.growth.sessions)?),
-            _ => print!("{}", errors_csv(&run.tool_errors.tools)?),
+            FlowSection::Errors => print!("{}", errors_csv(&run.tool_errors.tools)?),
+            _ => print!("{}", hooks_csv(&run.hooks.hooks)?),
         },
         Format::Table => {
             if want(FlowSection::Growth) {
@@ -254,6 +359,12 @@ pub fn run(
             }
             if want(FlowSection::Errors) {
                 errors_table(&run.tool_errors.tools, &run.tool_errors.loops, top);
+            }
+            if want(FlowSection::All) {
+                println!();
+            }
+            if want(FlowSection::Hooks) {
+                hooks_table(&run.hooks, top);
             }
         }
     }

@@ -43,7 +43,7 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = ContextView::All)]
         kind: ContextView,
     },
-    /// Show how sessions unfold: context growth, compactions, tool errors
+    /// Show how sessions unfold: context growth, compactions, tool errors, hooks
     Flow {
         /// Which section to show
         #[arg(long, value_enum, default_value_t = FlowSection::All)]
@@ -84,6 +84,7 @@ pub enum FlowSection {
     All,
     Growth,
     Errors,
+    Hooks,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]

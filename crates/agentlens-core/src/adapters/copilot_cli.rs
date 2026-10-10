@@ -16,8 +16,8 @@ use serde_json::Value;
 use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
 use crate::env::Env;
 use crate::model::{
-    EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger, Source, ToolCall, ToolStatus,
-    Usage, Warning,
+    EventKind, Hook, PermissionPrompt, Session, SessionEvents, SkillInvoked, SkillTrigger, Source,
+    ToolCall, ToolStatus, Usage, Warning,
 };
 
 pub struct CopilotCliAdapter;
@@ -38,10 +38,6 @@ const IGNORED: &[&str] = &[
     "assistant.message",
     "assistant.turn_end",
     "assistant.turn_start",
-    "hook.end",
-    "hook.start",
-    "permission.completed",
-    "permission.requested",
     "session.context_changed",
     "session.error",
     "session.info",
@@ -268,6 +264,8 @@ fn parse_session(
     let file = File::open(path).map_err(io)?;
     let mut se = SessionEvents::new(Session::new(id, Source::CopilotCli));
     let mut pending: HashMap<String, (usize, Option<Timestamp>)> = HashMap::new();
+    let mut hooks: HashMap<String, (usize, Option<Timestamp>)> = HashMap::new();
+    let mut prompts: HashMap<String, (usize, Option<Timestamp>)> = HashMap::new();
     let mut unknown: BTreeMap<String, u64> = BTreeMap::new();
     let mut shutdowns: Vec<(Option<Timestamp>, Vec<Usage>)> = Vec::new();
     let mut first: Option<Timestamp> = None;
@@ -351,6 +349,45 @@ fn parse_session(
                     };
                 }
             }
+            "hook.start" => {
+                let idx = se.events.len();
+                let hook = Hook {
+                    kind: str_of(data, "hookType").unwrap_or("unknown").to_owned(),
+                    success: None,
+                    duration_ms: None,
+                };
+                se.push(at, EventKind::Hook(hook));
+                if let Some(id) = str_of(data, "hookInvocationId") {
+                    hooks.insert(id.to_owned(), (idx, at));
+                }
+            }
+            "hook.end" => {
+                if let Some(id) = str_of(data, "hookInvocationId")
+                    && let Some((idx, started)) = hooks.remove(id)
+                    && let EventKind::Hook(h) = &mut se.events[idx].kind
+                {
+                    h.success = data.get("success").and_then(Value::as_bool);
+                    h.duration_ms = elapsed_ms(started, at);
+                }
+            }
+            "permission.requested" => {
+                let idx = se.events.len();
+                se.push(
+                    at,
+                    EventKind::PermissionPrompt(PermissionPrompt { wait_ms: None }),
+                );
+                if let Some(id) = str_of(data, "requestId") {
+                    prompts.insert(id.to_owned(), (idx, at));
+                }
+            }
+            "permission.completed" => {
+                if let Some(id) = str_of(data, "requestId")
+                    && let Some((idx, started)) = prompts.remove(id)
+                    && let EventKind::PermissionPrompt(p) = &mut se.events[idx].kind
+                {
+                    p.wait_ms = elapsed_ms(started, at);
+                }
+            }
             "session.compaction_complete" => se.push(at, EventKind::Compaction),
             "session.model_change" => {
                 model = str_of(data, "newModel").map(str::to_owned).or(model);
@@ -394,6 +431,11 @@ fn parse_session(
     se.session.started_at = first;
     se.session.ended_at = last;
     Ok(se)
+}
+
+fn elapsed_ms(start: Option<Timestamp>, end: Option<Timestamp>) -> Option<u64> {
+    let (s, e) = (start?, end?);
+    u64::try_from(e.as_millisecond() - s.as_millisecond()).ok()
 }
 
 /// One usage record per model from the `session.shutdown` metrics.

@@ -417,3 +417,58 @@ fn flow_csv_needs_a_section() {
         .failure()
         .stderr(predicate::str::contains("--section"));
 }
+
+#[test]
+fn flow_hooks_section_sums_runtime_and_lists_sources_without_data() {
+    let home = home();
+    let dir = home.path().join(".copilot/session-state/cp-1");
+    fs::create_dir_all(&dir).unwrap();
+    fs::copy(
+        fixtures().join("../copilot_cli/with_store.jsonl"),
+        dir.join("events.jsonl"),
+    )
+    .unwrap();
+    let v = json(agentlens(&home).args(["flow", "--section", "hooks", "--format", "json"]));
+    let hooks = v["hooks"]["hooks"].as_array().unwrap();
+    let post = hooks.iter().find(|h| h["hook"] == "postToolUse").unwrap();
+    assert_eq!(
+        (
+            post["runs"].as_u64(),
+            post["unknown"].as_u64(),
+            post["total_ms"].as_u64()
+        ),
+        (Some(2), Some(1), Some(250))
+    );
+    let pre = hooks.iter().find(|h| h["hook"] == "preToolUse").unwrap();
+    assert_eq!(
+        (pre["failures"].as_u64(), pre["total_ms"].as_u64()),
+        (Some(1), Some(500))
+    );
+    let perms = &v["hooks"]["permissions"][0];
+    assert_eq!(
+        (
+            perms["prompts"].as_u64(),
+            perms["answered"].as_u64(),
+            perms["total_wait_ms"].as_u64()
+        ),
+        (Some(2), Some(1), Some(1500))
+    );
+    assert_eq!(v["hooks"]["unavailable"]["claude-code"], 2);
+    agentlens(&home)
+        .args(["flow", "--section", "hooks"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("claude-code: not available"));
+    let csv = agentlens(&home)
+        .args(["flow", "--section", "hooks", "--format", "csv"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(
+        String::from_utf8(csv)
+            .unwrap()
+            .contains("copilot-cli,preToolUse,1,1,0,500")
+    );
+}

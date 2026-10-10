@@ -233,3 +233,53 @@ fn store_with_an_unknown_schema_falls_back_with_a_warning() {
             .any(|w| w.message.contains("unsupported session-store schema"))
     );
 }
+
+#[test]
+fn hooks_and_permission_prompts_are_paired_without_their_content() {
+    use agentlens_core::model::{Hook, PermissionPrompt};
+    let se = session(&home(false), "cp-1");
+    let hooks: Vec<&Hook> = se
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::Hook(h) => Some(h),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(hooks.len(), 3);
+    assert_eq!(
+        (
+            hooks[0].kind.as_str(),
+            hooks[0].success,
+            hooks[0].duration_ms
+        ),
+        ("postToolUse", Some(true), Some(250))
+    );
+    assert_eq!(
+        (hooks[1].success, hooks[1].duration_ms),
+        (Some(false), Some(500))
+    );
+    assert_eq!(
+        (hooks[2].success, hooks[2].duration_ms),
+        (None, None),
+        "unpaired start is kept"
+    );
+    let prompts: Vec<&PermissionPrompt> = se
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::PermissionPrompt(p) => Some(p),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(prompts.len(), 2);
+    assert_eq!(prompts[0].wait_ms, Some(1500));
+    assert_eq!(prompts[1].wait_ms, None);
+    assert!(!serde_json::to_string(&se).unwrap().contains("never kept"));
+    // Hook and permission events are known types, so they raise no warning.
+    assert!(
+        !se.warnings
+            .iter()
+            .any(|w| w.message.contains("hook") || w.message.contains("permission"))
+    );
+}

@@ -143,6 +143,27 @@ pub enum EventKind {
     Compaction,
     /// Static content the client put into the context (not conversation).
     ContextItem(ContextItem),
+    /// A hook the client ran.
+    Hook(Hook),
+    /// The client asked the user for permission.
+    PermissionPrompt(PermissionPrompt),
+}
+
+/// A hook run. Only the type and outcome are kept, never its input or command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hook {
+    /// The hook type as the client names it, e.g. `postToolUse`.
+    pub kind: String,
+    /// `None` if the run never reported an outcome.
+    pub success: Option<bool>,
+    pub duration_ms: Option<u64>,
+}
+
+/// A permission prompt and how long the user took to answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PermissionPrompt {
+    /// `None` if the prompt was never answered in the recorded session.
+    pub wait_ms: Option<u64>,
 }
 
 /// What kind of static content a [`ContextItem`] is.
