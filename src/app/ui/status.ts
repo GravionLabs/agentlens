@@ -7,7 +7,9 @@ import { messageOf } from "../core/analysis";
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading()) {
-      <p class="status" role="status">Reading sessions…</p>
+      <p class="status" role="status">
+        <span class="spinner" aria-hidden="true"></span>Reading sessions…
+      </p>
     }
     @if (failure(); as message) {
       <p class="status error" role="alert">{{ message }}</p>
@@ -21,8 +23,29 @@ import { messageOf } from "../core/analysis";
   `,
   styles: `
     .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       margin: 8px 0;
       color: var(--muted);
+    }
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--line);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .spinner {
+        animation-duration: 3s;
+      }
     }
     .error {
       color: var(--bad);

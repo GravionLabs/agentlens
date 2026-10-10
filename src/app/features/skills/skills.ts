@@ -72,8 +72,9 @@ function attributedTokens(s: SkillStats): number {
     .check {
       display: inline-flex;
       gap: 6px;
-      margin: 4px 0 8px;
+      margin: 4px 16px 8px 0;
       color: var(--muted);
+      align-items: center;
     }
     .est {
       color: var(--warn);
