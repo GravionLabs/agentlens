@@ -1,0 +1,539 @@
+//! Claude Code: `<config dir>/projects/<slug>/<session>.jsonl`, plus subagent
+//! transcripts in `<slug>/<session>/subagents/*.jsonl`.
+//!
+//! The format is not documented; the parser only relies on a handful of fields
+//! and skips everything it does not understand.
+
+use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
+
+use jiff::Timestamp;
+use serde_json::Value;
+
+use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
+use crate::env::Env;
+use crate::model::{
+    Event, EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger, Source, ToolCall,
+    ToolStatus, Usage, Warning,
+};
+
+/// Slash commands that control the client itself and never load a skill.
+const BUILTIN_COMMANDS: &[&str] = &[
+    "add-dir",
+    "agents",
+    "bug",
+    "clear",
+    "compact",
+    "config",
+    "context",
+    "cost",
+    "doctor",
+    "exit",
+    "export",
+    "help",
+    "hooks",
+    "ide",
+    "install-github-app",
+    "login",
+    "logout",
+    "mcp",
+    "memory",
+    "model",
+    "output-style",
+    "permissions",
+    "plan",
+    "privacy-settings",
+    "quit",
+    "release-notes",
+    "resume",
+    "rewind",
+    "status",
+    "statusline",
+    "terminal-setup",
+    "todos",
+    "upgrade",
+    "usage",
+    "vim",
+    "web-setup",
+];
+
+pub struct ClaudeCodeAdapter;
+
+fn projects_dir(env: &Env) -> PathBuf {
+    env.var("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| env.home().join(".claude"))
+        .join("projects")
+}
+
+impl Adapter for ClaudeCodeAdapter {
+    fn id(&self) -> Source {
+        Source::ClaudeCode
+    }
+
+    fn detect(&self, env: &Env) -> Detection {
+        let dir = projects_dir(env);
+        if dir.is_dir() {
+            Detection::found(vec![dir])
+        } else {
+            Detection::not_found(format!("{} does not exist", dir.display()))
+        }
+    }
+
+    fn sessions<'a>(&'a self, env: &'a Env, filter: &'a SessionFilter) -> SessionIter<'a> {
+        let files = match discover(&projects_dir(env), filter) {
+            Ok(files) => files,
+            Err(e) => return Box::new(std::iter::once(Err(e))),
+        };
+        Box::new(
+            files
+                .into_iter()
+                .filter_map(|f| match parse_session(&f.path, &f.subagents) {
+                    Ok(se) if se.events.is_empty() && se.warnings.is_empty() => None,
+                    other => Some(other),
+                }),
+        )
+    }
+}
+
+struct SessionFile {
+    path: PathBuf,
+    subagents: Vec<PathBuf>,
+}
+
+fn io_err(path: &Path, source: std::io::Error) -> AdapterError {
+    AdapterError::Io {
+        path: path.to_path_buf(),
+        source,
+    }
+}
+
+fn jsonl_files(dir: &Path) -> Vec<PathBuf> {
+    let Ok(rd) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut files: Vec<PathBuf> = rd
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "jsonl"))
+        .collect();
+    files.sort();
+    files
+}
+
+fn discover(projects: &Path, filter: &SessionFilter) -> Result<Vec<SessionFile>, AdapterError> {
+    let mut slugs: Vec<PathBuf> = fs::read_dir(projects)
+        .map_err(|e| io_err(projects, e))?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+    slugs.sort();
+    let mut out = Vec::new();
+    for slug in slugs {
+        for path in jsonl_files(&slug) {
+            if untouched_since(&path, filter.since) {
+                continue;
+            }
+            let stem = path.file_stem().map(PathBuf::from).unwrap_or_default();
+            let subagents = jsonl_files(&slug.join(stem).join("subagents"));
+            out.push(SessionFile { path, subagents });
+        }
+    }
+    Ok(out)
+}
+
+/// A file last modified before `since` cannot contain newer events.
+fn untouched_since(path: &Path, since: Option<Timestamp>) -> bool {
+    let Some(since) = since else { return false };
+    fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| Timestamp::try_from(t).ok())
+        .is_some_and(|modified| modified < since)
+}
+
+#[derive(Default)]
+struct Meta {
+    cwd: Option<String>,
+    branch: Option<String>,
+    model: Option<String>,
+    first: Option<Timestamp>,
+    last: Option<Timestamp>,
+}
+
+impl Meta {
+    fn seen_at(&mut self, ts: Timestamp) {
+        self.first = Some(self.first.map_or(ts, |f| f.min(ts)));
+        self.last = Some(self.last.map_or(ts, |l| l.max(ts)));
+    }
+}
+
+/// Reads one session: the main transcript and its subagent transcripts.
+pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents, AdapterError> {
+    let id = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut warnings = Vec::new();
+    let mut meta = Meta::default();
+    let mut events = Vec::new();
+    parse_file(path, false, &mut events, &mut warnings, &mut meta)?;
+    for sub in subagents {
+        let mut sub_events = Vec::new();
+        match parse_file(sub, true, &mut sub_events, &mut warnings, &mut meta) {
+            Ok(()) => events.append(&mut sub_events),
+            Err(e) => warnings.push(Warning::new(e.to_string())),
+        }
+    }
+    // Interleave subagent events by time, but only if that is well defined.
+    if !subagents.is_empty() && events.iter().all(|e| e.at.is_some()) {
+        events.sort_by_key(|e| e.at);
+    }
+    let mut session = Session::new(id, Source::ClaudeCode);
+    session.project_dir = meta.cwd.map(PathBuf::from);
+    session.branch = meta.branch;
+    session.model = meta.model;
+    session.started_at = meta.first;
+    session.ended_at = meta.last;
+    Ok(SessionEvents {
+        session,
+        events,
+        warnings,
+    })
+}
+
+struct Parser<'a> {
+    file: String,
+    force_subagent: bool,
+    events: &'a mut Vec<Event>,
+    warnings: &'a mut Vec<Warning>,
+    meta: &'a mut Meta,
+    /// `message.id:requestId` -> index of its `Usage` event.
+    usage_idx: HashMap<String, usize>,
+    /// `tool_use` id -> (index of its `ToolCall`, start time).
+    tool_idx: HashMap<String, (usize, Option<Timestamp>)>,
+    /// `tool_use` id -> index of its `SkillInvoked`.
+    skill_idx: HashMap<String, usize>,
+    /// A user-typed skill waiting for the content message that follows.
+    pending_slash: Option<usize>,
+}
+
+fn parse_file(
+    path: &Path,
+    subagent: bool,
+    events: &mut Vec<Event>,
+    warnings: &mut Vec<Warning>,
+    meta: &mut Meta,
+) -> Result<(), AdapterError> {
+    let reader = BufReader::new(File::open(path).map_err(|e| io_err(path, e))?);
+    let mut p = Parser {
+        file: path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        force_subagent: subagent,
+        events,
+        warnings,
+        meta,
+        usage_idx: HashMap::new(),
+        tool_idx: HashMap::new(),
+        skill_idx: HashMap::new(),
+        pending_slash: None,
+    };
+    for (n, line) in reader.lines().enumerate() {
+        let line = line.map_err(|e| io_err(path, e))?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<Value>(&line) {
+            Ok(v) => p.line(&v),
+            Err(e) => p
+                .warnings
+                .push(Warning::new(format!("invalid JSON: {e}")).at(format!(
+                    "{}:{}",
+                    p.file,
+                    n + 1
+                ))),
+        }
+    }
+    Ok(())
+}
+
+fn str_of<'v>(v: &'v Value, key: &str) -> Option<&'v str> {
+    v.get(key).and_then(Value::as_str).filter(|s| !s.is_empty())
+}
+
+fn u64_of(v: &Value, key: &str) -> u64 {
+    v.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+/// All text of a message `content` (a string or an array of blocks).
+fn text_of(content: &Value) -> String {
+    match content {
+        Value::String(s) => s.clone(),
+        Value::Array(blocks) => blocks
+            .iter()
+            .filter(|b| b.get("type").and_then(Value::as_str) == Some("text"))
+            .filter_map(|b| b.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    }
+}
+
+impl Parser<'_> {
+    fn push(&mut self, at: Option<Timestamp>, kind: EventKind) -> usize {
+        self.events.push(Event { at, kind });
+        self.events.len() - 1
+    }
+
+    fn line(&mut self, v: &Value) {
+        let at = str_of(v, "timestamp").and_then(|s| s.parse::<Timestamp>().ok());
+        if let Some(ts) = at {
+            self.meta.seen_at(ts);
+        }
+        if self.meta.cwd.is_none() {
+            self.meta.cwd = str_of(v, "cwd").map(str::to_owned);
+        }
+        if self.meta.branch.is_none() {
+            self.meta.branch = str_of(v, "gitBranch")
+                .filter(|b| *b != "HEAD")
+                .map(str::to_owned);
+        }
+        let subagent =
+            self.force_subagent || v.get("isSidechain").and_then(Value::as_bool) == Some(true);
+        match str_of(v, "type") {
+            Some("assistant") => self.assistant(v, at, subagent),
+            Some("user") => self.user(v, at, subagent),
+            Some("system") if str_of(v, "subtype") == Some("compact_boundary") && !subagent => {
+                self.push(at, EventKind::Compaction);
+            }
+            _ => {}
+        }
+    }
+
+    fn assistant(&mut self, v: &Value, at: Option<Timestamp>, subagent: bool) {
+        let Some(msg) = v.get("message") else { return };
+        let model = str_of(msg, "model").map(str::to_owned);
+        if let Some(usage) = msg.get("usage").filter(|u| u.is_object())
+            && model.as_deref() != Some("<synthetic>")
+        {
+            if self.meta.model.is_none() && !subagent {
+                self.meta.model = model.clone();
+            }
+            self.usage(msg, v, usage, model, at, subagent);
+        }
+        let Some(blocks) = msg.get("content").and_then(Value::as_array) else {
+            return;
+        };
+        for block in blocks {
+            if str_of(block, "type") != Some("tool_use") {
+                continue;
+            }
+            let name = str_of(block, "name").unwrap_or("unknown").to_owned();
+            let input = block.get("input").unwrap_or(&Value::Null);
+            let call = ToolCall {
+                input_summary: summarize(&name, input),
+                name: name.clone(),
+                status: ToolStatus::Unknown,
+                duration_ms: None,
+            };
+            let idx = self.push(at, EventKind::ToolCall(call));
+            let tool_id = str_of(block, "id").map(str::to_owned);
+            if let Some(id) = &tool_id {
+                self.tool_idx.insert(id.clone(), (idx, at));
+            }
+            if name == "Skill"
+                && let Some(skill) = str_of(input, "skill")
+            {
+                let i = self.push(
+                    at,
+                    EventKind::SkillInvoked(SkillInvoked::new(skill, SkillTrigger::Model)),
+                );
+                if let Some(id) = tool_id {
+                    self.skill_idx.insert(id, i);
+                }
+            }
+        }
+    }
+
+    /// One API response is spread over several lines that repeat the same
+    /// `usage`; count it once, keeping the largest values (streaming updates).
+    fn usage(
+        &mut self,
+        msg: &Value,
+        line: &Value,
+        usage: &Value,
+        model: Option<String>,
+        at: Option<Timestamp>,
+        subagent: bool,
+    ) {
+        let new = Usage {
+            model,
+            input: u64_of(usage, "input_tokens"),
+            output: u64_of(usage, "output_tokens"),
+            cache_read: u64_of(usage, "cache_read_input_tokens"),
+            cache_write: u64_of(usage, "cache_creation_input_tokens"),
+            reasoning: usage
+                .get("output_tokens_details")
+                .map_or(0, |d| u64_of(d, "thinking_tokens")),
+            cost_usd: None,
+            measured: true,
+            subagent,
+        };
+        let key =
+            str_of(msg, "id").map(|m| format!("{m}:{}", str_of(line, "requestId").unwrap_or("")));
+        if let Some(&i) = key.as_ref().and_then(|k| self.usage_idx.get(k))
+            && let EventKind::Usage(old) = &mut self.events[i].kind
+        {
+            old.input = old.input.max(new.input);
+            old.output = old.output.max(new.output);
+            old.cache_read = old.cache_read.max(new.cache_read);
+            old.cache_write = old.cache_write.max(new.cache_write);
+            old.reasoning = old.reasoning.max(new.reasoning);
+            return;
+        }
+        let i = self.push(at, EventKind::Usage(new));
+        if let Some(k) = key {
+            self.usage_idx.insert(k, i);
+        }
+    }
+
+    fn user(&mut self, v: &Value, at: Option<Timestamp>, subagent: bool) {
+        if v.get("isCompactSummary").and_then(Value::as_bool) == Some(true) {
+            return;
+        }
+        let content = v
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .unwrap_or(&Value::Null);
+        let is_meta = v.get("isMeta").and_then(Value::as_bool) == Some(true);
+        if let Some(blocks) = content.as_array() {
+            for b in blocks
+                .iter()
+                .filter(|b| str_of(b, "type") == Some("tool_result"))
+            {
+                self.tool_result(b, at);
+            }
+        }
+        let text = text_of(content);
+        if is_meta {
+            self.meta_message(v, &text);
+            return;
+        }
+        let trimmed = text.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with("<local-command-") {
+            return;
+        }
+        if let Some(command) = command_name(trimmed) {
+            if !subagent {
+                self.push(at, EventKind::UserTurn);
+            }
+            if !BUILTIN_COMMANDS.contains(&command) {
+                let i = self.push(
+                    at,
+                    EventKind::SkillInvoked(SkillInvoked::new(command, SkillTrigger::User)),
+                );
+                self.pending_slash = Some(i);
+            }
+            return;
+        }
+        self.pending_slash = None;
+        if !subagent {
+            self.push(at, EventKind::UserTurn);
+        }
+    }
+
+    fn tool_result(&mut self, block: &Value, at: Option<Timestamp>) {
+        let Some((idx, started)) =
+            str_of(block, "tool_use_id").and_then(|id| self.tool_idx.get(id).copied())
+        else {
+            return;
+        };
+        if let EventKind::ToolCall(call) = &mut self.events[idx].kind {
+            let failed = block.get("is_error").and_then(Value::as_bool) == Some(true);
+            call.status = if failed {
+                ToolStatus::Error
+            } else {
+                ToolStatus::Ok
+            };
+            if let (Some(s), Some(e)) = (started, at) {
+                call.duration_ms = u64::try_from(e.as_millisecond() - s.as_millisecond()).ok();
+            }
+        }
+    }
+
+    /// A meta message carries the text the client injected, e.g. a skill body.
+    fn meta_message(&mut self, v: &Value, text: &str) {
+        if text.trim_start().starts_with("<local-command-") {
+            return;
+        }
+        let target = str_of(v, "sourceToolUseID")
+            .and_then(|id| self.skill_idx.get(id).copied())
+            .or_else(|| self.pending_slash.take());
+        if let Some(i) = target
+            && let EventKind::SkillInvoked(skill) = &mut self.events[i].kind
+        {
+            skill.content_bytes = Some(text.len() as u64);
+            skill.path = text
+                .lines()
+                .find_map(|l| l.strip_prefix("Base directory for this skill: "))
+                .map(|p| PathBuf::from(p.trim()));
+        }
+    }
+}
+
+/// `<command-name>/foo</command-name>` -> `foo`.
+fn command_name(text: &str) -> Option<&str> {
+    let rest = text.strip_prefix("<command-name>")?;
+    let name = rest.split("</command-name>").next()?;
+    Some(name.trim().trim_start_matches('/')).filter(|n| !n.is_empty())
+}
+
+/// A short, privacy-conscious description of a tool input: a path, pattern or
+/// skill name; for shell commands only the program, never the arguments.
+fn summarize(tool: &str, input: &Value) -> Option<String> {
+    if tool == "Bash" {
+        return str_of(input, "command")?
+            .split_whitespace()
+            .next()
+            .map(str::to_owned);
+    }
+    [
+        "file_path",
+        "path",
+        "notebook_path",
+        "pattern",
+        "skill",
+        "description",
+    ]
+    .iter()
+    .find_map(|k| str_of(input, k))
+    .map(|s| s.chars().take(80).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_name_is_extracted() {
+        assert_eq!(
+            command_name("<command-name>/orch</command-name>\n<command-message>x"),
+            Some("orch")
+        );
+        assert_eq!(command_name("hello"), None);
+    }
+
+    #[test]
+    fn summary_never_contains_shell_arguments() {
+        let input: Value =
+            serde_json::json!({"command": "curl -H 'Authorization: secret' https://x"});
+        assert_eq!(summarize("Bash", &input).as_deref(), Some("curl"));
+        let input: Value = serde_json::json!({"file_path": "src/main.rs"});
+        assert_eq!(summarize("Read", &input).as_deref(), Some("src/main.rs"));
+    }
+}
