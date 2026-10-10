@@ -1,6 +1,7 @@
-import { inject, resource } from "@angular/core";
+import { DestroyRef, effect, inject, resource } from "@angular/core";
 import { FiltersService } from "./filters.service";
 import { Ipc } from "./ipc";
+import { LoadingService } from "./loading.service";
 import type { Answer } from "./types";
 
 /**
@@ -15,12 +16,17 @@ export function analysis<T>(
 ) {
   const ipc = inject(Ipc);
   const filters = inject(FiltersService);
-  return resource({
+  const loading = inject(LoadingService);
+  const id = Symbol(command);
+  const res = resource({
     // Without params the resource stays idle.
     params: () => (enabled() ? { filters: filters.payload(), extra: extra() } : undefined),
     loader: async ({ params }) =>
       ipc.invoke<Answer<T>>(command, { filters: params.filters, ...params.extra }),
   });
+  effect(() => loading.set(id, res.isLoading()));
+  inject(DestroyRef).onDestroy(() => loading.set(id, false));
+  return res;
 }
 
 /** A readable message for a failed command. */

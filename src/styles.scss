@@ -86,3 +86,36 @@ button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* Every control has the same height, so rows of mixed controls line up. */
+select,
+input[type="text"],
+input[type="search"],
+button {
+  height: 32px;
+}
+
+input[type="checkbox"] {
+  margin: 0;
+}
+
+th,
+td {
+  vertical-align: middle;
+}
+
+/* The view being reloaded stays visible but quiet. */
+main.busy > router-outlet ~ * {
+  opacity: 0.55;
+  transition: opacity 0.15s 0.2s;
+}
+
+main > router-outlet ~ * {
+  transition: opacity 0.1s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main > router-outlet ~ * {
+    transition: none;
+  }
+}

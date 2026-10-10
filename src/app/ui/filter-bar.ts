@@ -46,7 +46,7 @@ import { SOURCES, type SourceId } from "../core/types";
       display: flex;
       flex-wrap: wrap;
       gap: 12px 24px;
-      align-items: end;
+      align-items: flex-end;
       padding: 12px 16px;
       background: var(--panel);
       border-bottom: 1px solid var(--line);
@@ -67,10 +67,13 @@ import { SOURCES, type SourceId } from "../core/types";
       margin: 0;
       padding: 0;
       align-items: center;
+      /* As tall as the inputs next to it, so the checkboxes line up with them. */
+      min-height: 32px;
     }
     legend {
       float: left;
       padding: 0 8px 0 0;
+      line-height: 32px;
     }
     .check {
       flex-direction: row;

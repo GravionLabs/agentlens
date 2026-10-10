@@ -32,6 +32,8 @@ export class SampleIpc extends Ipc {
   override async invoke<T>(command: string): Promise<T> {
     const load = SAMPLES[command];
     if (!load) throw new Error(`no sample for the command ${command}`);
+    // Like the real backend, the answer takes a moment (shows the loading state).
+    await new Promise((resolve) => setTimeout(resolve, 600));
     return (await load()).default as T;
   }
 }

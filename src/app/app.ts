@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { NAV } from "./app.routes";
 import { SAMPLE_MODE } from "./core/ipc";
+import { LoadingService } from "./core/loading.service";
 import { FilterBar } from "./ui/filter-bar";
 import { inject } from "@angular/core";
 
@@ -10,8 +11,14 @@ import { inject } from "@angular/core";
   imports: [RouterOutlet, RouterLink, RouterLinkActive, FilterBar],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (loading.busy()) {
+      <div class="progress" role="progressbar" aria-label="Reading sessions"></div>
+    }
     <header class="top">
-      <strong class="brand">AgentLens</strong>
+      <span class="brand">
+        <img src="favicon.svg" alt="" width="24" height="24" />
+        <strong>AgentLens</strong>
+      </span>
       <nav aria-label="Views">
         @for (item of nav; track item.path) {
           <a [routerLink]="item.path" routerLinkActive="active">{{ item.label }}</a>
@@ -22,7 +29,7 @@ import { inject } from "@angular/core";
       }
     </header>
     <app-filter-bar />
-    <main>
+    <main [class.busy]="loading.busy()" [attr.aria-busy]="loading.busy()">
       <router-outlet />
     </main>
   `,
@@ -36,7 +43,46 @@ import { inject } from "@angular/core";
       border-bottom: 1px solid var(--line);
     }
     .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       font-size: 1.1rem;
+    }
+    .brand img {
+      display: block;
+      border-radius: 6px;
+    }
+    .progress {
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: 3px;
+      z-index: 10;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      /* Short loads stay quiet: the bar only appears after a moment. */
+      opacity: 0;
+      animation: appear 0s 200ms forwards;
+    }
+    .progress::after {
+      content: "";
+      display: block;
+      width: 35%;
+      height: 100%;
+      background: var(--accent);
+      animation: slide 1.1s ease-in-out infinite;
+    }
+    @keyframes appear {
+      to {
+        opacity: 1;
+      }
+    }
+    @keyframes slide {
+      from {
+        transform: translateX(-100%);
+      }
+      to {
+        transform: translateX(290%);
+      }
     }
     nav {
       display: flex;
@@ -47,7 +93,10 @@ import { inject } from "@angular/core";
     nav a {
       color: var(--muted);
       text-decoration: none;
-      padding: 4px 10px;
+      display: inline-flex;
+      align-items: center;
+      height: 30px;
+      padding: 0 10px;
       border-radius: 6px;
     }
     nav a:hover {
@@ -75,4 +124,5 @@ import { inject } from "@angular/core";
 export class App {
   protected readonly nav = NAV;
   protected readonly sampleMode = inject(SAMPLE_MODE);
+  protected readonly loading = inject(LoadingService);
 }

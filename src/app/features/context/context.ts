@@ -80,6 +80,7 @@ export function inView(kind: ContextKind, view: View): boolean {
       color: var(--text);
       border: 1px solid var(--line);
       border-radius: 999px;
+      height: auto;
       padding: 3px 12px;
       cursor: pointer;
     }
