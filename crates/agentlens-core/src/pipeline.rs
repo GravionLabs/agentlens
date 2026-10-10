@@ -7,6 +7,7 @@ use crate::adapter::{Detection, Registry, SessionFilter};
 use crate::analyzers::context::{self, ContextReport};
 use crate::analyzers::skills::{self, SkillReport};
 use crate::env::Env;
+use crate::instructions;
 use crate::inventory::{self, Inventory};
 use crate::model::{SessionEvents, Source};
 use crate::tokens::TokenEstimator;
@@ -124,9 +125,19 @@ pub fn context_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    let projects: BTreeSet<PathBuf> = sessions
+        .iter()
+        .filter_map(|s| s.session.project_dir.clone())
+        .collect();
+    let projects: Vec<PathBuf> = projects.into_iter().collect();
+    let instructions = instructions::scan(env, &projects, estimator);
     ContextRun {
-        warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
-        report: context::analyze(&sessions, estimator),
+        warnings: sessions
+            .iter()
+            .map(|s| s.warnings.len() as u64)
+            .sum::<u64>()
+            + instructions.warnings.len() as u64,
+        report: context::analyze(&sessions, &instructions.files, estimator),
         errors,
     }
 }
