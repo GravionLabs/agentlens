@@ -5,6 +5,9 @@
   --muted: #5c6770;
   --line: #dde1e5;
   --accent: #2563eb;
+  --warn: #b45309;
+  --bad: #b91c1c;
+  --good: #15803d;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -15,6 +18,9 @@
     --muted: #9aa5b1;
     --line: #2a333d;
     --accent: #60a5fa;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --good: #4ade80;
   }
 }
 
@@ -32,4 +38,17 @@ body {
 
 .muted {
   color: var(--muted);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h2 {
+  margin: 0 0 4px;
+  font-size: 1.3rem;
+}
+
+.view {
+  display: block;
 }
