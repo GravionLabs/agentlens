@@ -137,7 +137,7 @@ pub enum Format {
 
 fn parse_source(s: &str) -> Result<Source, String> {
     Source::from_id(s).ok_or_else(|| {
-        "unknown source, expected one of: claude-code, opencode, copilot-cli, vscode-copilot, vscode-copilot".to_owned()
+        "unknown source, expected one of: claude-code, opencode, copilot-cli, vscode-copilot".to_owned()
     })
 }
 
