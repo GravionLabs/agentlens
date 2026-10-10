@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::adapter::{Detection, Registry, SessionFilter};
 use crate::analyzers::context::{self, ContextReport};
-use crate::analyzers::cost::{self, CostReport};
+use crate::analyzers::cost::{self, CostReport, Grouping};
 use crate::analyzers::flow::{self, ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::{self, SkillReport};
 use crate::analyzers::unused::{self, UnusedReport};
@@ -239,6 +239,7 @@ pub fn cost_run(
     filter: &SessionFilter,
     only: &[Source],
     prices: &crate::prices::PriceTable,
+    group: Grouping,
 ) -> CostRun {
     let mut sessions: Vec<SessionEvents> = Vec::new();
     let mut errors = Vec::new();
@@ -250,7 +251,7 @@ pub fn cost_run(
     }
     CostRun {
         warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
-        report: cost::by_model(&sessions, prices),
+        report: cost::analyze(&sessions, prices, group),
         errors,
     }
 }

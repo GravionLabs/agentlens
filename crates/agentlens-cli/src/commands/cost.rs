@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use agentlens_core::adapter::{Registry, SessionFilter};
-use agentlens_core::analyzers::cost::CostRow;
+use agentlens_core::analyzers::cost::{CostRow, Grouping};
 use agentlens_core::env::Env;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::cost_run;
@@ -10,7 +10,7 @@ use anyhow::{Result, anyhow};
 
 use crate::output;
 
-use crate::args::Format;
+use crate::args::{CostBy, Format};
 
 fn usd(v: f64) -> String {
     format!("${v:.2}")
@@ -40,17 +40,24 @@ pub fn run(
     filter: &SessionFilter,
     only: &[Source],
     price_file: Option<&Path>,
+    by: CostBy,
     format: Format,
 ) -> Result<()> {
+    let (group, label) = match by {
+        CostBy::Model => (Grouping::Model, "model"),
+        CostBy::Project => (Grouping::Project, "project"),
+        CostBy::Branch => (Grouping::Branch, "branch"),
+        CostBy::Issue => (Grouping::Issue, "issue"),
+    };
     let table = prices::load(env, price_file).map_err(|e| anyhow!("cannot load prices: {e}"))?;
-    let run = cost_run(registry, env, filter, only, &table);
+    let run = cost_run(registry, env, filter, only, &table, group);
     let r = &run.report;
 
     match format {
         Format::Json => println!("{}", serde_json::to_string_pretty(r)?),
         Format::Csv => {
             let header = [
-                "model",
+                label,
                 "requests",
                 "input_tokens",
                 "output_tokens",
@@ -119,7 +126,7 @@ pub fn run(
                 "{}",
                 output::table(
                     &[
-                        "model",
+                        label,
                         "requests",
                         "input",
                         "output",

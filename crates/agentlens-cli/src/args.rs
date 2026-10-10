@@ -52,8 +52,11 @@ pub enum Command {
         #[arg(long, default_value_t = 25)]
         top: usize,
     },
-    /// Show what the sessions cost per model
+    /// Show what the sessions cost
     Cost {
+        /// Group the cost by model, project, git branch or issue number (parsed from the branch name)
+        #[arg(long, value_enum, default_value_t = CostBy::Model)]
+        by: CostBy,
         /// Price file that overrides or extends the bundled prices
         #[arg(long, value_name = "FILE")]
         prices: Option<std::path::PathBuf>,
@@ -83,6 +86,14 @@ pub enum ContextView {
     Instructions,
     Agents,
     Skills,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CostBy {
+    Model,
+    Project,
+    Branch,
+    Issue,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
