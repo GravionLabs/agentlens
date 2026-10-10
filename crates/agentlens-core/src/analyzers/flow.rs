@@ -148,7 +148,8 @@ pub struct ToolErrors {
 }
 
 /// Three or more adjacent calls of the same tool with the same input summary,
-/// the first of which failed.
+/// the first two of which failed. Calls without an input summary cannot be
+/// compared and never form a loop.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RetryLoop {
     pub source: Source,
@@ -175,14 +176,15 @@ pub fn errors(sessions: &[SessionEvents]) -> ErrorReport {
     let mut loops = Vec::new();
     for se in sessions {
         let source = se.session.source;
-        // The current run of identical adjacent calls: (tool, input, calls, errors, first failed).
-        let mut run: Option<(String, Option<String>, u64, u64, bool)> = None;
-        let flush = |run: &mut Option<(String, Option<String>, u64, u64, bool)>,
+        // The current run of identical adjacent calls: (tool, input, calls, errors, leading failures).
+        let mut run: Option<(String, Option<String>, u64, u64, u64)> = None;
+        let flush = |run: &mut Option<(String, Option<String>, u64, u64, u64)>,
                      tools: &mut BTreeMap<(Source, String), ToolErrors>,
                      loops: &mut Vec<RetryLoop>| {
-            if let Some((tool, input, calls, errs, first_failed)) = run.take()
+            if let Some((tool, input, calls, errs, leading)) = run.take()
                 && calls >= LOOP_MIN_CALLS
-                && first_failed
+                && leading >= 2
+                && input.is_some()
             {
                 if let Some(t) = tools.get_mut(&(source, tool.clone())) {
                     t.loops += 1;
@@ -219,9 +221,12 @@ pub fn errors(sessions: &[SessionEvents]) -> ErrorReport {
             }
             let failed = c.status == ToolStatus::Error;
             match &mut run {
-                Some((tool, input, calls, errs, _))
+                Some((tool, input, calls, errs, leading))
                     if *tool == c.name && *input == c.input_summary =>
                 {
+                    if failed && *leading == *calls {
+                        *leading += 1;
+                    }
                     *calls += 1;
                     *errs += u64::from(failed);
                 }
@@ -232,7 +237,7 @@ pub fn errors(sessions: &[SessionEvents]) -> ErrorReport {
                         c.input_summary.clone(),
                         1,
                         u64::from(failed),
-                        failed,
+                        u64::from(failed),
                     ));
                 }
             }
@@ -405,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn a_loop_needs_three_adjacent_identical_calls_and_a_first_failure() {
+    fn a_loop_needs_three_adjacent_identical_calls_and_two_leading_failures() {
         use ToolStatus::*;
         let looped = session(
             "loop",
@@ -444,7 +449,25 @@ mod tests {
                 call("Bash", Some("make"), Error),
             ],
         );
-        let r = errors(&[looped, two, succeeds, interrupted]);
+        let one_failure = session(
+            "one",
+            None,
+            vec![
+                call("Bash", Some("make"), Error),
+                call("Bash", Some("make"), Ok),
+                call("Bash", Some("make"), Ok),
+            ],
+        );
+        let no_input = session(
+            "noinput",
+            None,
+            vec![
+                call("click", None, Error),
+                call("click", None, Error),
+                call("click", None, Error),
+            ],
+        );
+        let r = errors(&[looped, two, succeeds, interrupted, one_failure, no_input]);
         assert_eq!(r.loops.len(), 1);
         let l = &r.loops[0];
         assert_eq!(

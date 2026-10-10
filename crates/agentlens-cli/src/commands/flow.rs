@@ -138,7 +138,7 @@ fn errors_table(tools: &[ToolErrors], loops: &[RetryLoop], top: usize) {
                 ]
             })
             .collect();
-        println!("\nRetry loops (3 or more adjacent identical calls, the first failed)");
+        println!("\nRetry loops (3 or more adjacent identical calls, the first two failed)");
         println!(
             "{}",
             output::table(
