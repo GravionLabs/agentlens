@@ -197,9 +197,11 @@ pub struct Usage {
     pub model: Option<String>,
     /// Input tokens that were not served from the cache.
     pub input: u64,
+    /// Output tokens. For Claude Code this already includes the reasoning tokens.
     pub output: u64,
     pub cache_read: u64,
     pub cache_write: u64,
+    /// Informational; see the adapter for whether it is a part of `output` or separate.
     pub reasoning: u64,
     pub cost_usd: Option<f64>,
     /// `true` if the client reported these numbers, `false` if they are estimated.

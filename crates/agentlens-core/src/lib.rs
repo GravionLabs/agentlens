@@ -2,6 +2,7 @@
 //! normalized events, analyzers turn those events into reports.
 
 pub mod adapter;
+pub mod adapters;
 pub mod env;
 pub mod model;
 
