@@ -247,3 +247,82 @@ fn context_table_marks_estimates_and_unavailable_sources() {
         .stdout(predicate::str::contains("~100"))
         .stdout(predicate::str::contains("first request"));
 }
+
+#[test]
+fn unused_lists_idle_agents_and_mcp_servers_with_their_cost() {
+    let home = home_with_context();
+    let agents = home.path().join(".claude/agents");
+    fs::create_dir_all(&agents).unwrap();
+    fs::write(
+        agents.join("reviewer.md"),
+        "---\nname: reviewer\ndescription: Reviews code\n---\nbody",
+    )
+    .unwrap();
+    fs::write(
+        home.path().join(".claude.json"),
+        r#"{"mcpServers":{"srv":{"command":"never-read"}}}"#,
+    )
+    .unwrap();
+    let v = json(agentlens(&home).args(["unused", "--since", "2026-01-01", "--format", "json"]));
+    let items = v["items"].as_array().unwrap();
+    let find = |kind: &str, name: &str| {
+        items
+            .iter()
+            .find(|i| i["kind"] == kind && i["name"] == name)
+            .unwrap_or_else(|| panic!("{kind} {name} missing"))
+    };
+    let agent = find("agent", "reviewer");
+    assert_eq!(agent["uses"], 0);
+    // "reviewerReviews code" = 20 characters = 5 tokens, three requests.
+    assert_eq!(agent["overhead_tokens"], 15);
+    let server = find("mcp-server", "srv");
+    assert_eq!(server["uses"], 0);
+    // Listings 2 x 4 tokens, definition 38 and instructions 75 tokens, three requests each.
+    assert_eq!(server["overhead_tokens"], 363);
+    assert!(!v.to_string().contains("never-read"));
+}
+
+#[test]
+fn unused_hides_used_items_unless_all_is_given() {
+    let home = home();
+    let csv = |args: &[&str]| {
+        let out = agentlens(&home)
+            .args(args)
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        String::from_utf8(out).unwrap()
+    };
+    let idle = csv(&["unused", "--since", "2026-01-01", "--format", "csv"]);
+    let all = csv(&[
+        "unused",
+        "--since",
+        "2026-01-01",
+        "--all",
+        "--format",
+        "csv",
+    ]);
+    assert!(idle.contains("skill,unused,"));
+    assert!(!idle.contains("skill,demo,"), "{idle}");
+    assert!(all.contains("skill,demo,"), "{all}");
+}
+
+#[test]
+fn unused_window_is_set_with_days_and_overridden_by_since() {
+    let home = home();
+    // The fixture sessions are from October 2026, so a one-day window is empty.
+    let v = json(agentlens(&home).args(["unused", "--days", "1", "--format", "json"]));
+    assert_eq!(v["sessions"], 0);
+    let v = json(agentlens(&home).args([
+        "unused",
+        "--days",
+        "1",
+        "--since",
+        "2026-01-01",
+        "--format",
+        "json",
+    ]));
+    assert!(v["sessions"].as_u64().unwrap() > 0);
+}

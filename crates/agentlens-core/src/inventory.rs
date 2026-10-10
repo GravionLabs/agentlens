@@ -303,6 +303,16 @@ fn duplicates(skills: &[SkillEntry], hashes: &BTreeMap<PathBuf, u64>) -> Vec<Dup
 
 /// Splits `---\nfrontmatter\n---\nbody`. Falls back to line matching when the
 /// frontmatter is not valid YAML (an unquoted colon in a description is common).
+pub(crate) fn parse_markdown(
+    text: &str,
+    fallback_name: &str,
+    warnings: &mut Vec<Warning>,
+    file: &Path,
+) -> (String, Option<String>) {
+    let p = parse(text, fallback_name, warnings, file);
+    (p.name, p.description)
+}
+
 fn parse(text: &str, fallback_name: &str, warnings: &mut Vec<Warning>, file: &Path) -> Parsed {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let hash = hash_of(text.as_bytes());

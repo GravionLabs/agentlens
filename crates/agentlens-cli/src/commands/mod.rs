@@ -2,6 +2,7 @@ mod context;
 mod report;
 mod scan;
 mod skills;
+mod unused;
 
 use agentlens_core::adapters::default_registry;
 use agentlens_core::env::Env;
@@ -19,6 +20,13 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Skills => skills::run(&registry, &env, &filter, &cli.source, cli.format),
         Command::Context { kind } => {
             context::run(&registry, &env, &filter, &cli.source, kind, cli.format)
+        }
+        Command::Unused { days, all } => {
+            let mut filter = filter;
+            if cli.since.is_none() {
+                filter.since = Some(crate::args::days_ago(days, jiff::Timestamp::now())?);
+            }
+            unused::run(&registry, &env, &filter, &cli.source, all, cli.format)
         }
         Command::Report { html } => report::run(&registry, &env, &filter, &cli.source, &html),
     }

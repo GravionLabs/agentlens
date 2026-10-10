@@ -420,6 +420,11 @@ fn summarize(tool: &str, input: &Value) -> Option<String> {
             .next()
             .map(str::to_owned);
     }
+    if tool == "task"
+        && let Some(kind) = str_of(input, "subagent_type")
+    {
+        return Some(kind.to_owned());
+    }
     ["filePath", "path", "pattern", "name", "description"]
         .iter()
         .find_map(|k| str_of(input, k))
