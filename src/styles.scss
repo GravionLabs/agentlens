@@ -8,6 +8,10 @@
   --warn: #b45309;
   --bad: #b91c1c;
   --good: #15803d;
+  --c-baseline: #d97706;
+  --c-load: #2563eb;
+  --c-carry: #7c3aed;
+  --c-follow: #059669;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,6 +25,10 @@
     --warn: #fbbf24;
     --bad: #f87171;
     --good: #4ade80;
+    --c-baseline: #f59e0b;
+    --c-load: #60a5fa;
+    --c-carry: #a78bfa;
+    --c-follow: #34d399;
   }
 }
 
