@@ -184,3 +184,66 @@ fn invalid_since_fails_with_a_hint() {
         .failure()
         .stderr(predicate::str::contains("30d"));
 }
+
+fn home_with_context() -> TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let projects = dir.path().join(".claude/projects/-work-demo");
+    fs::create_dir_all(&projects).unwrap();
+    fs::copy(
+        fixtures().join("context.jsonl"),
+        projects.join("context.jsonl"),
+    )
+    .unwrap();
+    dir
+}
+
+#[test]
+fn context_json_groups_by_kind_and_owner() {
+    let home = home_with_context();
+    let v = json(agentlens(&home).args(["context", "--kind", "tools", "--format", "json"]));
+    let rows = v["rows"].as_array().unwrap();
+    assert!(rows.iter().all(|r| r["kind"] != "instruction-file"));
+    let srv = rows
+        .iter()
+        .find(|r| r["kind"] == "tool-listing" && r["owner"] == "srv")
+        .unwrap();
+    // Two listed tools of 15 and 14 bytes -> 4 + 4 tokens, three requests follow each.
+    assert_eq!(srv["tokens"], 8);
+    assert_eq!(srv["requests"], 6, "summed over both items");
+    assert_eq!(srv["overhead_tokens"], 24);
+    assert_eq!(v["first_request"]["claude-code"]["max_tokens"], 1010);
+}
+
+#[test]
+fn context_instructions_view_and_csv() {
+    let home = home_with_context();
+    let out = agentlens(&home)
+        .args(["context", "--kind", "instructions", "--format", "csv"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    let mut lines = text.lines();
+    assert_eq!(
+        lines.next().unwrap(),
+        "source,project,kind,owner,items,bytes,tokens,requests,overhead_tokens"
+    );
+    assert_eq!(
+        lines.next().unwrap(),
+        "claude-code,/work/demo,instruction-file,/work/demo/CLAUDE.md,1,400,100,3,300"
+    );
+    assert!(lines.next().is_none());
+}
+
+#[test]
+fn context_table_marks_estimates_and_unavailable_sources() {
+    let home = home_with_context();
+    agentlens(&home)
+        .arg("context")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("~100"))
+        .stdout(predicate::str::contains("first request"));
+}

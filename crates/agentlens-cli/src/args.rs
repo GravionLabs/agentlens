@@ -37,12 +37,28 @@ pub enum Command {
     Scan,
     /// Show which skills are used and what they cost in tokens
     Skills,
+    /// Show what the clients put into the context besides the conversation
+    Context {
+        /// Which kind of static context to show
+        #[arg(long, value_enum, default_value_t = ContextView::All)]
+        kind: ContextView,
+    },
     /// Write a self-contained report
     Report {
         /// Write an HTML file that works offline
         #[arg(long, value_name = "FILE")]
         html: std::path::PathBuf,
     },
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContextView {
+    All,
+    /// Tool lists and definitions and MCP server instructions
+    Tools,
+    Instructions,
+    Agents,
+    Skills,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]

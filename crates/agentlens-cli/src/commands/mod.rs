@@ -1,3 +1,4 @@
+mod context;
 mod report;
 mod scan;
 mod skills;
@@ -16,6 +17,9 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Scan => scan::run(&registry, &env, &filter, &cli.source, cli.format),
         Command::Skills => skills::run(&registry, &env, &filter, &cli.source, cli.format),
+        Command::Context { kind } => {
+            context::run(&registry, &env, &filter, &cli.source, kind, cli.format)
+        }
         Command::Report { html } => report::run(&registry, &env, &filter, &cli.source, &html),
     }
 }
