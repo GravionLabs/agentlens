@@ -12,6 +12,20 @@ AgentLens only reads files that the clients already write. Nothing is sent anywh
 
 Early development. The plan lives in the GitHub issues and the [AgentLens project](https://github.com/orgs/GravionLabs/projects/13); milestone M0 delivers `agentlens scan` and `agentlens skills` for Claude Code.
 
+## Installation
+
+Download the archive for your platform from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` on your `PATH`:
+
+| Platform | Archive |
+|---|---|
+| Linux x86_64 / aarch64 | `agentlens-x86_64-unknown-linux-gnu.tar.gz` / `agentlens-aarch64-unknown-linux-gnu.tar.gz` |
+| macOS Intel / Apple silicon | `agentlens-x86_64-apple-darwin.tar.gz` / `agentlens-aarch64-apple-darwin.tar.gz` |
+| Windows x86_64 | `agentlens-x86_64-pc-windows-msvc.zip` |
+
+Verify the download against `SHA256SUMS` from the same release (`sha256sum -c --ignore-missing SHA256SUMS`). The repository is private for now, so use `gh release download --repo GravionLabs/agentlens`.
+
+To build from source, install the Rust toolchain and run `cargo install --path crates/agentlens-cli`.
+
 ## Usage
 
 ```sh

@@ -35,3 +35,7 @@ cargo test --workspace
 - One branch and one PR per PBI; the PR body says `Closes #<PBI>` and lists the task numbers. Conventional commit messages.
 - Milestone work is integrated on `release/<milestone>` branches; `main` only receives a finished release branch.
 - Decisions get the `needs-decision` label. Write the ADR in `docs/adr/` with the next free number and Status: Proposed, then wait for the owner.
+
+## Releases
+
+Pushing a tag `v*` runs `.github/workflows/release.yml`: a plain matrix build (no cargo-dist) on native runners for Linux x86_64/aarch64, macOS x86_64/aarch64 and Windows x86_64, which packages each binary with a SHA-256 file and attaches everything, plus a combined `SHA256SUMS`, to a GitHub release. Pull requests that change the workflow run the build as a dry run without publishing.
