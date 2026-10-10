@@ -1,3 +1,4 @@
+mod compare;
 mod context;
 mod cost;
 mod efficiency;
@@ -21,6 +22,7 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Scan => scan::run(&registry, &env, &filter, &cli.source, cli.format),
         Command::Skills => skills::run(&registry, &env, &filter, &cli.source, cli.format),
+        Command::Compare => compare::run(&registry, &env, &filter, &cli.source, cli.format),
         Command::Context { kind } => {
             context::run(&registry, &env, &filter, &cli.source, kind, cli.format)
         }

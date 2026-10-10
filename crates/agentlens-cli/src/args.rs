@@ -52,6 +52,8 @@ pub enum Command {
         #[arg(long, default_value_t = 25)]
         top: usize,
     },
+    /// Compare the clients side by side over the same period
+    Compare,
     /// Show cache hit rate and the share of work done by subagents
     Efficiency {
         /// Group the cache table by session, project or source

@@ -750,3 +750,83 @@ fn cost_what_if_needs_a_priced_model() {
         .failure()
         .stderr(predicate::str::contains("no price for the what-if model"));
 }
+
+fn home_with_two_clients() -> TempDir {
+    let home = home_with_context();
+    let dir = home.path().join(".copilot/session-state/cp-1");
+    fs::create_dir_all(&dir).unwrap();
+    fs::copy(
+        fixtures().join("../copilot_cli/with_store.jsonl"),
+        dir.join("events.jsonl"),
+    )
+    .unwrap();
+    home
+}
+
+#[test]
+fn compare_joins_the_clients_over_the_same_sessions() {
+    let home = home_with_two_clients();
+    let v = json(agentlens(&home).args(["compare", "--format", "json"]));
+    let sources = v["sources"].as_array().unwrap();
+    assert_eq!(sources.len(), 2);
+    let cc = sources
+        .iter()
+        .find(|s| s["source"] == "claude-code")
+        .unwrap();
+    assert_eq!(
+        (
+            cc["requests"].as_u64(),
+            cc["input_tokens"].as_u64(),
+            cc["output_tokens"].as_u64()
+        ),
+        (Some(3), Some(2890), Some(15))
+    );
+    assert!((cc["cache_hit_rate"].as_f64().unwrap() - 1000.0 / 2890.0).abs() < 1e-9);
+    assert!(
+        cc["tool_error_rate"].is_null(),
+        "no tool call has an outcome in this fixture"
+    );
+    let cp = sources
+        .iter()
+        .find(|s| s["source"] == "copilot-cli")
+        .unwrap();
+    assert_eq!(
+        (cp["tool_calls"].as_u64(), cp["tool_errors"].as_u64()),
+        (Some(2), Some(1))
+    );
+    assert!((cp["tool_error_rate"].as_f64().unwrap() - 0.5).abs() < 1e-9);
+    assert_eq!(cp["skill_invocations"], 2);
+    assert!(
+        cp["cache_hit_rate"].is_null(),
+        "shutdown totals carry no cache tokens"
+    );
+}
+
+#[test]
+fn compare_table_and_csv_show_missing_values_as_not_available() {
+    let home = home_with_two_clients();
+    agentlens(&home)
+        .arg("compare")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("claude-code"))
+        .stdout(predicate::str::contains("copilot-cli"))
+        .stdout(predicate::str::contains("n/a"))
+        .stdout(predicate::str::contains("skill overhead (est.)"));
+    let out = agentlens(&home)
+        .args(["compare", "--format", "csv", "--source", "copilot-cli"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert_eq!(text.lines().count(), 2, "only the selected source");
+    assert!(
+        text.lines()
+            .next()
+            .unwrap()
+            .starts_with("source,sessions,requests")
+    );
+    assert!(text.lines().nth(1).unwrap().starts_with("copilot-cli,1,1,"));
+}
