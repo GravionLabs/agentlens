@@ -19,14 +19,15 @@ fn write_store(home: &TempHome) {
            agent_id TEXT, parent_tool_call_id TEXT, model TEXT NOT NULL,
            input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
            cache_write_tokens INTEGER, reasoning_tokens INTEGER, total_nano_aiu INTEGER,
-           created_at TEXT);
+           request_multiplier REAL, initiator TEXT, created_at TEXT);
          INSERT INTO assistant_usage_events
            (session_id, turn_index, agent_id, parent_tool_call_id, model, input_tokens,
-            output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, created_at)
+            output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
+            request_multiplier, initiator, created_at)
          VALUES
-           ('cp-1', 0, NULL, NULL, 'model-a', 1000, 50, 600, 100, 5, '2026-07-15T04:00:02.000Z'),
-           ('cp-1', 0, NULL, NULL, 'model-a', 1200, 70, 900, 0, 0, '2026-07-15T04:00:05.500Z'),
-           ('cp-1', 0, 'explore-1', 'c3', 'model-b', 400, 30, 0, 0, 0, '2026-07-15T04:00:07.500Z');",
+           ('cp-1', 0, NULL, NULL, 'model-a', 1000, 50, 600, 100, 5, 9.0, 'user', '2026-07-15T04:00:02.000Z'),
+           ('cp-1', 0, NULL, NULL, 'model-a', 1200, 70, 900, 0, 0, 9.0, 'agent', '2026-07-15T04:00:05.500Z'),
+           ('cp-1', 0, 'explore-1', 'c3', 'model-b', 400, 30, 0, 0, 0, 1.0, 'agent', '2026-07-15T04:00:07.500Z');",
     )
     .unwrap();
 }
@@ -281,5 +282,34 @@ fn hooks_and_permission_prompts_are_paired_without_their_content() {
         !se.warnings
             .iter()
             .any(|w| w.message.contains("hook") || w.message.contains("permission"))
+    );
+}
+
+#[test]
+fn premium_requests_are_carried_separately_from_tokens() {
+    // Only the request the user started is charged, agent follow-ups are not.
+    let se = session(&home(true), "cp-1");
+    let u = usages(&se);
+    assert_eq!(
+        u.iter().map(|u| u.premium_requests).collect::<Vec<_>>(),
+        [Some(9.0), Some(0.0), Some(0.0)]
+    );
+    assert!(
+        u.iter().all(|u| u.cost_usd.is_none()),
+        "premium requests are not money"
+    );
+    // Shutdown totals carry `requests.cost` per model.
+    let se = session(&home(true), "cp-2");
+    let mut premium: Vec<_> = usages(&se)
+        .iter()
+        .map(|u| (u.model.clone().unwrap(), u.premium_requests))
+        .collect();
+    premium.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        premium,
+        [
+            ("model-a".to_owned(), Some(1.0)),
+            ("model-b".to_owned(), Some(3.0))
+        ]
     );
 }

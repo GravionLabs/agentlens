@@ -459,6 +459,7 @@ impl Parser<'_> {
             cost_usd: None,
             measured: true,
             subagent,
+            premium_requests: None,
         };
         let key =
             str_of(msg, "id").map(|m| format!("{m}:{}", str_of(line, "requestId").unwrap_or("")));

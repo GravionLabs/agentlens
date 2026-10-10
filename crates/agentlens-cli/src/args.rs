@@ -52,6 +52,12 @@ pub enum Command {
         #[arg(long, default_value_t = 25)]
         top: usize,
     },
+    /// Show what the sessions cost per model
+    Cost {
+        /// Price file that overrides or extends the bundled prices
+        #[arg(long, value_name = "FILE")]
+        prices: Option<std::path::PathBuf>,
+    },
     /// List installed skills, agents and MCP servers that were not used
     Unused {
         /// Length of the period to look at (ignored if --since is given)

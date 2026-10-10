@@ -472,3 +472,87 @@ fn flow_hooks_section_sums_runtime_and_lists_sources_without_data() {
             .contains("copilot-cli,preToolUse,1,1,0,500")
     );
 }
+
+fn price_file(home: &TempDir) -> std::path::PathBuf {
+    let path = home.path().join("prices.json");
+    fs::write(
+        &path,
+        r#"{"claude-test":{"input":1,"output":2,"cache_read":0.5,"cache_write":1.5}}"#,
+    )
+    .unwrap();
+    path
+}
+
+#[test]
+fn cost_uses_the_price_file_and_marks_computed_values() {
+    let home = home_with_context();
+    let file = price_file(&home);
+    let v = json(
+        agentlens(&home)
+            .args(["cost", "--format", "json", "--prices"])
+            .arg(&file),
+    );
+    let row = &v["rows"][0];
+    assert_eq!(row["key"], "claude-test-1");
+    assert_eq!(row["requests"], 3);
+    // (40 x 1 + 15 x 2 + 1000 x 0.5 + 1850 x 1.5) / 1e6
+    assert!((row["estimated_usd"].as_f64().unwrap() - 0.003345).abs() < 1e-9);
+    assert_eq!(row["measured_usd"], 0.0);
+    assert_eq!(v["unpriced_models"].as_object().unwrap().len(), 0);
+    agentlens(&home)
+        .args(["cost", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("~$0.00"))
+        .stdout(predicate::str::contains("computed from the price table"));
+}
+
+#[test]
+fn cost_lists_models_without_a_price_instead_of_guessing() {
+    let home = home_with_context();
+    let v = json(agentlens(&home).args(["cost", "--format", "json"]));
+    assert_eq!(v["unpriced_models"]["claude-test-1"], 3);
+    assert_eq!(v["total"]["unpriced_requests"], 3);
+    agentlens(&home)
+        .arg("cost")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("unpriced"))
+        .stdout(predicate::str::contains("No price for: claude-test-1 (3)"));
+}
+
+#[test]
+fn cost_csv_and_a_broken_price_file() {
+    let home = home_with_context();
+    let file = price_file(&home);
+    let out = agentlens(&home)
+        .args(["cost", "--format", "csv", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert!(
+        text.lines()
+            .next()
+            .unwrap()
+            .starts_with("model,requests,input_tokens")
+    );
+    assert!(
+        text.lines()
+            .nth(1)
+            .unwrap()
+            .starts_with("claude-test-1,3,40,15,1000,1850,0.000000,0.003345,0,")
+    );
+    let bad = home.path().join("bad.json");
+    fs::write(&bad, "{ nope").unwrap();
+    agentlens(&home)
+        .args(["cost", "--prices"])
+        .arg(&bad)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot load prices"));
+}

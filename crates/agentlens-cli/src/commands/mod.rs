@@ -1,4 +1,5 @@
 mod context;
+mod cost;
 mod flow;
 mod report;
 mod scan;
@@ -22,6 +23,14 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Context { kind } => {
             context::run(&registry, &env, &filter, &cli.source, kind, cli.format)
         }
+        Command::Cost { prices } => cost::run(
+            &registry,
+            &env,
+            &filter,
+            &cli.source,
+            prices.as_deref(),
+            cli.format,
+        ),
         Command::Flow { section, top } => flow::run(
             &registry,
             &env,

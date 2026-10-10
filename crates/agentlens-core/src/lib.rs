@@ -10,6 +10,7 @@ pub mod instructions;
 pub mod inventory;
 pub mod model;
 pub mod pipeline;
+pub mod prices;
 pub mod report;
 pub mod tokens;
 
