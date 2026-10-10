@@ -191,6 +191,18 @@ jobs:
         env:
           OUTPUT: RELEASE_NOTES.md
       # The installers job created the draft release; add the CLI binaries and publish it.
+      # Release PRs are squash-merged, so main may hold no conventional commits and
+      # git-cliff finds nothing. Then the notes are the change lines of the squash
+      # commit message (the commits of the release branch).
+      - name: Fall back to the squash commit message
+        run: |
+          if ! grep -q '^### ' RELEASE_NOTES.md; then
+            {
+              echo "## Changes"
+              echo
+              git log -1 --format=%b | grep -E '^\* (feat|fix|docs|perf|refactor)' | awk '!seen[$0]++'
+            } > RELEASE_NOTES.md
+          fi
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
