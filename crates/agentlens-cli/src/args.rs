@@ -15,7 +15,7 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Only this source (repeatable): claude-code, opencode, copilot-cli
+    /// Only this source (repeatable): claude-code, opencode, copilot-cli, vscode-copilot
     #[arg(long, global = true, value_name = "ID", value_parser = parse_source)]
     pub source: Vec<Source>,
 
