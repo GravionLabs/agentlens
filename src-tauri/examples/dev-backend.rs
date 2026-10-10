@@ -51,6 +51,8 @@ fn handle(ctx: &Context, command: &str, args: &Value) -> Result<String, String> 
         "compare" => json(api::compare(ctx, &filters)),
         "sessions" => json(api::sessions(ctx, &filters)),
         "timeline" => json(api::timeline(ctx, &filters, &text("source"), &text("id"))),
+        // The browser build never updates itself.
+        "update_check" => Ok("null".to_owned()),
         other => Err(format!("unknown command {other}")),
     }
 }

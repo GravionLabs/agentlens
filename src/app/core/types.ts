@@ -300,3 +300,11 @@ export interface Timeline {
   markers: TimelineMarker[];
   thinned_from: number | null;
 }
+
+/** A newer release than the running application. */
+export interface UpdateInfo {
+  version: string;
+  currentVersion: string;
+  notes: string | null;
+  date: string | null;
+}

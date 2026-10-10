@@ -6,11 +6,12 @@ import { FiltersService } from "./core/filters.service";
 import { Ipc } from "./core/ipc";
 import { LoadingService } from "./core/loading.service";
 import { FilterBar } from "./ui/filter-bar";
+import { UpdateStatus } from "./ui/update-status";
 import { inject } from "@angular/core";
 
 @Component({
   selector: "app-root",
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, FilterBar],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, FilterBar, UpdateStatus],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading.busy()) {
@@ -32,6 +33,9 @@ import { inject } from "@angular/core";
       <button type="button" class="refresh" (click)="refresh()" [disabled]="loading.busy()">
         Refresh
       </button>
+      @if (!sampleMode) {
+        <app-update-status />
+      }
     </header>
     <app-filter-bar />
     <main [class.busy]="loading.busy()" [attr.aria-busy]="loading.busy()">
