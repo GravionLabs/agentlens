@@ -94,6 +94,10 @@ pub struct SkillStats {
     pub unknown_loads: u32,
     pub carry: CarryCost,
     pub follow_on: UsageSum,
+    /// Usage the client itself attributes to the skill (OpenTelemetry
+    /// `skill.name`): measured, unlike the follow-on attribution.
+    #[serde(default)]
+    pub attributed: UsageSum,
     pub baseline: BaselineCost,
 }
 
@@ -182,6 +186,18 @@ pub fn analyze(
                 .or_insert_with(|| Acc::new(&skill.name, false, Vec::new()));
             acc.record(se, i, e.at, skill, inventory, estimator);
         }
+
+        for e in &se.events {
+            if let EventKind::Usage(u) = &e.kind
+                && let Some(name) = &u.skill
+            {
+                accs.entry(name.clone())
+                    .or_insert_with(|| Acc::new(name, false, Vec::new()))
+                    .stats
+                    .attributed
+                    .add(u);
+            }
+        }
     }
 
     // Several files may share a name; the skill is listed wherever any copy is visible.
@@ -221,6 +237,7 @@ impl Acc {
                 unknown_loads: 0,
                 carry: CarryCost::default(),
                 follow_on: UsageSum::default(),
+                attributed: UsageSum::default(),
                 baseline: BaselineCost {
                     requests: 0,
                     tokens: Tokens::estimated(0),

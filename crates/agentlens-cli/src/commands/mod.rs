@@ -3,12 +3,13 @@ mod context;
 mod cost;
 mod efficiency;
 mod flow;
+mod import_otel;
 mod report;
 mod scan;
 mod skills;
 mod unused;
 
-use agentlens_core::adapters::default_registry;
+use agentlens_core::adapters::registry_with_otel;
 use agentlens_core::env::Env;
 use anyhow::{Context, Result};
 
@@ -17,9 +18,10 @@ use crate::args::{Cli, Command};
 pub fn run(cli: Cli) -> Result<()> {
     let env =
         Env::from_system().context("cannot determine the home directory (HOME or USERPROFILE)")?;
-    let registry = default_registry();
+    let registry = registry_with_otel(cli.otel.clone());
     let filter = cli.filter()?;
     match cli.command {
+        Command::ImportOtel { file } => import_otel::run(&env, &file, cli.format),
         Command::Scan => scan::run(&registry, &env, &filter, &cli.source, cli.format),
         Command::Skills => skills::run(&registry, &env, &filter, &cli.source, cli.format),
         Command::Compare => compare::run(&registry, &env, &filter, &cli.source, cli.format),

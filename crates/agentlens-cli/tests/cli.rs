@@ -830,3 +830,98 @@ fn compare_table_and_csv_show_missing_values_as_not_available() {
     );
     assert!(text.lines().nth(1).unwrap().starts_with("copilot-cli,1,1,"));
 }
+
+fn otel_fixture() -> std::path::PathBuf {
+    fixtures().join("../otel/claude.jsonl")
+}
+
+#[test]
+fn import_otel_reports_what_the_export_holds() {
+    let home = home();
+    let v = json(
+        agentlens(&home)
+            .args(["import-otel", "--format", "json"])
+            .arg(otel_fixture()),
+    );
+    assert_eq!(v["sessions"], 2);
+    assert_eq!(v["requests"], 2);
+    assert_eq!(v["skill_invocations"], 1);
+    assert_eq!(v["tool_calls"], 2);
+    assert_eq!(v["also_in_local_data"], 0);
+    assert!(
+        v["warnings"][0]
+            .as_str()
+            .unwrap()
+            .contains("resourceMetrics")
+    );
+    agentlens(&home)
+        .arg("import-otel")
+        .arg(otel_fixture())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("also in local data"));
+    agentlens(&home)
+        .args(["import-otel", "/no/such/file"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("is not a file"));
+}
+
+#[test]
+fn otel_flag_adds_measured_skill_attribution_to_the_skills_report() {
+    let home = home();
+    let v = json(
+        agentlens(&home)
+            .args([
+                "skills",
+                "--since",
+                "2026-01-01",
+                "--format",
+                "json",
+                "--otel",
+            ])
+            .arg(otel_fixture()),
+    );
+    let demo = v["skills"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == "demo")
+        .unwrap();
+    assert_eq!(demo["attributed"]["requests"], 1);
+    assert_eq!(demo["attributed"]["input"], 100);
+    assert_eq!(demo["attributed"]["cache_read"], 1000);
+    agentlens(&home)
+        .args(["skills", "--since", "2026-01-01", "--otel"])
+        .arg(otel_fixture())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("attributed"));
+    // Without the flag nothing is attributed and the column is absent.
+    agentlens(&home)
+        .args(["skills", "--since", "2026-01-01"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("attributed").not());
+}
+
+#[test]
+fn otel_cost_comes_from_the_export_as_measured_cost() {
+    let home = tempfile::tempdir().unwrap();
+    let v = json(
+        agentlens(&home)
+            .args([
+                "cost",
+                "--since",
+                "2026-01-01",
+                "--format",
+                "json",
+                "--source",
+                "otel",
+                "--otel",
+            ])
+            .arg(otel_fixture()),
+    );
+    assert!((v["total"]["measured_usd"].as_f64().unwrap() - 0.30).abs() < 1e-9);
+    assert_eq!(v["total"]["unpriced_requests"], 0);
+}

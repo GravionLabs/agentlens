@@ -180,6 +180,8 @@ pub enum ContextKind {
     AgentListing,
     /// The list of available skills (name and description).
     SkillListing,
+    /// The client's system prompt (without tools and instruction files).
+    SystemPrompt,
     /// An instruction file such as `CLAUDE.md`.
     InstructionFile,
 }
@@ -191,6 +193,10 @@ pub struct ContextItem {
     /// Tool name, MCP server, agent type or file path, if known.
     pub name: Option<String>,
     pub bytes: u64,
+    /// Token count the client reported for the item; used instead of an
+    /// estimate from `bytes` when present.
+    #[serde(default)]
+    pub tokens: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -266,6 +272,10 @@ pub struct Usage {
     /// A count against a plan allowance, never money.
     #[serde(default)]
     pub premium_requests: Option<f64>,
+    /// The skill the client attributes this request to (OpenTelemetry
+    /// `skill.name`), if it reports one.
+    #[serde(default)]
+    pub skill: Option<String>,
 }
 
 impl Usage {
@@ -288,6 +298,7 @@ impl Default for Usage {
             measured: true,
             subagent: false,
             premium_requests: None,
+            skill: None,
         }
     }
 }

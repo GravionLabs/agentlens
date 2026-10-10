@@ -3,12 +3,13 @@ resolver = "3"
 members = ["crates/agentlens-core", "crates/agentlens-cli"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.94"
 authors = ["Jerome Kaufmann"]
 repository = "https://github.com/GravionLabs/agentlens"
 publish = false
+license = "MIT"
 
 [workspace.dependencies]
 agentlens-core = { path = "crates/agentlens-core" }

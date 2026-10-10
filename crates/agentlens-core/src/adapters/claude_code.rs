@@ -146,7 +146,7 @@ fn discover(projects: &Path, filter: &SessionFilter) -> Result<Vec<SessionFile>,
 }
 
 /// A file last modified before `since` cannot contain newer events.
-fn untouched_since(path: &Path, since: Option<Timestamp>) -> bool {
+pub(crate) fn untouched_since(path: &Path, since: Option<Timestamp>) -> bool {
     let Some(since) = since else { return false };
     fs::metadata(path)
         .and_then(|m| m.modified())
@@ -333,6 +333,7 @@ impl Parser<'_> {
                 kind,
                 name: name.map(str::to_owned),
                 bytes: bytes as u64,
+                tokens: None,
             }),
         );
     }
@@ -460,6 +461,7 @@ impl Parser<'_> {
             measured: true,
             subagent,
             premium_requests: None,
+            skill: None,
         };
         let key =
             str_of(msg, "id").map(|m| format!("{m}:{}", str_of(line, "requestId").unwrap_or("")));

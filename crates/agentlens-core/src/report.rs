@@ -89,6 +89,7 @@ mod tests {
             unknown_loads: 0,
             carry: Default::default(),
             follow_on: Default::default(),
+            attributed: Default::default(),
             baseline: BaselineCost {
                 requests: 3,
                 tokens: Tokens::estimated(40),

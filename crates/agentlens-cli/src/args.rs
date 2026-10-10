@@ -15,13 +15,17 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Only this source (repeatable): claude-code, opencode, copilot-cli
+    /// Only this source (repeatable): claude-code, opencode, copilot-cli, vscode-copilot
     #[arg(long, global = true, value_name = "ID", value_parser = parse_source)]
     pub source: Vec<Source>,
 
     /// Only sessions that ran in this project directory (or below it)
     #[arg(long, global = true, value_name = "DIR")]
     pub project: Option<std::path::PathBuf>,
+
+    /// OpenTelemetry export (OTLP JSON lines of Claude Code logs) to analyze as well (repeatable)
+    #[arg(long, global = true, value_name = "FILE")]
+    pub otel: Vec<std::path::PathBuf>,
 
     /// Output format
     #[arg(long, global = true, value_enum, default_value_t = Format::Table)]
@@ -33,6 +37,11 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// Read an OpenTelemetry export and report what it holds
+    ImportOtel {
+        /// OTLP JSON-lines file written by an OpenTelemetry Collector `file` exporter
+        file: std::path::PathBuf,
+    },
     /// Show which sources were found and how many sessions they hold
     Scan,
     /// Show which skills are used and what they cost in tokens
@@ -137,7 +146,8 @@ pub enum Format {
 
 fn parse_source(s: &str) -> Result<Source, String> {
     Source::from_id(s).ok_or_else(|| {
-        "unknown source, expected one of: claude-code, opencode, copilot-cli".to_owned()
+        "unknown source, expected one of: claude-code, opencode, copilot-cli, vscode-copilot"
+            .to_owned()
     })
 }
 
