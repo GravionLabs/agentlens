@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { NAV } from "./app.routes";
 import { SAMPLE_MODE } from "./core/ipc";
+import { FiltersService } from "./core/filters.service";
+import { Ipc } from "./core/ipc";
 import { LoadingService } from "./core/loading.service";
 import { FilterBar } from "./ui/filter-bar";
 import { inject } from "@angular/core";
@@ -27,6 +29,9 @@ import { inject } from "@angular/core";
       @if (sampleMode) {
         <span class="sample">sample data</span>
       }
+      <button type="button" class="refresh" (click)="refresh()" [disabled]="loading.busy()">
+        Refresh
+      </button>
     </header>
     <app-filter-bar />
     <main [class.busy]="loading.busy()" [attr.aria-busy]="loading.busy()">
@@ -107,6 +112,18 @@ import { inject } from "@angular/core";
       background: color-mix(in srgb, var(--accent) 12%, transparent);
       font-weight: 600;
     }
+    .refresh {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 14px;
+      cursor: pointer;
+    }
+    .refresh:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
     .sample {
       font-size: 0.8rem;
       color: var(--warn);
@@ -125,4 +142,15 @@ export class App {
   protected readonly nav = NAV;
   protected readonly sampleMode = inject(SAMPLE_MODE);
   protected readonly loading = inject(LoadingService);
+  private readonly ipc = inject(Ipc);
+  private readonly filters = inject(FiltersService);
+
+  /** Forgets the sessions the backend kept and runs the open view again. */
+  protected async refresh(): Promise<void> {
+    try {
+      await this.ipc.invoke("refresh");
+    } finally {
+      this.filters.bump();
+    }
+  }
 }

@@ -14,6 +14,7 @@ export class TauriIpc extends Ipc {
 }
 
 const SAMPLES: Record<string, () => Promise<{ default: unknown }>> = {
+  refresh: () => Promise.resolve({ default: { data: null, warnings: 0, errors: [] } }),
   overview: () => import("./samples/overview.json"),
   skills: () => import("./samples/skills.json"),
   context: () => import("./samples/context.json"),
@@ -38,15 +39,49 @@ export class SampleIpc extends Ipc {
   }
 }
 
+/** Calls the development backend (`cargo run -p agentlens-app --example dev-backend`). */
+export class HttpIpc extends Ipc {
+  private readonly base: string;
+
+  constructor(base: string) {
+    super();
+    this.base = base;
+  }
+
+  override async invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+    const res = await fetch(`${this.base}/${command}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(args ?? {}),
+    });
+    const body: unknown = await res.json();
+    if (!res.ok) throw new Error(typeof body === "string" ? body : "The backend failed.");
+    return body as T;
+  }
+}
+
+/** `?backend=http://127.0.0.1:1421` in the address selects the development backend. */
+export function devBackend(): string | null {
+  return BACKEND;
+}
+
+// Read once at start: the router rewrites the address and drops the query.
+const BACKEND =
+  typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("backend");
+
 export function runsInTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-export const IPC_FACTORY = () => (runsInTauri() ? new TauriIpc() : new SampleIpc());
+export const IPC_FACTORY = () => {
+  const backend = devBackend();
+  if (backend) return new HttpIpc(backend);
+  return runsInTauri() ? new TauriIpc() : new SampleIpc();
+};
 
 export const SAMPLE_MODE = new InjectionToken<boolean>("sample mode", {
   providedIn: "root",
-  factory: () => !runsInTauri(),
+  factory: () => !runsInTauri() && !devBackend(),
 });
 
 export function injectIpc(): Ipc {

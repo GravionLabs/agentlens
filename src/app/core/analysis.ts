@@ -20,7 +20,10 @@ export function analysis<T>(
   const id = Symbol(command);
   const res = resource({
     // Without params the resource stays idle.
-    params: () => (enabled() ? { filters: filters.payload(), extra: extra() } : undefined),
+    params: () =>
+      enabled()
+        ? { filters: filters.payload(), extra: extra(), generation: filters.generation() }
+        : undefined,
     loader: async ({ params }) =>
       ipc.invoke<Answer<T>>(command, { filters: params.filters, ...params.extra }),
   });

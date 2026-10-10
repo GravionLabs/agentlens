@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   compact,
   day,
+  timeOfDay,
   minutes,
   number,
+  pathLabel,
   percent,
   shortId,
+  shortPath,
   sourceLabel,
   tokens,
   usd,
@@ -38,7 +41,19 @@ describe("format", () => {
     expect(minutes(90_000)).toBe("1.5");
     expect(day("2026-10-02T09:00:00Z")).toBe("2026-10-02");
     expect(day(null)).toBe("-");
+    expect(timeOfDay("2026-10-02T09:00:20.123Z")).toBe("09:00:20");
+    expect(timeOfDay(null)).toBe("-");
     expect(shortId("0123456789")).toBe("01234567");
     expect(sourceLabel("vscode-copilot")).toBe("VS Code Copilot");
+  });
+
+  it("shortens paths to their last two segments and leaves other values alone", () => {
+    expect(shortPath("/home/u/Source/gravionlabs/ariadne")).toBe("gravionlabs/ariadne");
+    expect(shortPath("C:\\Users\\u\\repo\\app")).toBe("repo/app");
+    expect(shortPath("/work")).toBe("/work");
+    expect(shortPath(null)).toBe("-");
+    expect(pathLabel("/home/u/a/b")).toBe("a/b");
+    expect(pathLabel("claude-sonnet-5-5")).toBe("claude-sonnet-5-5");
+    expect(pathLabel("#327")).toBe("#327");
   });
 });

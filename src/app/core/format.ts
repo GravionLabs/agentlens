@@ -64,3 +64,20 @@ export function sourceLabel(id: string): string {
       return id;
   }
 }
+
+/** The last two segments of a path (`gravionlabs/ariadne`); the full path belongs in a tooltip. */
+export function shortPath(path: string | null | undefined): string {
+  if (!path) return "-";
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  return parts.length <= 2 ? path : parts.slice(-2).join("/");
+}
+
+/** Shortens values that are paths and leaves everything else (model names, issue numbers) as it is. */
+export function pathLabel(value: string): string {
+  return value.startsWith("/") || /^[A-Za-z]:[\\/]/.test(value) ? shortPath(value) : value;
+}
+
+/** The time of day (UTC) of an RFC 3339 instant, or `-`. */
+export function timeOfDay(ts: string | null | undefined): string {
+  return ts && ts.length >= 19 ? ts.slice(11, 19) : "-";
+}

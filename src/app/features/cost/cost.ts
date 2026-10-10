@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, usd } from "../../core/format";
+import { number, pathLabel, usd } from "../../core/format";
 import type { CostData, CostRow, WhatIfRow } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
@@ -179,6 +179,8 @@ export class Cost {
       key: "key",
       label: GROUPS.find((g) => g.id === this.by())?.label ?? "Group",
       value: (r) => r.key,
+      text: (r) => pathLabel(r.key),
+      hover: (r) => r.key,
     },
     {
       key: "requests",
@@ -210,14 +212,16 @@ export class Cost {
       estimated: (r) => r.estimated_usd > 0 && r.measured_usd === 0,
       numeric: true,
     },
-    {
-      key: "premium",
-      label: "Premium requests",
-      value: (r) => r.premium_requests,
-      text: (r) => (r.premium_requests > 0 ? String(r.premium_requests) : ""),
-      numeric: true,
-    },
+    ...(this.rows().some((r) => r.premium_requests > 0) ? [this.premiumColumn] : []),
   ]);
+
+  private readonly premiumColumn: Column<CostRow> = {
+    key: "premium",
+    label: "Premium requests",
+    value: (r) => r.premium_requests,
+    text: (r) => (r.premium_requests > 0 ? String(r.premium_requests) : ""),
+    numeric: true,
+  };
 
   protected readonly whatIfColumns: Column<WhatIfRow>[] = [
     { key: "model", label: "Model", value: (r) => r.model },

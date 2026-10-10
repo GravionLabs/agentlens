@@ -6,6 +6,7 @@
 //! against fixture homes.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use agentlens_core::adapter::{Registry, SessionFilter};
 use agentlens_core::adapters::default_registry;
@@ -39,7 +40,9 @@ impl Context {
             .ok_or("cannot determine the home directory (HOME or USERPROFILE)")?;
         Ok(Context {
             env,
-            registry: default_registry(),
+            // Every view asks for its own analysis; they share the sessions read for
+            // the same filters for a few minutes. Refresh forgets them.
+            registry: default_registry().with_cache(Duration::from_secs(300)),
         })
     }
 }
@@ -58,6 +61,10 @@ pub struct Filters {
 
 impl Filters {
     fn resolve(&self, now: Timestamp) -> Result<(SessionFilter, Vec<Source>), String> {
+        // Relative periods count from a five-minute step, so that the views asking one
+        // after the other share the sessions the registry cache holds for that selection.
+        let now = Timestamp::from_second(now.as_second() - now.as_second().rem_euclid(300))
+            .unwrap_or(now);
         let since = match self
             .since
             .as_deref()
@@ -97,6 +104,12 @@ fn answer<T>(data: T, warnings: u64, errors: Vec<String>) -> Result<Answer<T>, S
     })
 }
 
+/// Forgets the sessions read so far, so the next analysis reads the files again.
+pub fn refresh(ctx: &Context) -> Result<Answer<()>, String> {
+    ctx.registry.clear_cache();
+    answer((), 0, Vec::new())
+}
+
 #[derive(Debug, Serialize)]
 pub struct SourceOverview {
     pub source: Source,
@@ -111,22 +124,39 @@ pub struct SourceOverview {
 
 pub fn overview(ctx: &Context, f: &Filters) -> Result<Answer<Vec<SourceOverview>>, String> {
     let (filter, only) = f.resolve(Timestamp::now())?;
-    let scans = pipeline::scan_sources(&ctx.registry, &ctx.env, &filter, &only);
-    let warnings = scans.iter().map(|s| s.warnings).sum();
-    let data = scans
+    // One read of all selected sources (shared with the other views through the
+    // registry cache), then counted per source.
+    let mut rows: Vec<SourceOverview> = ctx
+        .registry
+        .detect_all(&ctx.env)
         .into_iter()
-        .map(|s| SourceOverview {
-            source: s.source,
-            found: s.detection.found,
-            roots: s.detection.roots,
-            note: s.detection.note,
-            sessions: s.sessions,
-            events: s.events,
-            warnings: s.warnings,
-            errors: s.errors,
+        .filter(|(source, _)| only.is_empty() || only.contains(source))
+        .map(|(source, d)| SourceOverview {
+            source,
+            found: d.found,
+            roots: d.roots,
+            note: d.note,
+            sessions: 0,
+            events: 0,
+            warnings: 0,
+            errors: Vec::new(),
         })
         .collect();
-    answer(data, warnings, Vec::new())
+    let mut errors = Vec::new();
+    for r in ctx.registry.sessions(&ctx.env, &filter, &only) {
+        match r {
+            Ok(se) => {
+                if let Some(row) = rows.iter_mut().find(|row| row.source == se.session.source) {
+                    row.sessions += 1;
+                    row.events += se.events.len() as u64;
+                    row.warnings += se.warnings.len() as u64;
+                }
+            }
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+    let warnings = rows.iter().map(|r| r.warnings).sum();
+    answer(rows, warnings, errors)
 }
 
 #[derive(Debug, Serialize)]
