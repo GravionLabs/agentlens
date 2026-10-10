@@ -100,6 +100,19 @@ impl Inventory {
     }
 }
 
+impl Location {
+    /// The project a project-level location belongs to (`<project>/.claude/skills` -> `<project>`).
+    pub fn project_root(&self) -> Option<&Path> {
+        use LocationKind::*;
+        match self.kind {
+            ProjectClaude | ProjectAgents | ProjectGithub | ProjectOpenCode => {
+                self.dir.parent()?.parent()
+            }
+            _ => None,
+        }
+    }
+}
+
 /// Skill directories of the user and of the given projects.
 pub fn locations(env: &Env, projects: &[PathBuf]) -> Vec<Location> {
     let home = env.home();

@@ -10,12 +10,16 @@ use serde::{Deserialize, Serialize};
 
 /// The kind of data source a session was read from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
 pub enum Source {
+    #[serde(rename = "claude-code")]
     ClaudeCode,
+    #[serde(rename = "opencode")]
     OpenCode,
+    #[serde(rename = "copilot-cli")]
     CopilotCli,
+    #[serde(rename = "vscode-copilot")]
     VsCodeCopilot,
+    #[serde(rename = "otel")]
     Otel,
 }
 
@@ -271,6 +275,22 @@ mod tests {
         let json = serde_json::to_string(&se).unwrap();
         let back: SessionEvents = serde_json::from_str(&json).unwrap();
         assert_eq!(back, se);
+    }
+
+    #[test]
+    fn serialized_source_matches_its_id() {
+        for s in [
+            Source::ClaudeCode,
+            Source::OpenCode,
+            Source::CopilotCli,
+            Source::VsCodeCopilot,
+            Source::Otel,
+        ] {
+            assert_eq!(
+                serde_json::to_string(&s).unwrap(),
+                format!("\"{}\"", s.id())
+            );
+        }
     }
 
     #[test]

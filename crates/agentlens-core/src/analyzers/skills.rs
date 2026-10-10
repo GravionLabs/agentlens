@@ -1,0 +1,656 @@
+//! Skill usage and what it costs.
+//!
+//! Four kinds of cost per skill:
+//!
+//! - **baseline**: name and description are part of every request of the
+//!   clients that load the skill, used or not (estimated from the inventory);
+//! - **load**: the skill content entering the context. Where the client reports
+//!   usage, this is the growth of the request size across the load (an upper
+//!   bound: other content added in the same step is included), otherwise it is
+//!   estimated from the content size;
+//! - **carry**: the loaded content stays in the context and is sent again with
+//!   every later request until the context is compacted (estimated: load size ×
+//!   later requests, split into cache read and uncached by each request's
+//!   cache share);
+//! - **follow-on**: what the requests after the load cost until the next user
+//!   turn, the next skill or a compaction. The usage numbers are measured, but
+//!   attributing them to the skill is an assumption.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
+
+use jiff::Timestamp;
+use serde::{Deserialize, Serialize};
+
+use crate::inventory::Inventory;
+use crate::model::{EventKind, SessionEvents, SkillInvoked, SkillTrigger, Source, Usage};
+use crate::tokens::{TokenEstimator, Tokens};
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TriggerCounts {
+    pub model: u32,
+    pub user: u32,
+    pub nested: u32,
+}
+
+/// Sum of the usage of several requests.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UsageSum {
+    pub requests: u64,
+    pub input: u64,
+    pub output: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
+}
+
+impl UsageSum {
+    fn add(&mut self, u: &Usage) {
+        self.requests += 1;
+        self.input += u.input;
+        self.output += u.output;
+        self.cache_read += u.cache_read;
+        self.cache_write += u.cache_write;
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CarryCost {
+    /// Later requests that carried the skill content.
+    pub requests: u64,
+    /// Skill content tokens × requests.
+    pub tokens: u64,
+    /// The part of `tokens` served from the cache.
+    pub cache_read_tokens: u64,
+    pub uncached_tokens: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BaselineCost {
+    /// Requests of the clients (and projects) that list the skill.
+    pub requests: u64,
+    /// Listing tokens × requests, estimated.
+    pub tokens: Tokens,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillStats {
+    pub name: String,
+    pub in_inventory: bool,
+    /// Clients that load the skill according to the inventory.
+    pub clients: Vec<Source>,
+    pub invocations: u32,
+    pub sessions: u32,
+    pub projects: Vec<PathBuf>,
+    pub first_used: Option<Timestamp>,
+    pub last_used: Option<Timestamp>,
+    pub triggers: TriggerCounts,
+    pub by_source: BTreeMap<Source, u32>,
+    /// Sum of the load cost; `measured` only if every load was measured.
+    pub load: Tokens,
+    /// Invocations whose load size could not be determined (counted as 0).
+    pub unknown_loads: u32,
+    pub carry: CarryCost,
+    pub follow_on: UsageSum,
+    pub baseline: BaselineCost,
+}
+
+impl SkillStats {
+    /// Tokens the skill adds on top of the work itself: baseline + load + carry.
+    pub fn overhead_tokens(&self) -> u64 {
+        self.baseline.tokens.count + self.load.count + self.carry.tokens
+    }
+}
+
+/// A user-typed command that is not an installed skill (e.g. a custom command).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IgnoredCommand {
+    pub name: String,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SkillReport {
+    pub sessions: u32,
+    pub first_event: Option<Timestamp>,
+    pub last_event: Option<Timestamp>,
+    pub requests_by_source: BTreeMap<Source, u64>,
+    /// Sorted by name.
+    pub skills: Vec<SkillStats>,
+    pub ignored_commands: Vec<IgnoredCommand>,
+}
+
+struct Acc {
+    stats: SkillStats,
+    sessions: BTreeSet<String>,
+    projects: BTreeSet<PathBuf>,
+    all_loads_measured: bool,
+}
+
+pub fn analyze(
+    inventory: &Inventory,
+    sessions: &[SessionEvents],
+    estimator: &dyn TokenEstimator,
+) -> SkillReport {
+    let mut report = SkillReport::default();
+    let mut accs: BTreeMap<String, Acc> = BTreeMap::new();
+    let mut ignored: BTreeMap<String, u32> = BTreeMap::new();
+
+    for entry in &inventory.skills {
+        accs.entry(entry.name.clone())
+            .or_insert_with(|| Acc::new(&entry.name, true, entry.clients.clone()));
+    }
+
+    for se in sessions {
+        report.sessions += 1;
+        let requests = se
+            .events
+            .iter()
+            .filter(|e| matches!(e.kind, EventKind::Usage(_)))
+            .count() as u64;
+        *report
+            .requests_by_source
+            .entry(se.session.source)
+            .or_default() += requests;
+        for e in &se.events {
+            if let Some(at) = e.at {
+                report.first_event = Some(report.first_event.map_or(at, |f| f.min(at)));
+                report.last_event = Some(report.last_event.map_or(at, |l| l.max(at)));
+            }
+        }
+
+        for (i, e) in se.events.iter().enumerate() {
+            let EventKind::SkillInvoked(skill) = &e.kind else {
+                continue;
+            };
+            let known = inventory.skills.iter().any(|s| s.name == skill.name);
+            if skill.trigger == SkillTrigger::User && !known {
+                *ignored.entry(skill.name.clone()).or_default() += 1;
+                continue;
+            }
+            let acc = accs
+                .entry(skill.name.clone())
+                .or_insert_with(|| Acc::new(&skill.name, false, Vec::new()));
+            acc.record(se, i, e.at, skill, inventory, estimator);
+        }
+    }
+
+    // Several files with one name: the first (sorted by name, then file) wins, so it is applied last.
+    for entry in inventory.skills.iter().rev() {
+        if let Some(acc) = accs.get_mut(&entry.name) {
+            acc.stats.baseline = baseline(entry, sessions);
+        }
+    }
+
+    report.skills = accs.into_values().map(Acc::finish).collect();
+    report.ignored_commands = ignored
+        .into_iter()
+        .map(|(name, count)| IgnoredCommand { name, count })
+        .collect();
+    report
+}
+
+impl Acc {
+    fn new(name: &str, in_inventory: bool, clients: Vec<Source>) -> Acc {
+        Acc {
+            stats: SkillStats {
+                name: name.to_owned(),
+                in_inventory,
+                clients,
+                invocations: 0,
+                sessions: 0,
+                projects: Vec::new(),
+                first_used: None,
+                last_used: None,
+                triggers: TriggerCounts::default(),
+                by_source: BTreeMap::new(),
+                load: Tokens::measured(0),
+                unknown_loads: 0,
+                carry: CarryCost::default(),
+                follow_on: UsageSum::default(),
+                baseline: BaselineCost {
+                    requests: 0,
+                    tokens: Tokens::estimated(0),
+                },
+            },
+            sessions: BTreeSet::new(),
+            projects: BTreeSet::new(),
+            all_loads_measured: true,
+        }
+    }
+
+    fn record(
+        &mut self,
+        se: &SessionEvents,
+        i: usize,
+        at: Option<Timestamp>,
+        skill: &SkillInvoked,
+        inventory: &Inventory,
+        estimator: &dyn TokenEstimator,
+    ) {
+        let s = &mut self.stats;
+        s.invocations += 1;
+        match skill.trigger {
+            SkillTrigger::Model => s.triggers.model += 1,
+            SkillTrigger::User => s.triggers.user += 1,
+            SkillTrigger::Nested => s.triggers.nested += 1,
+        }
+        *s.by_source.entry(se.session.source).or_default() += 1;
+        self.sessions
+            .insert(format!("{}:{}", se.session.source.id(), se.session.id));
+        if let Some(dir) = &se.session.project_dir {
+            self.projects.insert(dir.clone());
+        }
+        if let Some(at) = at {
+            s.first_used = Some(s.first_used.map_or(at, |f| f.min(at)));
+            s.last_used = Some(s.last_used.map_or(at, |l| l.max(at)));
+        }
+
+        let window_end = se.events[i + 1..]
+            .iter()
+            .position(|e| matches!(e.kind, EventKind::Compaction))
+            .map_or(se.events.len(), |p| i + 1 + p);
+        let main_usage = |range: std::ops::Range<usize>| {
+            se.events[range].iter().filter_map(|e| match &e.kind {
+                EventKind::Usage(u) if !u.subagent => Some(u),
+                _ => None,
+            })
+        };
+        let window_start = se.events[..i]
+            .iter()
+            .rposition(|e| matches!(e.kind, EventKind::Compaction))
+            .map_or(0, |p| p + 1);
+        let before = main_usage(window_start..i).next_back();
+        let mut after = main_usage(i + 1..window_end);
+        let first_after = after.next();
+
+        // Load: measured growth of the request size, else estimated from size.
+        let measured = match (before, first_after) {
+            (Some(b), Some(a)) => {
+                Some(a.total_input().saturating_sub(b.total_input())).filter(|d| *d > 0)
+            }
+            _ => None,
+        };
+        let load = match (
+            measured,
+            skill.content_bytes,
+            inventory.find(&skill.name).first(),
+        ) {
+            (Some(d), _, _) => Tokens::measured(d),
+            (None, Some(bytes), _) => estimator.count_bytes(bytes),
+            (None, None, Some(entry)) => entry.body_tokens,
+            (None, None, None) => {
+                s.unknown_loads += 1;
+                Tokens::estimated(0)
+            }
+        };
+        s.load.count += load.count;
+        self.all_loads_measured &= load.measured;
+
+        // Carry: every request after the first one that saw the content.
+        for u in after {
+            let total = u.total_input();
+            let cached = if total == 0 {
+                0
+            } else {
+                (load.count as u128 * u.cache_read as u128 / total as u128) as u64
+            };
+            s.carry.requests += 1;
+            s.carry.tokens += load.count;
+            s.carry.cache_read_tokens += cached;
+            s.carry.uncached_tokens += load.count - cached;
+        }
+
+        // Follow-on: until the next turn, skill or compaction.
+        let end = se.events[i + 1..]
+            .iter()
+            .position(|e| {
+                matches!(
+                    e.kind,
+                    EventKind::UserTurn | EventKind::SkillInvoked(_) | EventKind::Compaction
+                )
+            })
+            .map_or(se.events.len(), |p| i + 1 + p);
+        for e in &se.events[i + 1..end] {
+            if let EventKind::Usage(u) = &e.kind {
+                s.follow_on.add(u);
+            }
+        }
+    }
+
+    fn finish(mut self) -> SkillStats {
+        self.stats.sessions = self.sessions.len() as u32;
+        self.stats.projects = self.projects.into_iter().collect();
+        self.stats.load.measured = self.all_loads_measured;
+        self.stats
+    }
+}
+
+/// Listing tokens × the requests of every session in which the skill is listed.
+fn baseline(entry: &crate::inventory::SkillEntry, sessions: &[SessionEvents]) -> BaselineCost {
+    let mut requests = 0u64;
+    for se in sessions {
+        let listed = entry.locations.iter().any(|loc| {
+            loc.kind.clients().contains(&se.session.source)
+                && match loc.project_root() {
+                    None => true,
+                    Some(root) => se
+                        .session
+                        .project_dir
+                        .as_deref()
+                        .is_some_and(|d| d.starts_with(root)),
+                }
+        });
+        if listed {
+            requests += se
+                .events
+                .iter()
+                .filter(|e| matches!(e.kind, EventKind::Usage(_)))
+                .count() as u64;
+        }
+    }
+    BaselineCost {
+        requests,
+        tokens: Tokens::estimated(entry.baseline_tokens.count * requests),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::inventory::{Location, LocationKind, SkillEntry};
+    use crate::model::{Event, Session};
+    use crate::tokens::CharsPerToken;
+
+    fn usage(
+        input: u64,
+        output: u64,
+        cache_read: u64,
+        cache_write: u64,
+        subagent: bool,
+    ) -> EventKind {
+        EventKind::Usage(Usage {
+            input,
+            output,
+            cache_read,
+            cache_write,
+            subagent,
+            ..Usage::default()
+        })
+    }
+
+    fn skill(name: &str, trigger: SkillTrigger, bytes: Option<u64>) -> EventKind {
+        let mut s = SkillInvoked::new(name, trigger);
+        s.content_bytes = bytes;
+        EventKind::SkillInvoked(s)
+    }
+
+    fn session(id: &str, source: Source, project: &str, kinds: Vec<EventKind>) -> SessionEvents {
+        let mut s = Session::new(id, source);
+        s.project_dir = Some(project.into());
+        let events = kinds
+            .into_iter()
+            .enumerate()
+            .map(|(i, kind)| Event {
+                at: Some(Timestamp::from_second(1_790_000_000 + i as i64).unwrap()),
+                kind,
+            })
+            .collect();
+        SessionEvents {
+            session: s,
+            events,
+            warnings: Vec::new(),
+        }
+    }
+
+    fn entry(name: &str, baseline: u64, body: u64, kind: LocationKind, dir: &str) -> SkillEntry {
+        let loc = Location {
+            kind,
+            dir: dir.into(),
+        };
+        SkillEntry {
+            name: name.into(),
+            description: None,
+            file: format!("{dir}/{name}/SKILL.md").into(),
+            clients: kind.clients().to_vec(),
+            locations: vec![loc],
+            baseline_tokens: Tokens::estimated(baseline),
+            body_tokens: Tokens::estimated(body),
+            body_bytes: body * 4,
+        }
+    }
+
+    fn inventory(skills: Vec<SkillEntry>) -> Inventory {
+        Inventory {
+            skills,
+            ..Inventory::default()
+        }
+    }
+
+    fn find<'a>(r: &'a SkillReport, name: &str) -> &'a SkillStats {
+        r.skills.iter().find(|s| s.name == name).unwrap()
+    }
+
+    /// One skill load with known numbers, computed by hand:
+    ///
+    /// load = 2410 - 1010 = 1400 (measured)
+    /// carry = requests U3 and U5 (the subagent request U4 is not part of the main context):
+    ///   cache_read = 1400*2400/2405 + 1400*2000/2001 = 1397 + 1399 = 2796
+    /// follow-on = U2, U3, U4 (up to the next user turn)
+    fn measured_session() -> SessionEvents {
+        session(
+            "s1",
+            Source::ClaudeCode,
+            "/work/demo",
+            vec![
+                EventKind::UserTurn,
+                usage(10, 0, 1000, 0, false),
+                skill("demo", SkillTrigger::Model, Some(4000)),
+                usage(10, 100, 1900, 500, false),
+                usage(5, 50, 2400, 0, false),
+                usage(7, 3, 0, 0, true),
+                EventKind::UserTurn,
+                usage(1, 0, 2000, 0, false),
+            ],
+        )
+    }
+
+    #[test]
+    fn load_is_the_measured_growth_of_the_request_size() {
+        let r = analyze(&inventory(vec![]), &[measured_session()], &CharsPerToken);
+        let s = find(&r, "demo");
+        assert_eq!(s.load, Tokens::measured(1400));
+        assert_eq!(s.unknown_loads, 0);
+    }
+
+    #[test]
+    fn carry_counts_later_main_requests_until_the_end_of_the_window() {
+        let r = analyze(&inventory(vec![]), &[measured_session()], &CharsPerToken);
+        let c = &find(&r, "demo").carry;
+        assert_eq!(c.requests, 2);
+        assert_eq!(c.tokens, 2800);
+        assert_eq!(c.cache_read_tokens, 2796);
+        assert_eq!(c.uncached_tokens, 4);
+    }
+
+    #[test]
+    fn follow_on_stops_at_the_next_user_turn_and_includes_subagents() {
+        let r = analyze(&inventory(vec![]), &[measured_session()], &CharsPerToken);
+        let f = &find(&r, "demo").follow_on;
+        assert_eq!(
+            (f.requests, f.input, f.output, f.cache_read, f.cache_write),
+            (3, 22, 153, 4300, 500)
+        );
+    }
+
+    #[test]
+    fn load_falls_back_to_content_size_then_inventory_body_size() {
+        // No request before the load: no measured growth.
+        let first = session(
+            "a",
+            Source::ClaudeCode,
+            "/p",
+            vec![
+                skill("demo", SkillTrigger::Model, Some(4000)),
+                usage(1, 1, 1, 1, false),
+            ],
+        );
+        let r = analyze(&inventory(vec![]), &[first], &CharsPerToken);
+        assert_eq!(find(&r, "demo").load, Tokens::estimated(1000));
+
+        let no_size = session(
+            "b",
+            Source::ClaudeCode,
+            "/p",
+            vec![skill("demo", SkillTrigger::Model, None)],
+        );
+        let inv = inventory(vec![entry(
+            "demo",
+            7,
+            321,
+            LocationKind::UserClaude,
+            "/h/.claude/skills",
+        )]);
+        let r = analyze(&inv, std::slice::from_ref(&no_size), &CharsPerToken);
+        assert_eq!(find(&r, "demo").load, Tokens::estimated(321));
+
+        let r = analyze(&inventory(vec![]), &[no_size], &CharsPerToken);
+        assert_eq!(find(&r, "demo").unknown_loads, 1);
+    }
+
+    #[test]
+    fn a_compaction_ends_the_context_window() {
+        let s = session(
+            "c",
+            Source::ClaudeCode,
+            "/p",
+            vec![
+                usage(10, 0, 1000, 0, false),
+                skill("demo", SkillTrigger::Model, Some(400)),
+                usage(10, 0, 1100, 0, false),
+                usage(10, 0, 1200, 0, false),
+                EventKind::Compaction,
+                usage(10, 0, 100, 0, false),
+                usage(10, 0, 100, 0, false),
+            ],
+        );
+        let r = analyze(&inventory(vec![]), &[s], &CharsPerToken);
+        let d = find(&r, "demo");
+        assert_eq!(d.load, Tokens::measured(100));
+        assert_eq!(
+            d.carry.requests, 1,
+            "only the request before the compaction carries the content"
+        );
+        assert_eq!(d.follow_on.requests, 2);
+    }
+
+    #[test]
+    fn statistics_cover_triggers_sessions_projects_and_time() {
+        let a = session(
+            "a",
+            Source::ClaudeCode,
+            "/work/demo",
+            vec![
+                skill("demo", SkillTrigger::Model, None),
+                skill("demo", SkillTrigger::User, None),
+            ],
+        );
+        let b = session(
+            "b",
+            Source::OpenCode,
+            "/work/other",
+            vec![skill("demo", SkillTrigger::Model, None)],
+        );
+        let inv = inventory(vec![entry(
+            "demo",
+            7,
+            10,
+            LocationKind::UserClaude,
+            "/h/.claude/skills",
+        )]);
+        let r = analyze(&inv, &[a, b], &CharsPerToken);
+        let d = find(&r, "demo");
+        assert_eq!((d.invocations, d.sessions), (3, 2));
+        assert_eq!(
+            (d.triggers.model, d.triggers.user, d.triggers.nested),
+            (2, 1, 0)
+        );
+        assert_eq!(d.by_source[&Source::ClaudeCode], 2);
+        assert_eq!(
+            d.projects,
+            [PathBuf::from("/work/demo"), PathBuf::from("/work/other")]
+        );
+        assert!(d.first_used.unwrap() < d.last_used.unwrap());
+        assert!(d.in_inventory);
+        assert_eq!(r.sessions, 2);
+    }
+
+    #[test]
+    fn user_commands_that_are_no_installed_skill_are_ignored() {
+        let s = session(
+            "a",
+            Source::ClaudeCode,
+            "/p",
+            vec![
+                skill("my-command", SkillTrigger::User, None),
+                skill("demo", SkillTrigger::User, None),
+            ],
+        );
+        let inv = inventory(vec![entry(
+            "demo",
+            7,
+            10,
+            LocationKind::UserClaude,
+            "/h/.claude/skills",
+        )]);
+        let r = analyze(&inv, &[s], &CharsPerToken);
+        assert_eq!(
+            r.ignored_commands,
+            [IgnoredCommand {
+                name: "my-command".into(),
+                count: 1
+            }]
+        );
+        assert_eq!(find(&r, "demo").invocations, 1);
+        assert!(r.skills.iter().all(|s| s.name != "my-command"));
+    }
+
+    #[test]
+    fn baseline_counts_requests_of_the_clients_and_projects_that_list_the_skill() {
+        let user = entry(
+            "global",
+            7,
+            0,
+            LocationKind::UserClaude,
+            "/h/.claude/skills",
+        );
+        let project = entry(
+            "local",
+            10,
+            0,
+            LocationKind::ProjectGithub,
+            "/work/demo/.github/skills",
+        );
+        let reqs = |n: usize| (0..n).map(|_| usage(1, 1, 1, 1, false)).collect::<Vec<_>>();
+        let sessions = [
+            session("c", Source::ClaudeCode, "/work/demo", reqs(5)),
+            session("o", Source::OpenCode, "/work/demo", reqs(3)),
+            session("p1", Source::CopilotCli, "/work/demo", reqs(4)),
+            session("p2", Source::CopilotCli, "/work/other", reqs(6)),
+        ];
+        let r = analyze(&inventory(vec![user, project]), &sessions, &CharsPerToken);
+
+        // Claude Code, OpenCode and both Copilot sessions all load ~/.claude/skills.
+        let g = find(&r, "global");
+        assert_eq!(g.baseline.requests, 18);
+        assert_eq!(g.baseline.tokens, Tokens::estimated(7 * 18));
+        // Only Copilot sessions inside /work/demo list the project skill.
+        let l = find(&r, "local");
+        assert_eq!(l.baseline.requests, 4);
+        assert_eq!(l.baseline.tokens, Tokens::estimated(40));
+        assert_eq!(
+            l.invocations, 0,
+            "unused skills are reported with their baseline cost"
+        );
+        assert_eq!(r.requests_by_source[&Source::CopilotCli], 10);
+    }
+}

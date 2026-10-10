@@ -28,6 +28,9 @@ impl Tokens {
 /// Counts the tokens of a text.
 pub trait TokenEstimator {
     fn count(&self, text: &str) -> Tokens;
+
+    /// Estimate for content known only by its size in bytes.
+    fn count_bytes(&self, bytes: u64) -> Tokens;
 }
 
 /// `characters / 4`, rounded up. Offline, deterministic, always an estimate.
@@ -37,6 +40,10 @@ pub struct CharsPerToken;
 impl TokenEstimator for CharsPerToken {
     fn count(&self, text: &str) -> Tokens {
         Tokens::estimated((text.chars().count() as u64).div_ceil(4))
+    }
+
+    fn count_bytes(&self, bytes: u64) -> Tokens {
+        Tokens::estimated(bytes.div_ceil(4))
     }
 }
 
@@ -51,6 +58,11 @@ mod tests {
         assert_eq!(e.count("abcd").count, 1);
         assert_eq!(e.count("abcde").count, 2);
         assert_eq!(e.count("äöüß").count, 1, "four characters, eight bytes");
+    }
+
+    #[test]
+    fn size_only_estimate_uses_bytes() {
+        assert_eq!(CharsPerToken.count_bytes(9).count, 3);
     }
 
     #[test]
