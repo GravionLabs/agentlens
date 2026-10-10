@@ -40,7 +40,35 @@ export const routes: Routes = [
     path: "unused",
     loadComponent: () => import("./features/unused/unused").then((m) => m.Unused),
   },
-  ...NAV.filter((n) => !["overview", "skills", "context", "unused"].includes(n.path)).map((n) => ({
+  {
+    path: "flow",
+    loadComponent: () => import("./features/flow/flow").then((m) => m.Flow),
+  },
+  {
+    path: "cost",
+    loadComponent: () => import("./features/cost/cost").then((m) => m.Cost),
+  },
+  {
+    path: "efficiency",
+    loadComponent: () => import("./features/efficiency/efficiency").then((m) => m.Efficiency),
+  },
+  {
+    path: "compare",
+    loadComponent: () => import("./features/compare/compare").then((m) => m.Compare),
+  },
+  ...NAV.filter(
+    (n) =>
+      ![
+        "overview",
+        "skills",
+        "context",
+        "unused",
+        "flow",
+        "cost",
+        "efficiency",
+        "compare",
+      ].includes(n.path),
+  ).map((n) => ({
     path: n.path,
     ...placeholder(n.label),
   })),
