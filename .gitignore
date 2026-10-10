@@ -1,1 +1,11 @@
 /target
+
+# Frontend
+/dist
+/out-tsc
+/node_modules
+/.angular/cache
+/coverage
+
+# Tauri
+/src-tauri/gen
