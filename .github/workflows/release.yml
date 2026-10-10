@@ -2,22 +2,20 @@ name: release
 
 # A push to main versions the build with GitVersion (GitVersion.yml), builds the
 # CLI binaries and the application installers and publishes one GitHub release
-# tagged v<version>. Pull requests that touch the release files run the builds as
-# a dry run without publishing.
+# tagged v<version>. Binaries and installers for four targets are expensive
+# (macOS and Windows runners), so they are only built when a release branch is
+# merged into main, never on a pull request. Run this via workflow_dispatch to
+# validate the matrix on a branch: such a run gets a throw-away version and
+# creates no release.
 on:
   push:
     branches: [main]
-  pull_request:
-    paths:
-      - ".github/workflows/release.yml"
-      - "GitVersion.yml"
-      - "cliff.toml"
-      - "src-tauri/tauri.conf.json"
+  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.ref }}
   # A release in progress is never cancelled.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read

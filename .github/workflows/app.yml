@@ -5,6 +5,7 @@ name: App
 # and needs no system libraries.
 on:
   pull_request:
+    branches: [main]
     paths:
       - "package.json"
       - "pnpm-lock.yaml"
