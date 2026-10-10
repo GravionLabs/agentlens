@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::adapter::{Detection, Registry, SessionFilter};
+use crate::analyzers::compare::{self, CompareReport};
 use crate::analyzers::context::{self, ContextReport};
 use crate::analyzers::cost::{self, CostReport, Grouping, WhatIfReport};
 use crate::analyzers::efficiency::{self, CacheBy, EfficiencyReport};
@@ -288,6 +289,64 @@ pub fn efficiency_run(
     EfficiencyRun {
         warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
         report: efficiency::analyze(&sessions, prices, by),
+        errors,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CompareRun {
+    pub report: CompareReport,
+    pub warnings: u64,
+    pub errors: Vec<String>,
+}
+
+/// Reads the sessions and compares the sources.
+pub fn compare_run(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    only: &[Source],
+    estimator: &dyn TokenEstimator,
+) -> CompareRun {
+    let mut sessions: Vec<SessionEvents> = Vec::new();
+    let mut errors = Vec::new();
+    for r in registry.sessions(env, filter, only) {
+        match r {
+            Ok(se) => sessions.push(se),
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+    let projects: BTreeSet<PathBuf> = sessions
+        .iter()
+        .filter_map(|s| s.session.project_dir.clone())
+        .collect();
+    let projects: Vec<PathBuf> = projects.into_iter().collect();
+    let inventory = inventory::scan(&inventory::locations(env, &projects), estimator);
+    // The skill analysis per source: baseline, load and carry depend on the client.
+    let mut skill_overhead = std::collections::BTreeMap::new();
+    for source in sessions
+        .iter()
+        .map(|s| s.session.source)
+        .collect::<BTreeSet<_>>()
+    {
+        let of_source: Vec<SessionEvents> = sessions
+            .iter()
+            .filter(|s| s.session.source == source)
+            .cloned()
+            .collect();
+        let report = skills::analyze(&inventory, &of_source, estimator);
+        skill_overhead.insert(
+            source,
+            report
+                .skills
+                .iter()
+                .map(|s| s.overhead_tokens())
+                .sum::<u64>(),
+        );
+    }
+    CompareRun {
+        warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
+        report: compare::analyze(&sessions, &skill_overhead),
         errors,
     }
 }

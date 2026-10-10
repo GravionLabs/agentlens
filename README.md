@@ -34,6 +34,7 @@ cargo run -p agentlens-cli -- skills --since 30d         # skill usage and token
 cargo run -p agentlens-cli -- skills --format json       # also: csv
 cargo run -p agentlens-cli -- report --html report.html  # self-contained page, works offline
 cargo run -p agentlens-cli -- context --kind tools       # static context: tools, MCP, agents, skills, instruction files
+cargo run -p agentlens-cli -- compare --since 30d          # clients side by side
 cargo run -p agentlens-cli -- cost --since 30d             # cost per model, measured vs. computed
 cargo run -p agentlens-cli -- efficiency                   # cache hit rate, subagent share
 cargo run -p agentlens-cli -- flow --top 10               # context growth and compactions per session
@@ -60,6 +61,8 @@ Token values with a leading `~` are estimated (see [ADR 0001](docs/adr/0001-toke
 `agentlens cost` shows requests, tokens and cost per model. Cost the client reported (OpenCode) is shown as is; otherwise it is computed from a bundled price table and marked `~` ([ADR 0002](docs/adr/0002-price-source.md)). The table only contains prices checked against the vendor's price list (with source and date); models without a price are listed as unpriced, never guessed. Add or override prices in `~/.config/agentlens/prices.json` or with `--prices FILE` (per million tokens, keyed by model-id prefix: `{"my-model": {"input": 3, "output": 15, "cache_read": 0.3, "cache_write": 3.75}}`). `--what-if MODEL` recomputes the same tokens with the prices of another model (id prefix) and shows actual cost, what-if cost and the difference per model; requests without an actual price are excluded and counted. The `share` column is the model mix. `--by project|branch|issue` groups the cost instead of per model; the issue number is read from the branch name when a number of 2 to 6 digits starts a `/` segment (`feat/123-title`) or follows `issue-`/`gh-`; other sessions are `(unassigned)`. Only Claude Code and Copilot CLI record the branch. GitHub Copilot premium requests are shown separately and are not money.
 
 `agentlens efficiency` shows the cache hit rate (cache read / all input tokens, measured; `--by session|project|source`) and the share of subagents in requests, tokens and cost. Sources that report no cache tokens show `n/a` instead of 0%; cost shares only cover priced requests.
+
+`agentlens compare` puts the clients side by side over the same sessions: sessions, requests, tokens, cache hit rate, tool calls and error rate, skill invocations and their estimated overhead, and session time (first to last event, so idle time is included). A value a client does not record is `n/a`, never 0.
 
 Supported sources today: Claude Code, OpenCode (SQLite database) and GitHub Copilot CLI. Copilot CLI sessions without per-request rows in `session-store.db` fall back to the session totals from `session.shutdown`, which cannot be split per request.
 
