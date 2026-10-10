@@ -225,3 +225,181 @@ fn unknown_schema_is_reported_clearly() {
     let err = results[0].as_ref().unwrap_err().to_string();
     assert!(err.contains("unsupported OpenCode schema"), "{err}");
 }
+
+// ---- legacy JSON storage (OpenCode before 1.2.0) ----
+
+/// Writes `value` to `<data home>/opencode/storage/<rel>`.
+fn put(home: &TempHome, rel: &str, value: &str) {
+    let path = home.path().join(".local/share/opencode/storage").join(rel);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, value).unwrap();
+}
+
+/// One synthetic legacy session `ses_legacy` with a subagent `ses_legacy_sub`.
+fn legacy_home() -> TempHome {
+    let home = TempHome::new();
+    put(
+        &home,
+        "session/proj1/ses_legacy.json",
+        r#"{"id":"ses_legacy","projectID":"proj1","directory":"/work/legacy","title":"Legacy","time":{"created":1780000000000,"updated":1780000100000}}"#,
+    );
+    put(
+        &home,
+        "session/proj1/ses_legacy_sub.json",
+        r#"{"id":"ses_legacy_sub","parentID":"ses_legacy","projectID":"proj1","directory":"/work/legacy","time":{"created":1780000030000,"updated":1780000040000}}"#,
+    );
+    put(
+        &home,
+        "message/ses_legacy/msg_1.json",
+        r#"{"id":"msg_1","sessionID":"ses_legacy","role":"user","time":{"created":1780000000000}}"#,
+    );
+    put(
+        &home,
+        "message/ses_legacy/msg_2.json",
+        r#"{"id":"msg_2","sessionID":"ses_legacy","role":"assistant","modelID":"model-a","providerID":"prov","cost":0.03,"tokens":{"input":300,"output":100,"reasoning":0,"cache":{"read":1000,"write":300}},"time":{"created":1780000001000,"completed":1780000020000}}"#,
+    );
+    put(
+        &home,
+        "part/msg_2/prt_1.json",
+        r#"{"id":"prt_1","messageID":"msg_2","sessionID":"ses_legacy","type":"tool","tool":"skill","state":{"status":"completed","input":{"name":"demo-skill"},"output":"0123456789","metadata":{"dir":"/home/u/.claude/skills/demo-skill"},"time":{"start":1780000002000,"end":1780000002500}}}"#,
+    );
+    put(
+        &home,
+        "part/msg_2/prt_2.json",
+        r#"{"id":"prt_2","messageID":"msg_2","sessionID":"ses_legacy","type":"step-finish","tokens":{"input":100,"output":20,"reasoning":0,"cache":{"read":500,"write":300}},"cost":0.01}"#,
+    );
+    put(
+        &home,
+        "part/msg_2/prt_3.json",
+        r#"{"id":"prt_3","messageID":"msg_2","sessionID":"ses_legacy","type":"step-finish","tokens":{"input":200,"output":80,"reasoning":0,"cache":{"read":500,"write":0}},"cost":0.02}"#,
+    );
+    put(
+        &home,
+        "message/ses_legacy_sub/msg_s.json",
+        r#"{"id":"msg_s","sessionID":"ses_legacy_sub","role":"assistant","modelID":"model-b","cost":0.005,"tokens":{"input":50,"output":20,"reasoning":0,"cache":{"read":180,"write":0}},"time":{"created":1780000031000,"completed":1780000040000}}"#,
+    );
+    home
+}
+
+#[test]
+fn detects_the_legacy_storage_directory() {
+    let home = legacy_home();
+    let d = OpenCodeAdapter.detect(&home.env());
+    assert!(d.found);
+    assert_eq!(d.roots, [home.path().join(".local/share/opencode/storage")]);
+}
+
+#[test]
+fn legacy_sessions_are_read_with_the_same_mapping() {
+    let home = legacy_home();
+    let all = read(&home, &SessionFilter::default());
+    assert_eq!(all.len(), 1, "the subagent is merged into its root");
+    let se = &all[0];
+    assert_eq!(se.session.id, "ses_legacy");
+    assert_eq!(
+        se.session.project_dir.as_deref(),
+        Some(Path::new("/work/legacy"))
+    );
+    assert_eq!(se.session.model.as_deref(), Some("model-a"));
+    assert_eq!(
+        se.session.started_at.unwrap().as_millisecond(),
+        1780000000000
+    );
+
+    let u = usages(se);
+    assert_eq!(u.len(), 3, "two steps of msg_2 and one subagent request");
+    assert!(u.iter().all(|u| u.measured));
+    let main: Vec<_> = u.iter().filter(|u| !u.subagent).collect();
+    assert_eq!(main.len(), 2);
+    assert_eq!(
+        (
+            main[0].input,
+            main[0].output,
+            main[0].cache_read,
+            main[0].cache_write
+        ),
+        (100, 20, 500, 300)
+    );
+    assert_eq!(main[0].model.as_deref(), Some("model-a"));
+    let sub: Vec<_> = u.iter().filter(|u| u.subagent).collect();
+    assert_eq!(sub.len(), 1, "a message without steps counts by its totals");
+    assert_eq!(sub[0].cache_read, 180);
+
+    let skill = se.events.iter().find_map(|e| match &e.kind {
+        EventKind::SkillInvoked(s) => Some(s),
+        _ => None,
+    });
+    let skill = skill.expect("the skill call");
+    assert_eq!(skill.name, "demo-skill");
+    assert_eq!(skill.content_bytes, Some(10));
+    assert_eq!(
+        se.events
+            .iter()
+            .filter(|e| matches!(e.kind, EventKind::UserTurn))
+            .count(),
+        1
+    );
+    assert!(se.warnings.is_empty(), "{:?}", se.warnings);
+}
+
+#[test]
+fn a_session_in_both_places_is_counted_once_from_the_database() {
+    let (home, _conn) = home_with_db("");
+    // The same id as in the database fixture, with different numbers.
+    put(
+        &home,
+        "session/p/ses_root.json",
+        r#"{"id":"ses_root","directory":"/work/legacy","time":{"created":1780000000000,"updated":1780000100000}}"#,
+    );
+    put(
+        &home,
+        "message/ses_root/m.json",
+        r#"{"id":"m","role":"assistant","modelID":"x","tokens":{"input":9999,"output":1,"cache":{"read":0,"write":0}},"time":{"created":1780000001000}}"#,
+    );
+    let all = read(&home, &SessionFilter::default());
+    let roots: Vec<_> = all.iter().filter(|s| s.session.id == "ses_root").collect();
+    assert_eq!(roots.len(), 1);
+    assert_eq!(
+        roots[0].session.project_dir.as_deref(),
+        Some(Path::new("/work/demo"))
+    );
+    assert!(usages(roots[0]).iter().all(|u| u.input != 9999));
+}
+
+#[test]
+fn legacy_only_sessions_are_listed_next_to_database_sessions() {
+    let (home, _conn) = home_with_db("");
+    put(
+        &home,
+        "session/p/ses_only_legacy.json",
+        r#"{"id":"ses_only_legacy","directory":"/work/legacy","time":{"created":1700000000000,"updated":1700000001000}}"#,
+    );
+    let ids: Vec<_> = read(&home, &SessionFilter::default())
+        .into_iter()
+        .map(|s| s.session.id)
+        .collect();
+    assert!(ids.contains(&"ses_root".to_string()));
+    assert!(ids.contains(&"ses_only_legacy".to_string()));
+}
+
+#[test]
+fn broken_legacy_files_are_skipped_with_a_warning_for_parts() {
+    let home = legacy_home();
+    put(&home, "session/proj1/broken.json", "not json");
+    put(&home, "message/ses_legacy/msg_bad.json", "{");
+    put(&home, "part/msg_2/prt_bad.json", "oops");
+    let all = read(&home, &SessionFilter::default());
+    assert_eq!(all.len(), 1);
+    assert_eq!(usages(&all[0]).len(), 3, "the valid records still count");
+    assert_eq!(all[0].warnings.len(), 1);
+}
+
+#[test]
+fn the_since_filter_applies_to_legacy_sessions() {
+    let home = legacy_home();
+    let filter = SessionFilter {
+        since: Some(jiff::Timestamp::from_millisecond(1790000000000).unwrap()),
+        ..SessionFilter::default()
+    };
+    assert!(read(&home, &filter).is_empty());
+}
