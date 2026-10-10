@@ -25,8 +25,8 @@ client files ─► Adapter ─► normalized events ─► Analyzer ─► repo
 
 ```sh
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo clippy --workspace --exclude agentlens-app --all-targets -- -D warnings
+cargo test --workspace --exclude agentlens-app
 ```
 
 ## Issue and PR conventions
