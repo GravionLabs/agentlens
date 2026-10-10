@@ -28,7 +28,19 @@ export const routes: Routes = [
     path: "overview",
     loadComponent: () => import("./features/overview/overview").then((m) => m.Overview),
   },
-  ...NAV.filter((n) => n.path !== "overview").map((n) => ({
+  {
+    path: "skills",
+    loadComponent: () => import("./features/skills/skills").then((m) => m.Skills),
+  },
+  {
+    path: "context",
+    loadComponent: () => import("./features/context/context").then((m) => m.Context),
+  },
+  {
+    path: "unused",
+    loadComponent: () => import("./features/unused/unused").then((m) => m.Unused),
+  },
+  ...NAV.filter((n) => !["overview", "skills", "context", "unused"].includes(n.path)).map((n) => ({
     path: n.path,
     ...placeholder(n.label),
   })),
