@@ -146,19 +146,19 @@ pub fn locations(env: &Env, projects: &[PathBuf]) -> Vec<Location> {
     out
 }
 
-fn claude_dir(env: &Env) -> PathBuf {
+pub(crate) fn claude_dir(env: &Env) -> PathBuf {
     env.var("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| env.home().join(".claude"))
 }
 
-fn copilot_dir(env: &Env) -> PathBuf {
+pub(crate) fn copilot_dir(env: &Env) -> PathBuf {
     env.var("COPILOT_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| env.home().join(".copilot"))
 }
 
-fn config_home(env: &Env) -> PathBuf {
+pub(crate) fn config_home(env: &Env) -> PathBuf {
     env.var("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| env.home().join(".config"))

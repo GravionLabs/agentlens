@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::instructions::InstructionFile;
 use crate::model::{ContextKind, EventKind, SessionEvents, Source};
 use crate::tokens::TokenEstimator;
 
@@ -70,7 +71,13 @@ fn owner(kind: ContextKind, name: Option<&str>) -> String {
     }
 }
 
-pub fn analyze(sessions: &[SessionEvents], estimator: &dyn TokenEstimator) -> ContextReport {
+/// `instructions` is the inventory of instruction files; it fills in for
+/// sessions whose client does not report the files it loaded.
+pub fn analyze(
+    sessions: &[SessionEvents],
+    instructions: &[InstructionFile],
+    estimator: &dyn TokenEstimator,
+) -> ContextReport {
     type Key = (Source, Option<PathBuf>, ContextKind, String);
     let mut report = ContextReport::default();
     let mut rows: BTreeMap<Key, ContextRow> = BTreeMap::new();
@@ -106,7 +113,8 @@ pub fn analyze(sessions: &[SessionEvents], estimator: &dyn TokenEstimator) -> Co
                 entry.1 = entry.1.max(item.bytes);
             }
         }
-        let any = !seen.is_empty();
+        let mut any = !seen.is_empty();
+        let seen_instruction_files = seen.keys().any(|(k, _)| *k == ContextKind::InstructionFile);
         for ((kind, name), (i, bytes)) in seen {
             let owner = owner(kind, name);
             let tokens = estimator.count_bytes(bytes).count;
@@ -129,6 +137,41 @@ pub fn analyze(sessions: &[SessionEvents], estimator: &dyn TokenEstimator) -> Co
             row.tokens += tokens;
             row.requests += requests;
             row.overhead_tokens += tokens * requests;
+        }
+        let reported = seen_instruction_files;
+        if !reported {
+            let requests = later[0];
+            for f in instructions {
+                let applies = f.clients.contains(&source)
+                    && (f.project.is_none() || f.project == se.session.project_dir);
+                if !applies {
+                    continue;
+                }
+                any = true;
+                let row = rows
+                    .entry((
+                        source,
+                        se.session.project_dir.clone(),
+                        ContextKind::InstructionFile,
+                        f.path.display().to_string(),
+                    ))
+                    .or_insert_with(|| ContextRow {
+                        source,
+                        project: se.session.project_dir.clone(),
+                        kind: ContextKind::InstructionFile,
+                        owner: f.path.display().to_string(),
+                        items: 0,
+                        bytes: 0,
+                        tokens: 0,
+                        requests: 0,
+                        overhead_tokens: 0,
+                    });
+                row.items += 1;
+                row.bytes += f.bytes;
+                row.tokens += f.tokens.count;
+                row.requests += requests;
+                row.overhead_tokens += f.tokens.count * requests;
+            }
         }
         if !any {
             *report.unavailable.entry(source).or_default() += 1;
@@ -194,7 +237,7 @@ mod tests {
                 request(20, false),
             ],
         );
-        let r = analyze(&[se], &CharsPerToken);
+        let r = analyze(&[se], &[], &CharsPerToken);
         let row = |kind, owner: &str| {
             r.rows
                 .iter()
@@ -228,7 +271,7 @@ mod tests {
                 request(10, false),
             ],
         );
-        let r = analyze(&[se], &CharsPerToken);
+        let r = analyze(&[se], &[], &CharsPerToken);
         let row = &r.rows[0];
         assert_eq!((row.items, row.bytes, row.tokens), (1, 80, 20));
         assert_eq!(row.requests, 2);
@@ -245,7 +288,7 @@ mod tests {
                 request(10, false),
             ],
         );
-        let r = analyze(&[se], &CharsPerToken);
+        let r = analyze(&[se], &[], &CharsPerToken);
         assert_eq!(r.rows[0].requests, 1);
         assert_eq!(r.rows[0].owner, "agents");
     }
@@ -257,7 +300,7 @@ mod tests {
             vec![request(1000, false), request(5, false)],
         );
         let b = session(Source::ClaudeCode, vec![request(300, false)]);
-        let r = analyze(&[a, b], &CharsPerToken);
+        let r = analyze(&[a, b], &[], &CharsPerToken);
         let f = &r.first_request[&Source::ClaudeCode];
         assert_eq!((f.sessions, f.total_tokens, f.max_tokens), (2, 1300, 1000));
     }
@@ -269,7 +312,7 @@ mod tests {
             vec![item(ContextKind::SkillListing, None, 8), request(1, false)],
         );
         let without = session(Source::OpenCode, vec![request(1, false)]);
-        let r = analyze(&[with, without.clone(), without], &CharsPerToken);
+        let r = analyze(&[with, without.clone(), without], &[], &CharsPerToken);
         assert_eq!(r.unavailable.get(&Source::OpenCode), Some(&2));
         assert!(!r.unavailable.contains_key(&Source::ClaudeCode));
         assert!(r.rows.iter().all(|x| x.source == Source::ClaudeCode));
@@ -283,5 +326,73 @@ mod tests {
         );
         assert_eq!(mcp_server("Read"), None);
         assert_eq!(mcp_server("mcp____x"), None);
+    }
+
+    fn file(path: &str, project: Option<&str>, bytes: u64, clients: &[Source]) -> InstructionFile {
+        InstructionFile {
+            path: path.into(),
+            kind: crate::instructions::InstructionKind::AgentsMd,
+            project: project.map(Into::into),
+            clients: clients.to_vec(),
+            bytes,
+            tokens: CharsPerToken.count_bytes(bytes),
+        }
+    }
+
+    #[test]
+    fn inventory_fills_in_where_the_client_reports_no_files() {
+        let se = session(
+            Source::OpenCode,
+            vec![request(1, false), request(1, false), request(1, false)],
+        );
+        let files = [
+            file(
+                "/work/demo/AGENTS.md",
+                Some("/work/demo"),
+                400,
+                &[Source::OpenCode],
+            ),
+            file("/home/u/AGENTS.md", None, 40, &[Source::OpenCode]),
+            file("/other/AGENTS.md", Some("/other"), 800, &[Source::OpenCode]),
+            file(
+                "/work/demo/CLAUDE.md",
+                Some("/work/demo"),
+                800,
+                &[Source::ClaudeCode],
+            ),
+        ];
+        let r = analyze(&[se], &files, &CharsPerToken);
+        let owners: Vec<_> = r.rows.iter().map(|x| x.owner.as_str()).collect();
+        assert_eq!(owners, ["/work/demo/AGENTS.md", "/home/u/AGENTS.md"]);
+        assert_eq!(r.rows[0].overhead_tokens, 100 * 3);
+        assert_eq!(r.rows[1].overhead_tokens, 10 * 3);
+        assert!(
+            r.unavailable.is_empty(),
+            "inventory data counts as available"
+        );
+    }
+
+    #[test]
+    fn reported_instruction_files_win_over_the_inventory() {
+        let se = session(
+            Source::ClaudeCode,
+            vec![
+                item(
+                    ContextKind::InstructionFile,
+                    Some("/work/demo/CLAUDE.md"),
+                    40,
+                ),
+                request(1, false),
+            ],
+        );
+        let files = [file(
+            "/work/demo/CLAUDE.md",
+            Some("/work/demo"),
+            4000,
+            &[Source::ClaudeCode],
+        )];
+        let r = analyze(&[se], &files, &CharsPerToken);
+        assert_eq!(r.rows.len(), 1);
+        assert_eq!(r.rows[0].tokens, 10);
     }
 }
