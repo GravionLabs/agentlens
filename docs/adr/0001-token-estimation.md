@@ -30,3 +30,14 @@ Constraints:
 - Reports show estimated static costs with a visible marker (for example `~`). Costs that clients measure (usage per request) stay marked as measured.
 - Estimates are good for ranking and for spotting outliers, not for billing.
 - Analyzers depend on the `TokenEstimator` trait, so the exact counter can be added without changing them.
+
+## Follow-up: exact counts (implemented)
+
+`--exact` and `--exact-model` select `ExactTokens` (`agentlens-core/src/exact.rs`), the second `TokenEstimator`.
+
+- It counts texts (`count`) with `POST /v1/messages/count_tokens` and marks them measured. `count_bytes`, used where only a file size is known (instruction files, tool definitions), stays an estimate.
+- Results are cached on disk by model and SHA-256 of the text. The cache is a plain JSON file and can be deleted at any time.
+- The first failed request switches the run back to the estimate with a single warning; there is no retry, so an offline run is not slowed down.
+- Derived values keep their own marking: a baseline total (listing size × requests) is measured if every listing size behind it is; carry stays an estimate because it depends on when the client compacts.
+- Only the text of skills leaves the machine, only with the flag. `ANTHROPIC_API_KEY` is read from the process environment and never stored.
+
