@@ -18,6 +18,7 @@ client files ─► Adapter ─► normalized events ─► Analyzer ─► repo
 - **Measured vs. estimated:** every token or cost value carries a `measured` flag. Values read from client data are measured; anything computed from file sizes or heuristics is estimated and must be shown as such.
 - **Fail soft:** the client formats are partly undocumented. A malformed or unknown record produces a warning and is skipped; it never aborts a scan or panics.
 - **Read-only:** adapters never write to client data. SQLite files are opened read-only.
+- **Timestamps** are `jiff::Timestamp` (UTC instants) everywhere in the model.
 - **Privacy:** tests and fixtures use synthetic data only (no real prompts, file contents, paths of real projects or secrets).
 
 ## Verification
