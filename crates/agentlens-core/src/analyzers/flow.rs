@@ -259,6 +259,101 @@ pub fn errors(sessions: &[SessionEvents]) -> ErrorReport {
     ErrorReport { tools, loops }
 }
 
+/// Runs of one hook type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HookStats {
+    pub source: Source,
+    pub hook: String,
+    pub runs: u64,
+    pub failures: u64,
+    /// Runs that never reported an outcome.
+    pub unknown: u64,
+    /// Summed duration of the runs that reported one.
+    pub total_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PermissionStats {
+    pub source: Source,
+    pub prompts: u64,
+    /// Prompts with a recorded answer.
+    pub answered: u64,
+    /// Summed time until the answers.
+    pub total_wait_ms: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HooksReport {
+    /// Sorted by total runtime, largest first.
+    pub hooks: Vec<HookStats>,
+    pub permissions: Vec<PermissionStats>,
+    /// Sessions per source whose client records neither hooks nor permission
+    /// prompts at all.
+    pub unavailable: BTreeMap<Source, u32>,
+}
+
+pub fn hooks(sessions: &[SessionEvents]) -> HooksReport {
+    let mut hooks: BTreeMap<(Source, String), HookStats> = BTreeMap::new();
+    let mut perms: BTreeMap<Source, PermissionStats> = BTreeMap::new();
+    let mut session_count: BTreeMap<Source, u32> = BTreeMap::new();
+    for se in sessions {
+        let source = se.session.source;
+        *session_count.entry(source).or_default() += 1;
+        for e in &se.events {
+            match &e.kind {
+                EventKind::Hook(h) => {
+                    let st = hooks
+                        .entry((source, h.kind.clone()))
+                        .or_insert_with(|| HookStats {
+                            source,
+                            hook: h.kind.clone(),
+                            runs: 0,
+                            failures: 0,
+                            unknown: 0,
+                            total_ms: 0,
+                        });
+                    st.runs += 1;
+                    match h.success {
+                        Some(false) => st.failures += 1,
+                        None => st.unknown += 1,
+                        Some(true) => {}
+                    }
+                    st.total_ms += h.duration_ms.unwrap_or(0);
+                }
+                EventKind::PermissionPrompt(p) => {
+                    let st = perms.entry(source).or_insert(PermissionStats {
+                        source,
+                        prompts: 0,
+                        answered: 0,
+                        total_wait_ms: 0,
+                    });
+                    st.prompts += 1;
+                    if let Some(w) = p.wait_ms {
+                        st.answered += 1;
+                        st.total_wait_ms += w;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let unavailable = session_count
+        .into_iter()
+        .filter(|(s, _)| !perms.contains_key(s) && !hooks.keys().any(|(hs, _)| hs == s))
+        .collect();
+    let mut hooks: Vec<HookStats> = hooks.into_values().collect();
+    hooks.sort_by(|a, b| {
+        b.total_ms
+            .cmp(&a.total_ms)
+            .then_with(|| a.hook.cmp(&b.hook))
+    });
+    HooksReport {
+        hooks,
+        permissions: perms.into_values().collect(),
+        unavailable,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -477,5 +572,42 @@ mod tests {
         assert_eq!(l.input.as_deref(), Some("make"));
         let bash = r.tools.iter().find(|t| t.tool == "Bash").unwrap();
         assert_eq!(bash.loops, 1);
+    }
+
+    #[test]
+    fn hooks_and_permissions_are_summed_per_source() {
+        use crate::model::{Hook, PermissionPrompt};
+        let hook = |kind: &str, success: Option<bool>, ms: Option<u64>| {
+            EventKind::Hook(Hook {
+                kind: kind.into(),
+                success,
+                duration_ms: ms,
+            })
+        };
+        let mut a = SessionEvents::new(Session::new("a", Source::CopilotCli));
+        for k in [
+            hook("post", Some(true), Some(100)),
+            hook("post", Some(false), Some(300)),
+            hook("post", None, None),
+            hook("pre", Some(true), Some(1000)),
+            EventKind::PermissionPrompt(PermissionPrompt {
+                wait_ms: Some(1500),
+            }),
+            EventKind::PermissionPrompt(PermissionPrompt { wait_ms: None }),
+        ] {
+            a.push(None, k);
+        }
+        let claude = session("c", None, vec![EventKind::UserTurn]);
+        let r = hooks(&[a, claude.clone(), claude]);
+        assert_eq!(r.hooks[0].hook, "pre", "sorted by runtime");
+        let post = &r.hooks[1];
+        assert_eq!(
+            (post.runs, post.failures, post.unknown, post.total_ms),
+            (3, 1, 1, 400)
+        );
+        let p = &r.permissions[0];
+        assert_eq!((p.prompts, p.answered, p.total_wait_ms), (2, 1, 1500));
+        assert_eq!(r.unavailable.get(&Source::ClaudeCode), Some(&2));
+        assert!(!r.unavailable.contains_key(&Source::CopilotCli));
     }
 }
