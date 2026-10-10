@@ -10,6 +10,7 @@ use crate::analyzers::cost::{self, CostReport, Grouping, WhatIfReport};
 use crate::analyzers::efficiency::{self, CacheBy, EfficiencyReport};
 use crate::analyzers::flow::{self, ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::{self, SkillReport};
+use crate::analyzers::timeline::{self, SessionSummary, Timeline};
 use crate::analyzers::unused::{self, UnusedReport};
 use crate::catalog;
 use crate::env::Env;
@@ -349,4 +350,38 @@ pub fn compare_run(
         report: compare::analyze(&sessions, &skill_overhead),
         errors,
     }
+}
+
+/// The sessions of the selection, most recent first, for a session picker.
+pub fn session_list(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    only: &[Source],
+) -> (Vec<SessionSummary>, Vec<String>) {
+    let mut sessions = Vec::new();
+    let mut errors = Vec::new();
+    for r in registry.sessions(env, filter, only) {
+        match r {
+            Ok(se) => sessions.push(se),
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+    (timeline::list(&sessions), errors)
+}
+
+/// The timeline of one session, or `None` if it is not found.
+pub fn session_timeline(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    source: Source,
+    id: &str,
+    prices: &crate::prices::PriceTable,
+) -> Option<Timeline> {
+    registry
+        .sessions(env, filter, &[source])
+        .filter_map(Result::ok)
+        .find(|s| s.session.id == id && s.session.source == source)
+        .map(|s| timeline::timeline(&s, prices))
 }
