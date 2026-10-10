@@ -27,6 +27,16 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "FILE")]
     pub otel: Vec<std::path::PathBuf>,
 
+    /// Count the text of skills with the Anthropic count_tokens API instead of estimating (skills,
+    /// context, unused, compare, report). Needs ANTHROPIC_API_KEY and sends the text of your skills
+    /// to the API; without this flag nothing leaves the machine.
+    #[arg(long, global = true)]
+    pub exact: bool,
+
+    /// Model whose tokenizer --exact uses
+    #[arg(long, global = true, value_name = "MODEL", requires = "exact")]
+    pub exact_model: Option<String>,
+
     /// Output format
     #[arg(long, global = true, value_enum, default_value_t = Format::Table)]
     pub format: Format,

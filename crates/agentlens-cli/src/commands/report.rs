@@ -5,7 +5,7 @@ use agentlens_core::env::Env;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::skill_run;
 use agentlens_core::report::Report;
-use agentlens_core::tokens::CharsPerToken;
+use agentlens_core::tokens::TokenEstimator;
 use anyhow::{Context, Result};
 use jiff::Timestamp;
 
@@ -24,9 +24,10 @@ pub fn run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    estimator: &dyn TokenEstimator,
     html: &Path,
 ) -> Result<()> {
-    let run = skill_run(registry, env, filter, only, &CharsPerToken);
+    let run = skill_run(registry, env, filter, only, estimator);
     for e in &run.errors {
         eprintln!("error: {e}");
     }

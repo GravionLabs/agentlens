@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 const KNOWN_VARS: &[&str] = &[
     "CLAUDE_CONFIG_DIR",
     "COPILOT_HOME",
+    "XDG_CACHE_HOME",
     "XDG_CONFIG_HOME",
     "XDG_DATA_HOME",
     "APPDATA",
@@ -56,6 +57,13 @@ impl Env {
             .get(key)
             .map(String::as_str)
             .filter(|v| !v.is_empty())
+    }
+
+    /// `$XDG_CACHE_HOME` or `~/.cache`.
+    pub fn cache_home(&self) -> PathBuf {
+        self.var("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| self.home.join(".cache"))
     }
 
     /// `$XDG_DATA_HOME` or `~/.local/share`.

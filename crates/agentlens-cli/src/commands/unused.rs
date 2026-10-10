@@ -3,7 +3,7 @@ use agentlens_core::analyzers::unused::{UnusedItem, UnusedKind};
 use agentlens_core::env::Env;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::unused_run;
-use agentlens_core::tokens::{CharsPerToken, Tokens};
+use agentlens_core::tokens::{TokenEstimator, Tokens};
 use anyhow::Result;
 
 use crate::args::Format;
@@ -37,10 +37,11 @@ pub fn run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    estimator: &dyn TokenEstimator,
     all: bool,
     format: Format,
 ) -> Result<()> {
-    let run = unused_run(registry, env, filter, only, &CharsPerToken);
+    let run = unused_run(registry, env, filter, only, estimator);
     let items: Vec<&UnusedItem> = run
         .report
         .items
