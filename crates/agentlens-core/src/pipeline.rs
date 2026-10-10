@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::adapter::{Detection, Registry, SessionFilter};
 use crate::analyzers::context::{self, ContextReport};
-use crate::analyzers::flow::{self, GrowthReport};
+use crate::analyzers::flow::{self, ErrorReport, GrowthReport};
 use crate::analyzers::skills::{self, SkillReport};
 use crate::analyzers::unused::{self, UnusedReport};
 use crate::catalog;
@@ -194,6 +194,7 @@ pub fn unused_run(
 #[derive(Debug, Clone)]
 pub struct FlowRun {
     pub growth: GrowthReport,
+    pub tool_errors: ErrorReport,
     pub warnings: u64,
     pub errors: Vec<String>,
 }
@@ -215,6 +216,7 @@ pub fn flow_run(
     }
     FlowRun {
         growth: flow::growth(&sessions),
+        tool_errors: flow::errors(&sessions),
         warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
         errors,
     }

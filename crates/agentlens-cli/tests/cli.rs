@@ -330,7 +330,7 @@ fn unused_window_is_set_with_days_and_overridden_by_since() {
 #[test]
 fn flow_growth_reports_measured_context_sizes_and_compactions() {
     let home = home_with_context();
-    let v = json(agentlens(&home).args(["flow", "--format", "json"]));
+    let v = json(agentlens(&home).args(["flow", "--section", "growth", "--format", "json"]));
     let g = &v["growth"]["sessions"][0];
     assert_eq!(g["requests"], 3);
     assert_eq!(g["first_tokens"], 1010);
@@ -346,7 +346,7 @@ fn flow_growth_reports_measured_context_sizes_and_compactions() {
 fn flow_csv_and_table_have_one_row_per_session() {
     let home = home_with_context();
     let out = agentlens(&home)
-        .args(["flow", "--format", "csv"])
+        .args(["flow", "--section", "growth", "--format", "csv"])
         .assert()
         .success()
         .get_output()
@@ -366,4 +366,54 @@ fn flow_csv_and_table_have_one_row_per_session() {
         .success()
         .stdout(predicate::str::contains("Context growth"))
         .stdout(predicate::str::contains("1,060"));
+}
+
+#[test]
+fn flow_errors_section_counts_failures_and_loops() {
+    let home = tempfile::tempdir().unwrap();
+    let projects = home.path().join(".claude/projects/-work-demo");
+    fs::create_dir_all(&projects).unwrap();
+    let line = |ts: &str, id: &str, status_error: bool| {
+        // An assistant tool call followed by its result.
+        format!(
+            "{{\"sessionId\":\"e1\",\"cwd\":\"/work/demo\",\"timestamp\":\"{ts}\",\"type\":\"assistant\",\"isSidechain\":false,\"requestId\":\"{id}\",\"message\":{{\"id\":\"m{id}\",\"role\":\"assistant\",\"model\":\"claude-test-1\",\"content\":[{{\"type\":\"tool_use\",\"id\":\"t{id}\",\"name\":\"Bash\",\"input\":{{\"command\":\"make all\"}}}}],\"usage\":{{\"input_tokens\":1,\"output_tokens\":1}}}}}}\n{{\"sessionId\":\"e1\",\"cwd\":\"/work/demo\",\"timestamp\":\"{ts}\",\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":[{{\"type\":\"tool_result\",\"tool_use_id\":\"t{id}\",\"is_error\":{status_error},\"content\":\"x\"}}]}}}}\n"
+        )
+    };
+    let body = [
+        line("2026-10-03T10:00:01Z", "1", true),
+        line("2026-10-03T10:00:02Z", "2", true),
+        line("2026-10-03T10:00:03Z", "3", false),
+    ]
+    .concat();
+    fs::write(projects.join("errors.jsonl"), body).unwrap();
+    let v = json(agentlens(&home).args(["flow", "--section", "errors", "--format", "json"]));
+    let bash = v["errors"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["tool"] == "Bash")
+        .unwrap();
+    assert_eq!(
+        (bash["calls"].as_u64(), bash["errors"].as_u64()),
+        (Some(3), Some(2))
+    );
+    assert_eq!(bash["loops"], 1);
+    assert_eq!(v["errors"]["loops"][0]["input"], "make");
+    assert!(v.get("growth").is_none());
+    agentlens(&home)
+        .args(["flow", "--section", "errors"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Retry loops"))
+        .stdout(predicate::str::contains("66.7%"));
+}
+
+#[test]
+fn flow_csv_needs_a_section() {
+    let home = home_with_context();
+    agentlens(&home)
+        .args(["flow", "--format", "csv"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--section"));
 }
