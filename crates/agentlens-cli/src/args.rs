@@ -72,6 +72,9 @@ pub enum Command {
         /// Price file that overrides or extends the bundled prices
         #[arg(long, value_name = "FILE")]
         prices: Option<std::path::PathBuf>,
+        /// Recompute the usage with the prices of this model (id prefix) and compare
+        #[arg(long, value_name = "MODEL")]
+        what_if: Option<String>,
     },
     /// List installed skills, agents and MCP servers that were not used
     Unused {

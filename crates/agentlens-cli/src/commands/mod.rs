@@ -24,13 +24,20 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Context { kind } => {
             context::run(&registry, &env, &filter, &cli.source, kind, cli.format)
         }
-        Command::Cost { by, prices } => cost::run(
+        Command::Cost {
+            by,
+            prices,
+            what_if,
+        } => cost::run(
             &registry,
             &env,
             &filter,
             &cli.source,
-            prices.as_deref(),
-            by,
+            cost::Params {
+                price_file: prices.as_deref(),
+                by,
+                what_if: what_if.as_deref(),
+            },
             cli.format,
         ),
         Command::Efficiency { by, top, prices } => efficiency::run(
