@@ -43,6 +43,15 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = ContextView::All)]
         kind: ContextView,
     },
+    /// Show how sessions unfold: context growth, compactions
+    Flow {
+        /// Which section to show
+        #[arg(long, value_enum, default_value_t = FlowSection::All)]
+        section: FlowSection,
+        /// Rows per table (0 shows all); JSON and CSV always contain everything
+        #[arg(long, default_value_t = 25)]
+        top: usize,
+    },
     /// List installed skills, agents and MCP servers that were not used
     Unused {
         /// Length of the period to look at (ignored if --since is given)
@@ -68,6 +77,12 @@ pub enum ContextView {
     Instructions,
     Agents,
     Skills,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FlowSection {
+    All,
+    Growth,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]

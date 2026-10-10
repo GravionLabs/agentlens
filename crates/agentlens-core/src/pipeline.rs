@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use crate::adapter::{Detection, Registry, SessionFilter};
 use crate::analyzers::context::{self, ContextReport};
+use crate::analyzers::flow::{self, GrowthReport};
 use crate::analyzers::skills::{self, SkillReport};
 use crate::analyzers::unused::{self, UnusedReport};
 use crate::catalog;
@@ -186,6 +187,35 @@ pub fn unused_run(
     UnusedRun {
         report: unused::analyze(&skill_report, &catalog, &context_report, &sessions),
         warnings,
+        errors,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FlowRun {
+    pub growth: GrowthReport,
+    pub warnings: u64,
+    pub errors: Vec<String>,
+}
+
+/// Reads the sessions and analyzes how they unfold.
+pub fn flow_run(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    only: &[Source],
+) -> FlowRun {
+    let mut sessions: Vec<SessionEvents> = Vec::new();
+    let mut errors = Vec::new();
+    for r in registry.sessions(env, filter, only) {
+        match r {
+            Ok(se) => sessions.push(se),
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+    FlowRun {
+        growth: flow::growth(&sessions),
+        warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
         errors,
     }
 }

@@ -326,3 +326,44 @@ fn unused_window_is_set_with_days_and_overridden_by_since() {
     ]));
     assert!(v["sessions"].as_u64().unwrap() > 0);
 }
+
+#[test]
+fn flow_growth_reports_measured_context_sizes_and_compactions() {
+    let home = home_with_context();
+    let v = json(agentlens(&home).args(["flow", "--format", "json"]));
+    let g = &v["growth"]["sessions"][0];
+    assert_eq!(g["requests"], 3);
+    assert_eq!(g["first_tokens"], 1010);
+    assert_eq!(g["peak_tokens"], 1060);
+    assert_eq!(g["last_tokens"], 820);
+    assert_eq!(g["compactions"], serde_json::json!([1060]));
+    assert_eq!(g["window"], 200_000);
+    assert_eq!(g["window_basis"], "documented");
+    assert_eq!(g["near_limit"], false);
+}
+
+#[test]
+fn flow_csv_and_table_have_one_row_per_session() {
+    let home = home_with_context();
+    let out = agentlens(&home)
+        .args(["flow", "--format", "csv"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert_eq!(text.lines().count(), 2);
+    assert!(
+        text.lines()
+            .nth(1)
+            .unwrap()
+            .contains(",3,1010,820,1060,1,1060,false")
+    );
+    agentlens(&home)
+        .arg("flow")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Context growth"))
+        .stdout(predicate::str::contains("1,060"));
+}
