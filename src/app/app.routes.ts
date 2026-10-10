@@ -1,10 +1,5 @@
 import { Routes } from "@angular/router";
 
-const placeholder = (title: string) => ({
-  loadComponent: () => import("./features/placeholder/placeholder").then((m) => m.Placeholder),
-  data: { title },
-});
-
 export interface NavItem {
   path: string;
   label: string;
@@ -56,21 +51,9 @@ export const routes: Routes = [
     path: "compare",
     loadComponent: () => import("./features/compare/compare").then((m) => m.Compare),
   },
-  ...NAV.filter(
-    (n) =>
-      ![
-        "overview",
-        "skills",
-        "context",
-        "unused",
-        "flow",
-        "cost",
-        "efficiency",
-        "compare",
-      ].includes(n.path),
-  ).map((n) => ({
-    path: n.path,
-    ...placeholder(n.label),
-  })),
+  {
+    path: "timeline",
+    loadComponent: () => import("./features/timeline/timeline").then((m) => m.Timeline),
+  },
   { path: "**", redirectTo: "overview" },
 ];

@@ -5,14 +5,19 @@ import type { Answer } from "./types";
 
 /**
  * Runs one analysis command and runs it again whenever the filters or the
- * extra arguments change. The result carries the data plus the warnings and
+ * extra arguments change, and stays idle while `enabled` is false. The result carries the data plus the warnings and
  * errors of reading the sessions.
  */
-export function analysis<T>(command: string, extra: () => Record<string, unknown> = () => ({})) {
+export function analysis<T>(
+  command: string,
+  extra: () => Record<string, unknown> = () => ({}),
+  enabled: () => boolean = () => true,
+) {
   const ipc = inject(Ipc);
   const filters = inject(FiltersService);
   return resource({
-    params: () => ({ filters: filters.payload(), extra: extra() }),
+    // Without params the resource stays idle.
+    params: () => (enabled() ? { filters: filters.payload(), extra: extra() } : undefined),
     loader: async ({ params }) =>
       ipc.invoke<Answer<T>>(command, { filters: params.filters, ...params.extra }),
   });
