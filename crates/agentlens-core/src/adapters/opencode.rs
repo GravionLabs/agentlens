@@ -236,6 +236,7 @@ fn usage_of(tokens: &Value, cost: Option<f64>, model: Option<String>, subagent: 
         cost_usd: cost,
         measured: true,
         subagent,
+        premium_requests: None,
     }
 }
 
@@ -419,6 +420,11 @@ fn summarize(tool: &str, input: &Value) -> Option<String> {
             .split_whitespace()
             .next()
             .map(str::to_owned);
+    }
+    if tool == "task"
+        && let Some(kind) = str_of(input, "subagent_type")
+    {
+        return Some(kind.to_owned());
     }
     ["filePath", "path", "pattern", "name", "description"]
         .iter()

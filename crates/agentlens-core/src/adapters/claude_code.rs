@@ -15,8 +15,8 @@ use serde_json::Value;
 use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
 use crate::env::Env;
 use crate::model::{
-    Event, EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger, Source, ToolCall,
-    ToolStatus, Usage, Warning,
+    ContextItem, ContextKind, Event, EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger,
+    Source, ToolCall, ToolStatus, Usage, Warning,
 };
 
 /// Slash commands that control the client itself and never load a skill.
@@ -308,8 +308,84 @@ impl Parser<'_> {
         match str_of(v, "type") {
             Some("assistant") => self.assistant(v, at, subagent),
             Some("user") => self.user(v, at, subagent),
+            Some("attachment") if !subagent => {
+                if let Some(a) = v.get("attachment") {
+                    self.attachment(a, at);
+                }
+            }
             Some("system") if str_of(v, "subtype") == Some("compact_boundary") && !subagent => {
                 self.push(at, EventKind::Compaction);
+            }
+            _ => {}
+        }
+    }
+
+    fn context(
+        &mut self,
+        at: Option<Timestamp>,
+        kind: ContextKind,
+        name: Option<&str>,
+        bytes: usize,
+    ) {
+        self.push(
+            at,
+            EventKind::ContextItem(ContextItem {
+                kind,
+                name: name.map(str::to_owned),
+                bytes: bytes as u64,
+            }),
+        );
+    }
+
+    /// Attachments announce static context. Only names and sizes are read.
+    fn attachment(&mut self, a: &Value, at: Option<Timestamp>) {
+        let list = |key: &str| a.get(key).and_then(Value::as_array);
+        let len = |v: &Value| v.as_str().map_or_else(|| v.to_string().len(), str::len);
+        match str_of(a, "type") {
+            Some("deferred_tools_delta") => {
+                let names = list("addedNames").map(Vec::as_slice).unwrap_or_default();
+                let lines = list("addedLines").map(Vec::as_slice).unwrap_or_default();
+                for (i, name) in names.iter().enumerate() {
+                    let bytes = lines.get(i).map_or(0, len);
+                    self.context(at, ContextKind::ToolListing, name.as_str(), bytes);
+                }
+                for d in list("surfacedDefinitions")
+                    .map(Vec::as_slice)
+                    .unwrap_or_default()
+                {
+                    let bytes = d.get("definition").map_or(0, len);
+                    self.context(at, ContextKind::ToolDefinition, str_of(d, "name"), bytes);
+                }
+            }
+            Some("mcp_instructions_delta") => {
+                let names = list("addedNames").map(Vec::as_slice).unwrap_or_default();
+                let blocks = list("addedBlocks").map(Vec::as_slice).unwrap_or_default();
+                for (i, block) in blocks.iter().enumerate() {
+                    let name = names.get(i).and_then(Value::as_str);
+                    self.context(at, ContextKind::McpInstructions, name, len(block));
+                }
+            }
+            Some("agent_listing_delta") => {
+                let names = list("addedTypes").map(Vec::as_slice).unwrap_or_default();
+                let lines = list("addedLines").map(Vec::as_slice).unwrap_or_default();
+                for (i, line) in lines.iter().enumerate() {
+                    let name = names.get(i).and_then(Value::as_str);
+                    self.context(at, ContextKind::AgentListing, name, len(line));
+                }
+            }
+            Some("skill_listing") => {
+                let bytes = a.get("content").map_or(0, len);
+                self.context(at, ContextKind::SkillListing, None, bytes);
+            }
+            Some("instructions") => {
+                for f in list("files").map(Vec::as_slice).unwrap_or_default() {
+                    let bytes = f.get("content").map_or(0, len);
+                    self.context(at, ContextKind::InstructionFile, str_of(f, "path"), bytes);
+                }
+            }
+            Some("nested_memory") => {
+                let bytes = a.get("content").map_or(0, len);
+                self.context(at, ContextKind::InstructionFile, str_of(a, "path"), bytes);
             }
             _ => {}
         }
@@ -383,6 +459,7 @@ impl Parser<'_> {
             cost_usd: None,
             measured: true,
             subagent,
+            premium_requests: None,
         };
         let key =
             str_of(msg, "id").map(|m| format!("{m}:{}", str_of(line, "requestId").unwrap_or("")));
@@ -502,6 +579,11 @@ fn summarize(tool: &str, input: &Value) -> Option<String> {
             .next()
             .map(str::to_owned);
     }
+    if matches!(tool, "Agent" | "Task")
+        && let Some(kind) = str_of(input, "subagent_type")
+    {
+        return Some(kind.to_owned());
+    }
     [
         "file_path",
         "path",
@@ -526,6 +608,13 @@ mod tests {
             Some("orch")
         );
         assert_eq!(command_name("hello"), None);
+    }
+
+    #[test]
+    fn subagent_calls_are_summarized_by_agent_type() {
+        let input = serde_json::json!({"subagent_type": "Explore", "description": "find things", "prompt": "secret"});
+        assert_eq!(summarize("Agent", &input).as_deref(), Some("Explore"));
+        assert_eq!(summarize("Other", &input).as_deref(), Some("find things"));
     }
 
     #[test]

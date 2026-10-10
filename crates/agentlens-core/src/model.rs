@@ -141,6 +141,56 @@ pub enum EventKind {
     Usage(Usage),
     /// The context was compacted; earlier content no longer counts as carried.
     Compaction,
+    /// Static content the client put into the context (not conversation).
+    ContextItem(ContextItem),
+    /// A hook the client ran.
+    Hook(Hook),
+    /// The client asked the user for permission.
+    PermissionPrompt(PermissionPrompt),
+}
+
+/// A hook run. Only the type and outcome are kept, never its input or command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hook {
+    /// The hook type as the client names it, e.g. `postToolUse`.
+    pub kind: String,
+    /// `None` if the run never reported an outcome.
+    pub success: Option<bool>,
+    pub duration_ms: Option<u64>,
+}
+
+/// A permission prompt and how long the user took to answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PermissionPrompt {
+    /// `None` if the prompt was never answered in the recorded session.
+    pub wait_ms: Option<u64>,
+}
+
+/// What kind of static content a [`ContextItem`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ContextKind {
+    /// Names of tools the client lists without their full definition.
+    ToolListing,
+    /// A full tool definition that entered the context.
+    ToolDefinition,
+    /// Instructions an MCP server contributes.
+    McpInstructions,
+    /// The list of available subagents.
+    AgentListing,
+    /// The list of available skills (name and description).
+    SkillListing,
+    /// An instruction file such as `CLAUDE.md`.
+    InstructionFile,
+}
+
+/// A piece of static context. Only the size is kept, never the content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextItem {
+    pub kind: ContextKind,
+    /// Tool name, MCP server, agent type or file path, if known.
+    pub name: Option<String>,
+    pub bytes: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -212,6 +262,10 @@ pub struct Usage {
     pub measured: bool,
     /// The request was made by a subagent.
     pub subagent: bool,
+    /// Premium requests the client charged for this request (GitHub Copilot).
+    /// A count against a plan allowance, never money.
+    #[serde(default)]
+    pub premium_requests: Option<f64>,
 }
 
 impl Usage {
@@ -233,6 +287,7 @@ impl Default for Usage {
             cost_usd: None,
             measured: true,
             subagent: false,
+            premium_requests: None,
         }
     }
 }

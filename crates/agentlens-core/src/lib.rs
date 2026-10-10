@@ -4,10 +4,13 @@
 pub mod adapter;
 pub mod adapters;
 pub mod analyzers;
+pub mod catalog;
 pub mod env;
+pub mod instructions;
 pub mod inventory;
 pub mod model;
 pub mod pipeline;
+pub mod prices;
 pub mod report;
 pub mod tokens;
 

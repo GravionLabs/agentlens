@@ -16,8 +16,8 @@ use serde_json::Value;
 use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
 use crate::env::Env;
 use crate::model::{
-    EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger, Source, ToolCall, ToolStatus,
-    Usage, Warning,
+    EventKind, Hook, PermissionPrompt, Session, SessionEvents, SkillInvoked, SkillTrigger, Source,
+    ToolCall, ToolStatus, Usage, Warning,
 };
 
 pub struct CopilotCliAdapter;
@@ -38,10 +38,6 @@ const IGNORED: &[&str] = &[
     "assistant.message",
     "assistant.turn_end",
     "assistant.turn_start",
-    "hook.end",
-    "hook.start",
-    "permission.completed",
-    "permission.requested",
     "session.context_changed",
     "session.error",
     "session.info",
@@ -171,15 +167,26 @@ fn read_usage_rows(path: &Path) -> (HashMap<String, Vec<UsageRow>>, Option<Strin
     }
     let subagent_cols =
         have.iter().any(|c| c == "agent_id") && have.iter().any(|c| c == "parent_tool_call_id");
+    let has = |c: &str| have.iter().any(|h| h == c);
     let sql = format!(
         "SELECT session_id, model, input_tokens, output_tokens, cache_read_tokens, \
-         cache_write_tokens, reasoning_tokens, created_at, {} \
+         cache_write_tokens, reasoning_tokens, created_at, {}, {}, {} \
          FROM assistant_usage_events ORDER BY created_at, id",
         if subagent_cols {
             "(agent_id IS NOT NULL OR parent_tool_call_id IS NOT NULL)"
         } else {
             "0"
-        }
+        },
+        if has("request_multiplier") {
+            "request_multiplier"
+        } else {
+            "NULL"
+        },
+        if has("initiator") {
+            "initiator"
+        } else {
+            "NULL"
+        },
     );
     let result = conn.prepare(&sql).and_then(|mut stmt| {
         let rows = stmt.query_map([], |r| {
@@ -203,6 +210,14 @@ fn read_usage_rows(path: &Path) -> (HashMap<String, Vec<UsageRow>>, Option<Strin
                         cost_usd: None,
                         measured: true,
                         subagent: r.get::<_, i64>(8)? != 0,
+                        // Only requests the user started are charged; agent
+                        // follow-ups ride along.
+                        premium_requests: r.get::<_, Option<f64>>(9)?.map(|m| {
+                            match r.get::<_, Option<String>>(10).ok().flatten().as_deref() {
+                                Some("user") | None => m,
+                                Some(_) => 0.0,
+                            }
+                        }),
                     },
                 },
             ))
@@ -245,6 +260,11 @@ fn summarize(tool: &str, args: &Value) -> Option<String> {
             .next()
             .map(str::to_owned);
     }
+    if tool == "task"
+        && let Some(kind) = str_of(args, "agent_type")
+    {
+        return Some(kind.to_owned());
+    }
     ["path", "file_path", "pattern", "skill", "name", "intent"]
         .iter()
         .find_map(|k| str_of(args, k))
@@ -263,6 +283,8 @@ fn parse_session(
     let file = File::open(path).map_err(io)?;
     let mut se = SessionEvents::new(Session::new(id, Source::CopilotCli));
     let mut pending: HashMap<String, (usize, Option<Timestamp>)> = HashMap::new();
+    let mut hooks: HashMap<String, (usize, Option<Timestamp>)> = HashMap::new();
+    let mut prompts: HashMap<String, (usize, Option<Timestamp>)> = HashMap::new();
     let mut unknown: BTreeMap<String, u64> = BTreeMap::new();
     let mut shutdowns: Vec<(Option<Timestamp>, Vec<Usage>)> = Vec::new();
     let mut first: Option<Timestamp> = None;
@@ -346,6 +368,45 @@ fn parse_session(
                     };
                 }
             }
+            "hook.start" => {
+                let idx = se.events.len();
+                let hook = Hook {
+                    kind: str_of(data, "hookType").unwrap_or("unknown").to_owned(),
+                    success: None,
+                    duration_ms: None,
+                };
+                se.push(at, EventKind::Hook(hook));
+                if let Some(id) = str_of(data, "hookInvocationId") {
+                    hooks.insert(id.to_owned(), (idx, at));
+                }
+            }
+            "hook.end" => {
+                if let Some(id) = str_of(data, "hookInvocationId")
+                    && let Some((idx, started)) = hooks.remove(id)
+                    && let EventKind::Hook(h) = &mut se.events[idx].kind
+                {
+                    h.success = data.get("success").and_then(Value::as_bool);
+                    h.duration_ms = elapsed_ms(started, at);
+                }
+            }
+            "permission.requested" => {
+                let idx = se.events.len();
+                se.push(
+                    at,
+                    EventKind::PermissionPrompt(PermissionPrompt { wait_ms: None }),
+                );
+                if let Some(id) = str_of(data, "requestId") {
+                    prompts.insert(id.to_owned(), (idx, at));
+                }
+            }
+            "permission.completed" => {
+                if let Some(id) = str_of(data, "requestId")
+                    && let Some((idx, started)) = prompts.remove(id)
+                    && let EventKind::PermissionPrompt(p) = &mut se.events[idx].kind
+                {
+                    p.wait_ms = elapsed_ms(started, at);
+                }
+            }
             "session.compaction_complete" => se.push(at, EventKind::Compaction),
             "session.model_change" => {
                 model = str_of(data, "newModel").map(str::to_owned).or(model);
@@ -391,6 +452,11 @@ fn parse_session(
     Ok(se)
 }
 
+fn elapsed_ms(start: Option<Timestamp>, end: Option<Timestamp>) -> Option<u64> {
+    let (s, e) = (start?, end?);
+    u64::try_from(e.as_millisecond() - s.as_millisecond()).ok()
+}
+
 /// One usage record per model from the `session.shutdown` metrics.
 fn shutdown_usage(data: &Value) -> Vec<Usage> {
     let Some(metrics) = data.get("modelMetrics").and_then(Value::as_object) else {
@@ -416,6 +482,11 @@ fn shutdown_usage(data: &Value) -> Vec<Usage> {
                 cost_usd: None,
                 measured: true,
                 subagent: false,
+                // `requests.cost` is the number of premium requests charged.
+                premium_requests: m
+                    .get("requests")
+                    .and_then(|r| r.get("cost"))
+                    .and_then(Value::as_f64),
             }
         })
         .collect()

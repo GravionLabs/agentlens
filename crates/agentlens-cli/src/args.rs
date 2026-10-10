@@ -37,12 +37,95 @@ pub enum Command {
     Scan,
     /// Show which skills are used and what they cost in tokens
     Skills,
+    /// Show what the clients put into the context besides the conversation
+    Context {
+        /// Which kind of static context to show
+        #[arg(long, value_enum, default_value_t = ContextView::All)]
+        kind: ContextView,
+    },
+    /// Show how sessions unfold: context growth, compactions, tool errors, hooks
+    Flow {
+        /// Which section to show
+        #[arg(long, value_enum, default_value_t = FlowSection::All)]
+        section: FlowSection,
+        /// Rows per table (0 shows all); JSON and CSV always contain everything
+        #[arg(long, default_value_t = 25)]
+        top: usize,
+    },
+    /// Compare the clients side by side over the same period
+    Compare,
+    /// Show cache hit rate and the share of work done by subagents
+    Efficiency {
+        /// Group the cache table by session, project or source
+        #[arg(long, value_enum, default_value_t = EfficiencyBy::Source)]
+        by: EfficiencyBy,
+        /// Rows of the cache table (0 shows all); JSON and CSV always contain everything
+        #[arg(long, default_value_t = 25)]
+        top: usize,
+        /// Price file that overrides or extends the bundled prices (used for the cost share)
+        #[arg(long, value_name = "FILE")]
+        prices: Option<std::path::PathBuf>,
+    },
+    /// Show what the sessions cost
+    Cost {
+        /// Group the cost by model, project, git branch or issue number (parsed from the branch name)
+        #[arg(long, value_enum, default_value_t = CostBy::Model)]
+        by: CostBy,
+        /// Price file that overrides or extends the bundled prices
+        #[arg(long, value_name = "FILE")]
+        prices: Option<std::path::PathBuf>,
+        /// Recompute the usage with the prices of this model (id prefix) and compare
+        #[arg(long, value_name = "MODEL")]
+        what_if: Option<String>,
+    },
+    /// List installed skills, agents and MCP servers that were not used
+    Unused {
+        /// Length of the period to look at (ignored if --since is given)
+        #[arg(long, value_name = "DAYS", default_value_t = 30)]
+        days: u32,
+        /// Also list items that were used
+        #[arg(long)]
+        all: bool,
+    },
     /// Write a self-contained report
     Report {
         /// Write an HTML file that works offline
         #[arg(long, value_name = "FILE")]
         html: std::path::PathBuf,
     },
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContextView {
+    All,
+    /// Tool lists and definitions and MCP server instructions
+    Tools,
+    Instructions,
+    Agents,
+    Skills,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EfficiencyBy {
+    Session,
+    Project,
+    Source,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CostBy {
+    Model,
+    Project,
+    Branch,
+    Issue,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FlowSection {
+    All,
+    Growth,
+    Errors,
+    Hooks,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,6 +152,11 @@ impl Cli {
             project: self.project.clone(),
         })
     }
+}
+
+/// The instant `days` days before `now`.
+pub fn days_ago(days: u32, now: Timestamp) -> Result<Timestamp> {
+    parse_since(&format!("{days}d"), now)
 }
 
 /// `30d`, `12h`, `4w` (relative to `now`), a date (`2026-10-01`, midnight UTC) or an RFC 3339 instant.
