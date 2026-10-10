@@ -60,9 +60,12 @@ pub fn mcp_server(tool: &str) -> Option<&str> {
 
 fn owner(kind: ContextKind, name: Option<&str>) -> String {
     match kind {
-        ContextKind::ToolListing | ContextKind::ToolDefinition => {
-            name.and_then(mcp_server).unwrap_or("built-in").to_owned()
-        }
+        ContextKind::ToolListing | ContextKind::ToolDefinition => match name {
+            // Clients that report only a total for all tool definitions.
+            None => "all tools".to_owned(),
+            Some(n) => mcp_server(n).unwrap_or("built-in").to_owned(),
+        },
+        ContextKind::SystemPrompt => "system prompt".to_owned(),
         ContextKind::McpInstructions | ContextKind::InstructionFile => {
             name.unwrap_or("unknown").to_owned()
         }
@@ -70,6 +73,9 @@ fn owner(kind: ContextKind, name: Option<&str>) -> String {
         ContextKind::SkillListing => "skills".to_owned(),
     }
 }
+
+/// First index, largest size and reported tokens per distinct item of a session.
+type Seen<'a> = BTreeMap<(ContextKind, Option<&'a str>), (usize, u64, Option<u64>)>;
 
 /// `instructions` is the inventory of instruction files; it fills in for
 /// sessions whose client does not report the files it loaded.
@@ -104,20 +110,21 @@ pub fn analyze(
 
         // Clients announce the same item again (resume, compaction, deltas):
         // it is one piece of context, counted from its first appearance.
-        let mut seen: BTreeMap<(ContextKind, Option<&str>), (usize, u64)> = BTreeMap::new();
+        let mut seen: Seen = BTreeMap::new();
         for (i, e) in se.events.iter().enumerate() {
             if let EventKind::ContextItem(item) = &e.kind {
                 let entry = seen
                     .entry((item.kind, item.name.as_deref()))
-                    .or_insert((i, 0));
+                    .or_insert((i, 0, None));
                 entry.1 = entry.1.max(item.bytes);
+                entry.2 = entry.2.max(item.tokens);
             }
         }
         let mut any = !seen.is_empty();
         let seen_instruction_files = seen.keys().any(|(k, _)| *k == ContextKind::InstructionFile);
-        for ((kind, name), (i, bytes)) in seen {
+        for ((kind, name), (i, bytes, reported)) in seen {
             let owner = owner(kind, name);
-            let tokens = estimator.count_bytes(bytes).count;
+            let tokens = reported.unwrap_or_else(|| estimator.count_bytes(bytes).count);
             let requests = later[i + 1];
             let row = rows
                 .entry((source, se.session.project_dir.clone(), kind, owner.clone()))
@@ -198,6 +205,7 @@ mod tests {
             kind,
             name: name.map(str::to_owned),
             bytes,
+            tokens: None,
         })
     }
 
@@ -276,6 +284,26 @@ mod tests {
         assert_eq!((row.items, row.bytes, row.tokens), (1, 80, 20));
         assert_eq!(row.requests, 2);
         assert_eq!(row.overhead_tokens, 40);
+    }
+
+    #[test]
+    fn reported_tokens_replace_the_size_estimate() {
+        let se = session(
+            Source::VsCodeCopilot,
+            vec![
+                EventKind::ContextItem(ContextItem {
+                    kind: ContextKind::ToolDefinition,
+                    name: None,
+                    bytes: 0,
+                    tokens: Some(500),
+                }),
+                request(10, false),
+                request(10, false),
+            ],
+        );
+        let r = analyze(&[se], &[], &CharsPerToken);
+        assert_eq!(r.rows[0].owner, "all tools");
+        assert_eq!((r.rows[0].tokens, r.rows[0].overhead_tokens), (500, 1000));
     }
 
     #[test]

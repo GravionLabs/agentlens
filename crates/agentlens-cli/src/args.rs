@@ -15,7 +15,7 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Only this source (repeatable): claude-code, opencode, copilot-cli
+    /// Only this source (repeatable): claude-code, opencode, copilot-cli, vscode-copilot
     #[arg(long, global = true, value_name = "ID", value_parser = parse_source)]
     pub source: Vec<Source>,
 
@@ -137,7 +137,8 @@ pub enum Format {
 
 fn parse_source(s: &str) -> Result<Source, String> {
     Source::from_id(s).ok_or_else(|| {
-        "unknown source, expected one of: claude-code, opencode, copilot-cli".to_owned()
+        "unknown source, expected one of: claude-code, opencode, copilot-cli, vscode-copilot"
+            .to_owned()
     })
 }
 

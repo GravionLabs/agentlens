@@ -180,6 +180,8 @@ pub enum ContextKind {
     AgentListing,
     /// The list of available skills (name and description).
     SkillListing,
+    /// The client's system prompt (without tools and instruction files).
+    SystemPrompt,
     /// An instruction file such as `CLAUDE.md`.
     InstructionFile,
 }
@@ -191,6 +193,10 @@ pub struct ContextItem {
     /// Tool name, MCP server, agent type or file path, if known.
     pub name: Option<String>,
     pub bytes: u64,
+    /// Token count the client reported for the item; used instead of an
+    /// estimate from `bytes` when present.
+    #[serde(default)]
+    pub tokens: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
