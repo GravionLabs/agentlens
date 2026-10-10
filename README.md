@@ -31,7 +31,7 @@ Token values with a leading `~` are estimated (see [ADR 0001](docs/adr/0001-toke
 | baseline | name and description of the skill, sent with every request of the clients that list it, used or not |
 | overhead | baseline + load + carry |
 
-Supported sources today: Claude Code. OpenCode and GitHub Copilot CLI follow in milestone M1.
+Supported sources today: Claude Code and OpenCode (SQLite database). GitHub Copilot CLI follows in milestone M1.
 
 ## Layout
 
