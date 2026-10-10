@@ -1,0 +1,15 @@
+{"type":"session.start","data":{"sessionId":"cp-1","version":1,"producer":"copilot-agent","copilotVersion":"0.0.0","startTime":"2026-07-15T04:00:00.000Z","context":{"cwd":"/work/demo","gitRoot":"/work/demo","branch":"main","repository":"acme/demo"}},"id":"e1","timestamp":"2026-07-15T04:00:00.000Z","parentId":null}
+{"type":"user.message","data":{"content":"synthetic prompt","attachments":[],"interactionId":"i1"},"id":"e2","timestamp":"2026-07-15T04:00:01.000Z","parentId":"e1"}
+{"type":"assistant.turn_start","data":{"turnId":"0","interactionId":"i1"},"id":"e3","timestamp":"2026-07-15T04:00:01.500Z","parentId":"e2"}
+{"type":"tool.execution_start","data":{"toolCallId":"c1","toolName":"view","arguments":{"path":"/work/demo/a.txt"}},"id":"e4","timestamp":"2026-07-15T04:00:02.000Z","parentId":"e3"}
+{"type":"tool.execution_complete","data":{"toolCallId":"c1","model":"model-a","success":true,"result":{"content":"ok"}},"id":"e5","timestamp":"2026-07-15T04:00:02.500Z","parentId":"e4"}
+{"type":"tool.execution_start","data":{"toolCallId":"c2","toolName":"bash","arguments":{"command":"curl -H secret https://example.test"}},"id":"e6","timestamp":"2026-07-15T04:00:03.000Z","parentId":"e5"}
+{"type":"tool.execution_complete","data":{"toolCallId":"c2","model":"model-a","success":false,"result":{"content":"failed"}},"id":"e7","timestamp":"2026-07-15T04:00:04.000Z","parentId":"e6"}
+{"type":"skill.invoked","data":{"name":"demo-skill","path":"/home/u/.agents/skills/demo-skill/SKILL.md","content":"0123456789","source":"personal-agents","description":"d","trigger":"agent-invoked"},"id":"e8","timestamp":"2026-07-15T04:00:05.000Z","parentId":"e7"}
+{"type":"skill.invoked","data":{"name":"typed-skill","path":"/home/u/.agents/skills/typed-skill/SKILL.md","content":"01234567890123456789","source":"project","description":"d"},"id":"e9","timestamp":"2026-07-15T04:00:06.000Z","parentId":"e8"}
+{"type":"subagent.started","data":{"toolCallId":"c3","agentName":"explore","agentDisplayName":"Explore","agentDescription":"d"},"id":"e10","timestamp":"2026-07-15T04:00:07.000Z","parentId":"e9"}
+{"type":"future.event","data":{},"id":"e11","timestamp":"2026-07-15T04:00:08.000Z","parentId":"e10"}
+{"type":"future.event","data":{},"id":"e12","timestamp":"2026-07-15T04:00:08.500Z","parentId":"e11"}
+not json at all
+{"type":"session.compaction_complete","data":{"success":true,"preCompactionTokens":1000},"id":"e13","timestamp":"2026-07-15T04:00:09.000Z","parentId":"e12"}
+{"type":"session.shutdown","data":{"shutdownType":"routine","currentModel":"model-a","modelMetrics":{"model-a":{"requests":{"count":9,"cost":1},"usage":{"inputTokens":99999,"outputTokens":9999,"cacheReadTokens":0,"cacheWriteTokens":0}}}},"id":"e14","timestamp":"2026-07-15T04:00:10.000Z","parentId":"e13"}

@@ -12,12 +12,27 @@ AgentLens only reads files that the clients already write. Nothing is sent anywh
 
 Early development. The plan lives in the GitHub issues and the [AgentLens project](https://github.com/orgs/GravionLabs/projects/13); milestone M0 delivers `agentlens scan` and `agentlens skills` for Claude Code.
 
+## Installation
+
+Download the archive for your platform from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` on your `PATH`:
+
+| Platform | Archive |
+|---|---|
+| Linux x86_64 / aarch64 | `agentlens-x86_64-unknown-linux-gnu.tar.gz` / `agentlens-aarch64-unknown-linux-gnu.tar.gz` |
+| macOS Apple silicon | `agentlens-aarch64-apple-darwin.tar.gz` |
+| Windows x86_64 | `agentlens-x86_64-pc-windows-msvc.zip` |
+
+Verify the download against `SHA256SUMS` from the same release (`sha256sum -c --ignore-missing SHA256SUMS`). The repository is private for now, so use `gh release download --repo GravionLabs/agentlens`.
+
+To build from source, install the Rust toolchain and run `cargo install --path crates/agentlens-cli`.
+
 ## Usage
 
 ```sh
 cargo run -p agentlens-cli -- scan                       # which sources exist, how many sessions
 cargo run -p agentlens-cli -- skills --since 30d         # skill usage and token cost
 cargo run -p agentlens-cli -- skills --format json       # also: csv
+cargo run -p agentlens-cli -- report --html report.html  # self-contained page, works offline
 ```
 
 Global flags: `--since <12h|30d|4w|2026-10-01>`, `--source <id>` (repeatable), `--project <dir>`, `--format table|json|csv`.
@@ -31,7 +46,7 @@ Token values with a leading `~` are estimated (see [ADR 0001](docs/adr/0001-toke
 | baseline | name and description of the skill, sent with every request of the clients that list it, used or not |
 | overhead | baseline + load + carry |
 
-Supported sources today: Claude Code. OpenCode and GitHub Copilot CLI follow in milestone M1.
+Supported sources today: Claude Code, OpenCode (SQLite database) and GitHub Copilot CLI. Copilot CLI sessions without per-request rows in `session-store.db` fall back to the session totals from `session.shutdown`, which cannot be split per request.
 
 ## Layout
 
