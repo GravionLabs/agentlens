@@ -241,3 +241,50 @@ fn since_filter_skips_files_not_touched_since() {
     };
     assert_eq!(ClaudeCodeAdapter.sessions(&env, &future).count(), 0);
 }
+
+fn context_items(se: &SessionEvents) -> Vec<&agentlens_core::model::ContextItem> {
+    se.events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::ContextItem(c) => Some(c),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn attachments_become_context_items_with_sizes_only() {
+    use agentlens_core::model::ContextKind::*;
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/context.jsonl",
+        &format!("{SLUG}/context.jsonl"),
+    );
+    let se = read_all(&home).remove(0);
+    let items: Vec<(_, Option<&str>, u64)> = context_items(&se)
+        .into_iter()
+        .map(|c| (c.kind, c.name.as_deref(), c.bytes))
+        .collect();
+    assert_eq!(
+        items,
+        [
+            (InstructionFile, Some("/work/demo/CLAUDE.md"), 400),
+            (SkillListing, None, 800),
+            (ToolListing, Some("mcp__srv__alpha"), 15),
+            (ToolListing, Some("mcp__srv__beta"), 14),
+            (ToolListing, Some("WebFetch"), 8),
+            (ToolDefinition, Some("mcp__srv__alpha"), 150),
+            (McpInstructions, Some("srv"), 300),
+            (AgentListing, Some("explore"), 100),
+        ]
+    );
+    // One compaction and three requests are still found.
+    assert_eq!(
+        se.events
+            .iter()
+            .filter(|e| matches!(e.kind, EventKind::Compaction))
+            .count(),
+        1
+    );
+    assert_eq!(usages(&se).len(), 3);
+}

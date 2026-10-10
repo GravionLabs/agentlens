@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::adapter::{Detection, Registry, SessionFilter};
+use crate::analyzers::context::{self, ContextReport};
 use crate::analyzers::skills::{self, SkillReport};
 use crate::env::Env;
 use crate::inventory::{self, Inventory};
@@ -96,6 +97,36 @@ pub fn skill_run(
         report,
         inventory,
         warnings,
+        errors,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ContextRun {
+    pub report: ContextReport,
+    pub warnings: u64,
+    pub errors: Vec<String>,
+}
+
+/// Reads the sessions and analyzes the static context of their requests.
+pub fn context_run(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    only: &[Source],
+    estimator: &dyn TokenEstimator,
+) -> ContextRun {
+    let mut sessions: Vec<SessionEvents> = Vec::new();
+    let mut errors = Vec::new();
+    for r in registry.sessions(env, filter, only) {
+        match r {
+            Ok(se) => sessions.push(se),
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+    ContextRun {
+        warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
+        report: context::analyze(&sessions, estimator),
         errors,
     }
 }

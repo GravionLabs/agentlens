@@ -141,6 +141,35 @@ pub enum EventKind {
     Usage(Usage),
     /// The context was compacted; earlier content no longer counts as carried.
     Compaction,
+    /// Static content the client put into the context (not conversation).
+    ContextItem(ContextItem),
+}
+
+/// What kind of static content a [`ContextItem`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ContextKind {
+    /// Names of tools the client lists without their full definition.
+    ToolListing,
+    /// A full tool definition that entered the context.
+    ToolDefinition,
+    /// Instructions an MCP server contributes.
+    McpInstructions,
+    /// The list of available subagents.
+    AgentListing,
+    /// The list of available skills (name and description).
+    SkillListing,
+    /// An instruction file such as `CLAUDE.md`.
+    InstructionFile,
+}
+
+/// A piece of static context. Only the size is kept, never the content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextItem {
+    pub kind: ContextKind,
+    /// Tool name, MCP server, agent type or file path, if known.
+    pub name: Option<String>,
+    pub bytes: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

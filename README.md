@@ -33,6 +33,7 @@ cargo run -p agentlens-cli -- scan                       # which sources exist, 
 cargo run -p agentlens-cli -- skills --since 30d         # skill usage and token cost
 cargo run -p agentlens-cli -- skills --format json       # also: csv
 cargo run -p agentlens-cli -- report --html report.html  # self-contained page, works offline
+cargo run -p agentlens-cli -- context --kind tools       # static context: tools, MCP, agents, skills, instruction files
 ```
 
 Global flags: `--since <12h|30d|4w|2026-10-01>`, `--source <id>` (repeatable), `--project <dir>`, `--format table|json|csv`.
@@ -45,6 +46,8 @@ Token values with a leading `~` are estimated (see [ADR 0001](docs/adr/0001-toke
 | carry | the loaded content sent again with every later request until the context is compacted |
 | baseline | name and description of the skill, sent with every request of the clients that list it, used or not |
 | overhead | baseline + load + carry |
+
+`agentlens context` shows static context the client adds to every request, with columns `kind` (tool listing, tool definition, MCP instructions, agent listing, skill listing, instruction file), `owner` (MCP server, `built-in`, or file path), `items` (distinct items, once per session), `tokens` (estimated size of those items), `requests` (main-agent requests that followed them) and `overhead` (tokens x requests, estimated). The measured size of the first request of a session bounds everything static. Only Claude Code reports these items today; other sources are listed as not available.
 
 Supported sources today: Claude Code, OpenCode (SQLite database) and GitHub Copilot CLI. Copilot CLI sessions without per-request rows in `session-store.db` fall back to the session totals from `session.shutdown`, which cannot be split per request.
 
