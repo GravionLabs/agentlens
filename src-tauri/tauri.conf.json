@@ -31,9 +31,7 @@
         "connect-src": "ipc: http://ipc.localhost"
       },
       "devCsp": null,
-      "dangerousDisableAssetCspModification": [
-        "style-src"
-      ]
+      "dangerousDisableAssetCspModification": ["style-src"]
     }
   },
   "bundle": {
@@ -51,9 +49,7 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM3MzY0MTQ5NjRBMUEwMTUKUldRVm9LRmtTVUUyTjl6cENwSWFqakdsNjd2ZW9SdTh3NWFuakF4U0hyYm5Hd0MvdjlwZHlsT1MK",
-      "endpoints": [
-        "https://github.com/GravionLabs/agentlens/releases/latest/download/latest.json"
-      ]
+      "endpoints": ["https://github.com/GravionLabs/agentlens/releases/latest/download/latest.json"]
     }
   }
 }
