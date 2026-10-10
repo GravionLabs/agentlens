@@ -1,8 +1,9 @@
 name: release
 
 # A push to main versions the build with GitVersion (GitVersion.yml), builds the
-# CLI binaries and publishes a GitHub release tagged v<version>. Pull requests
-# that touch the release files run the build as a dry run without publishing.
+# CLI binaries and the application installers and publishes one GitHub release
+# tagged v<version>. Pull requests that touch the release files run the builds as
+# a dry run without publishing.
 on:
   push:
     branches: [main]
@@ -11,6 +12,7 @@ on:
       - ".github/workflows/release.yml"
       - "GitVersion.yml"
       - "cliff.toml"
+      - "src-tauri/tauri.conf.json"
 
 concurrency:
   group: release-${{ github.ref }}
@@ -102,9 +104,69 @@ jobs:
             ${{ env.ARCHIVE }}
             ${{ env.ARCHIVE }}.sha256
 
+  installers:
+    name: installers ${{ matrix.target }}
+    needs: determine-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    env:
+      # MSI needs a numeric version, so builds that are not releases get 0.0.<run number>.
+      VERSION: ${{ github.ref == 'refs/heads/main' && needs.determine-version.outputs.semver || format('0.0.{0}', github.run_number) }}
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: installers-${{ matrix.target }}
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev \
+            libxdo-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Set the version
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const version = process.env.VERSION;
+            for (const file of ['package.json', 'src-tauri/tauri.conf.json']) {
+              const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+              json.version = version;
+              fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
+            }
+            const cargo = fs.readFileSync('Cargo.toml', 'utf8');
+            fs.writeFileSync('Cargo.toml', cargo.replace(/^version = \".*\"/m, 'version = \"' + version + '\"'));
+          "
+      - run: pnpm install --frozen-lockfile
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Only builds from main create the release, as a draft until the publish job.
+          tagName: ${{ github.ref == 'refs/heads/main' && format('v{0}', env.VERSION) || '' }}
+          releaseName: ${{ github.ref == 'refs/heads/main' && format('v{0}', env.VERSION) || '' }}
+          releaseDraft: true
+          args: --target ${{ matrix.target }}
+
   publish:
     name: publish release
-    needs: [determine-version, build]
+    needs: [determine-version, build, installers]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -128,12 +190,29 @@ jobs:
           args: --unreleased --tag v${{ needs.determine-version.outputs.semver }} --strip header
         env:
           OUTPUT: RELEASE_NOTES.md
-      - name: Create the release
+      # The installers job created the draft release; add the CLI binaries and publish it.
+      # Release PRs are squash-merged, so main may hold no conventional commits and
+      # git-cliff finds nothing. Then the notes are the change lines of the squash
+      # commit message (the commits of the release branch).
+      - name: Fall back to the squash commit message
+        run: |
+          if ! grep -q '^### ' RELEASE_NOTES.md; then
+            {
+              echo "## Changes"
+              echo
+              git log -1 --format=%b | grep -E '^\* (feat|fix|docs|perf|refactor)' | awk '!seen[$0]++'
+            } > RELEASE_NOTES.md
+          fi
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ needs.determine-version.outputs.semver }}" dist/* \
-            --repo "${{ github.repository }}" \
-            --target "${{ github.sha }}" \
-            --title "v${{ needs.determine-version.outputs.semver }}" \
-            --notes-file RELEASE_NOTES.md
+          tag="v${{ needs.determine-version.outputs.semver }}"
+          if gh release view "$tag" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber --repo "${{ github.repository }}"
+          else
+            gh release create "$tag" dist/* --draft --target "${{ github.sha }}" \
+              --title "$tag" --repo "${{ github.repository }}"
+          fi
+          gh release edit "$tag" --notes-file RELEASE_NOTES.md --draft=false \
+            --title "$tag" --repo "${{ github.repository }}"
