@@ -1,0 +1,26 @@
+{
+  "data": [
+    {
+      "source": "claude-code",
+      "id": "context",
+      "project": "/work/demo",
+      "model": "claude-test-1",
+      "started_at": "2026-10-02T09:00:00Z",
+      "ended_at": "2026-10-02T09:00:30Z",
+      "requests": 3,
+      "peak_tokens": 1060
+    },
+    {
+      "source": "copilot-cli",
+      "id": "cp-1",
+      "project": "/work/demo",
+      "model": "model-a",
+      "started_at": "2026-07-15T04:00:00Z",
+      "ended_at": "2026-07-15T04:00:10Z",
+      "requests": 1,
+      "peak_tokens": 99999
+    }
+  ],
+  "warnings": 0,
+  "errors": []
+}

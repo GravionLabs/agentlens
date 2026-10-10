@@ -13,10 +13,12 @@ name = "agentlens-app"
 version = "0.3.0"
 dependencies = [
  "agentlens-core",
+ "jiff",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
+ "tempfile",
 ]
 
 [[package]]
