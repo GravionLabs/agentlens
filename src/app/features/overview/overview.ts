@@ -1,3 +1,4 @@
+import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { number, sourceLabel } from "../../core/format";
@@ -6,14 +7,16 @@ import { Status } from "../../ui/status";
 
 @Component({
   selector: "app-overview",
-  imports: [Status],
+  imports: [PageHeader, Status],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <h2>Sources</h2>
-      <p class="muted">
-        Which coding agents left sessions on this machine, for the selected filters.
-      </p>
+      <app-page-header title="Sources" summary="Which coding agents left sessions on this machine.">
+        <p>
+          Which coding agents left sessions on this machine, for the selected filters. Sources that
+          are not found show where AgentLens looked.
+        </p>
+      </app-page-header>
       <app-status
         [loading]="res.isLoading()"
         [error]="res.error()"

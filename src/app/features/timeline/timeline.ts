@@ -1,3 +1,5 @@
+import { PageHeader } from "../../ui/page-header";
+import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { compact, day, number, sourceLabel, timeOfDay, usd } from "../../core/format";
@@ -27,15 +29,16 @@ const MARKER_LEGEND = [
 
 @Component({
   selector: "app-timeline",
-  imports: [Status, Legend],
+  imports: [PageHeader, Term, Status, Legend],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <h2>Timeline</h2>
-      <p class="muted">
-        The context size (input + cache, measured) of every main-agent request of one session, with
-        what happened in between.
-      </p>
+      <app-page-header title="Timeline" summary="Context size of every request of one session.">
+        <p>
+          The <app-term id="context-size">context size</app-term> (input + cache, measured) of every
+          main-agent request of one session, with what happened in between.
+        </p>
+      </app-page-header>
       <app-status
         [loading]="list.isLoading()"
         [error]="list.error()"

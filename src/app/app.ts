@@ -17,7 +17,7 @@ import { inject } from "@angular/core";
     @if (loading.busy()) {
       <div class="progress" role="progressbar" aria-label="Reading sessions"></div>
     }
-    <header class="top">
+    <aside class="side">
       <span class="brand">
         <img src="favicon.svg" alt="" width="24" height="24" />
         <strong>AgentLens</strong>
@@ -27,29 +27,44 @@ import { inject } from "@angular/core";
           <a [routerLink]="item.path" routerLinkActive="active">{{ item.label }}</a>
         }
       </nav>
-      @if (sampleMode) {
-        <span class="sample">sample data</span>
-      }
-      <button type="button" class="refresh" (click)="refresh()" [disabled]="loading.busy()">
-        Refresh
-      </button>
-      @if (!sampleMode) {
-        <app-update-status />
-      }
-    </header>
-    <app-filter-bar />
+      <app-filter-bar />
+      <div class="foot">
+        @if (sampleMode) {
+          <span class="sample">sample data</span>
+        }
+        <button type="button" class="refresh" (click)="refresh()" [disabled]="loading.busy()">
+          Refresh
+        </button>
+        @if (!sampleMode) {
+          <app-update-status />
+        }
+      </div>
+    </aside>
     <main [class.busy]="loading.busy()" [attr.aria-busy]="loading.busy()">
       <router-outlet />
     </main>
   `,
   styles: `
-    .top {
+    :host {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      height: 100dvh;
+    }
+    .side {
       display: flex;
-      align-items: center;
-      gap: 24px;
-      padding: 10px 16px;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px;
       background: var(--panel);
-      border-bottom: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      overflow-y: auto;
+    }
+    .foot {
+      margin-top: auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
     }
     .brand {
       display: inline-flex;
@@ -95,9 +110,8 @@ import { inject } from "@angular/core";
     }
     nav {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      flex: 1;
+      flex-direction: column;
+      gap: 2px;
     }
     nav a {
       color: var(--muted);
@@ -136,9 +150,9 @@ import { inject } from "@angular/core";
       padding: 1px 10px;
     }
     main {
-      padding: 16px;
-      max-width: 1280px;
-      margin: 0 auto;
+      padding: 12px 20px 24px;
+      overflow-y: auto;
+      min-width: 0;
     }
   `,
 })

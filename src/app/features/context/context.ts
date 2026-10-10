@@ -1,3 +1,5 @@
+import { PageHeader } from "../../ui/page-header";
+import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { number, pathLabel, shortPath, sourceLabel, tokens } from "../../core/format";
@@ -53,16 +55,18 @@ export function inView(kind: ContextKind, view: View): boolean {
 
 @Component({
   selector: "app-context",
-  imports: [Status, DataTable],
+  imports: [PageHeader, Term, Status, DataTable],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <h2>Context</h2>
-      <p class="muted">
-        Static content the clients add to every request. Overhead = tokens × the requests that
-        followed;
-        <span class="est">~</span> marks estimates.
-      </p>
+      <app-page-header title="Context" summary="Static content the clients add to every request.">
+        <p>
+          Static content the clients add to every request (<app-term id="context"
+            >static context</app-term
+          >). <app-term id="overhead">Overhead</app-term> = tokens × the requests that followed;
+          <span class="est">~</span> marks estimates.
+        </p>
+      </app-page-header>
       <app-status
         [loading]="res.isLoading()"
         [error]="res.error()"
@@ -184,10 +188,11 @@ export class Context {
   });
 
   private readonly valueColumns: Column<ContextRow>[] = [
-    { key: "kind", label: "Kind", value: (r) => r.kind },
+    { key: "kind", label: "Kind", term: "kind", value: (r) => r.kind },
     {
       key: "owner",
       label: "Owner",
+      term: "owner",
       value: (r) => r.owner,
       text: (r) => pathLabel(r.owner),
       hover: (r) => r.owner,
@@ -196,6 +201,7 @@ export class Context {
     {
       key: "tokens",
       label: "Tokens",
+      term: "token",
       value: (r) => r.tokens,
       text: (r) => tokens(r.tokens, true),
       estimated: () => true,
@@ -204,6 +210,7 @@ export class Context {
     {
       key: "requests",
       label: "Requests",
+      term: "request",
       value: (r) => r.requests,
       text: (r) => number(r.requests),
       numeric: true,
@@ -211,6 +218,7 @@ export class Context {
     {
       key: "overhead",
       label: "Overhead",
+      term: "overhead",
       value: (r) => r.overhead_tokens,
       text: (r) => tokens(r.overhead_tokens, true),
       estimated: () => true,
