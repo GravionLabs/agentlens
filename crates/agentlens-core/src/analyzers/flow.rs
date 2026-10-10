@@ -8,7 +8,9 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{EventKind, SessionEvents, Source};
+use std::collections::BTreeMap;
+
+use crate::model::{EventKind, SessionEvents, Source, ToolStatus};
 
 /// Context windows by model-name prefix (vendor documentation, October 2026).
 /// Models that are not listed are never flagged.
@@ -110,7 +112,7 @@ pub fn growth(sessions: &[SessionEvents]) -> GrowthReport {
     }
     // Without a fitting documented window, compare with the largest size at
     // which this model was compacted.
-    let mut observed: std::collections::BTreeMap<String, u64> = Default::default();
+    let mut observed: BTreeMap<String, u64> = Default::default();
     for g in &out {
         if let (Some(m), Some(c)) = (&g.model, g.compactions.iter().max()) {
             let e = observed.entry(m.clone()).or_default();
@@ -130,6 +132,131 @@ pub fn growth(sessions: &[SessionEvents]) -> GrowthReport {
             .then_with(|| a.session.cmp(&b.session))
     });
     GrowthReport { sessions: out }
+}
+
+/// Calls of one tool and how many failed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolErrors {
+    pub source: Source,
+    pub tool: String,
+    pub calls: u64,
+    pub errors: u64,
+    /// Calls whose outcome the client did not record; never counted as errors.
+    pub unknown: u64,
+    /// Retry loops of this tool.
+    pub loops: u64,
+}
+
+/// Three or more adjacent calls of the same tool with the same input summary,
+/// the first two of which failed. Calls without an input summary cannot be
+/// compared and never form a loop.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetryLoop {
+    pub source: Source,
+    pub session: String,
+    pub tool: String,
+    pub input: Option<String>,
+    pub calls: u64,
+    pub errors: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ErrorReport {
+    /// Sorted by errors, largest first.
+    pub tools: Vec<ToolErrors>,
+    /// Sorted by calls, largest first.
+    pub loops: Vec<RetryLoop>,
+}
+
+/// Calls in a row needed to call it a loop.
+pub const LOOP_MIN_CALLS: u64 = 3;
+
+pub fn errors(sessions: &[SessionEvents]) -> ErrorReport {
+    let mut tools: BTreeMap<(Source, String), ToolErrors> = BTreeMap::new();
+    let mut loops = Vec::new();
+    for se in sessions {
+        let source = se.session.source;
+        // The current run of identical adjacent calls: (tool, input, calls, errors, leading failures).
+        let mut run: Option<(String, Option<String>, u64, u64, u64)> = None;
+        let flush = |run: &mut Option<(String, Option<String>, u64, u64, u64)>,
+                     tools: &mut BTreeMap<(Source, String), ToolErrors>,
+                     loops: &mut Vec<RetryLoop>| {
+            if let Some((tool, input, calls, errs, leading)) = run.take()
+                && calls >= LOOP_MIN_CALLS
+                && leading >= 2
+                && input.is_some()
+            {
+                if let Some(t) = tools.get_mut(&(source, tool.clone())) {
+                    t.loops += 1;
+                }
+                loops.push(RetryLoop {
+                    source,
+                    session: se.session.id.clone(),
+                    tool,
+                    input,
+                    calls,
+                    errors: errs,
+                });
+            }
+        };
+        for e in &se.events {
+            let EventKind::ToolCall(c) = &e.kind else {
+                continue;
+            };
+            let t = tools
+                .entry((source, c.name.clone()))
+                .or_insert_with(|| ToolErrors {
+                    source,
+                    tool: c.name.clone(),
+                    calls: 0,
+                    errors: 0,
+                    unknown: 0,
+                    loops: 0,
+                });
+            t.calls += 1;
+            match c.status {
+                ToolStatus::Error => t.errors += 1,
+                ToolStatus::Unknown => t.unknown += 1,
+                ToolStatus::Ok => {}
+            }
+            let failed = c.status == ToolStatus::Error;
+            match &mut run {
+                Some((tool, input, calls, errs, leading))
+                    if *tool == c.name && *input == c.input_summary =>
+                {
+                    if failed && *leading == *calls {
+                        *leading += 1;
+                    }
+                    *calls += 1;
+                    *errs += u64::from(failed);
+                }
+                _ => {
+                    flush(&mut run, &mut tools, &mut loops);
+                    run = Some((
+                        c.name.clone(),
+                        c.input_summary.clone(),
+                        1,
+                        u64::from(failed),
+                        u64::from(failed),
+                    ));
+                }
+            }
+        }
+        flush(&mut run, &mut tools, &mut loops);
+    }
+    let mut tools: Vec<ToolErrors> = tools.into_values().collect();
+    tools.sort_by(|a, b| {
+        b.errors
+            .cmp(&a.errors)
+            .then_with(|| b.calls.cmp(&a.calls))
+            .then_with(|| a.tool.cmp(&b.tool))
+    });
+    loops.sort_by(|a, b| {
+        b.calls
+            .cmp(&a.calls)
+            .then_with(|| a.session.cmp(&b.session))
+    });
+    ErrorReport { tools, loops }
 }
 
 #[cfg(test)]
@@ -251,5 +378,104 @@ mod tests {
         let r = growth(&[with, empty]);
         assert_eq!(r.sessions.len(), 1);
         assert_eq!(r.sessions[0].model.as_deref(), Some("claude-x"));
+    }
+
+    fn call(name: &str, input: Option<&str>, status: ToolStatus) -> EventKind {
+        EventKind::ToolCall(crate::model::ToolCall {
+            name: name.into(),
+            input_summary: input.map(Into::into),
+            status,
+            duration_ms: None,
+        })
+    }
+
+    #[test]
+    fn error_rate_counts_unknown_separately() {
+        use ToolStatus::*;
+        let se = session(
+            "a",
+            None,
+            vec![
+                call("Read", Some("x"), Ok),
+                call("Read", Some("y"), Error),
+                call("Read", Some("z"), Unknown),
+                call("Bash", Some("ls"), Ok),
+            ],
+        );
+        let r = errors(&[se]);
+        let read = r.tools.iter().find(|t| t.tool == "Read").unwrap();
+        assert_eq!((read.calls, read.errors, read.unknown), (3, 1, 1));
+        assert_eq!(r.tools[0].tool, "Read", "sorted by errors");
+        assert!(r.loops.is_empty());
+    }
+
+    #[test]
+    fn a_loop_needs_three_adjacent_identical_calls_and_two_leading_failures() {
+        use ToolStatus::*;
+        let looped = session(
+            "loop",
+            None,
+            vec![
+                call("Bash", Some("make"), Error),
+                call("Bash", Some("make"), Error),
+                call("Bash", Some("make"), Ok),
+                call("Read", Some("a"), Ok),
+            ],
+        );
+        let two = session(
+            "two",
+            None,
+            vec![
+                call("Bash", Some("make"), Error),
+                call("Bash", Some("make"), Ok),
+            ],
+        );
+        let succeeds = session(
+            "fine",
+            None,
+            vec![
+                call("Read", Some("a"), Ok),
+                call("Read", Some("a"), Ok),
+                call("Read", Some("a"), Ok),
+            ],
+        );
+        let interrupted = session(
+            "interrupted",
+            None,
+            vec![
+                call("Bash", Some("make"), Error),
+                call("Read", Some("a"), Ok),
+                call("Bash", Some("make"), Error),
+                call("Bash", Some("make"), Error),
+            ],
+        );
+        let one_failure = session(
+            "one",
+            None,
+            vec![
+                call("Bash", Some("make"), Error),
+                call("Bash", Some("make"), Ok),
+                call("Bash", Some("make"), Ok),
+            ],
+        );
+        let no_input = session(
+            "noinput",
+            None,
+            vec![
+                call("click", None, Error),
+                call("click", None, Error),
+                call("click", None, Error),
+            ],
+        );
+        let r = errors(&[looped, two, succeeds, interrupted, one_failure, no_input]);
+        assert_eq!(r.loops.len(), 1);
+        let l = &r.loops[0];
+        assert_eq!(
+            (l.session.as_str(), l.tool.as_str(), l.calls, l.errors),
+            ("loop", "Bash", 3, 2)
+        );
+        assert_eq!(l.input.as_deref(), Some("make"));
+        let bash = r.tools.iter().find(|t| t.tool == "Bash").unwrap();
+        assert_eq!(bash.loops, 1);
     }
 }
