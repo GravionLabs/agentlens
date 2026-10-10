@@ -52,6 +52,18 @@ pub enum Command {
         #[arg(long, default_value_t = 25)]
         top: usize,
     },
+    /// Show cache hit rate and the share of work done by subagents
+    Efficiency {
+        /// Group the cache table by session, project or source
+        #[arg(long, value_enum, default_value_t = EfficiencyBy::Source)]
+        by: EfficiencyBy,
+        /// Rows of the cache table (0 shows all); JSON and CSV always contain everything
+        #[arg(long, default_value_t = 25)]
+        top: usize,
+        /// Price file that overrides or extends the bundled prices (used for the cost share)
+        #[arg(long, value_name = "FILE")]
+        prices: Option<std::path::PathBuf>,
+    },
     /// Show what the sessions cost
     Cost {
         /// Group the cost by model, project, git branch or issue number (parsed from the branch name)
@@ -86,6 +98,13 @@ pub enum ContextView {
     Instructions,
     Agents,
     Skills,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EfficiencyBy {
+    Session,
+    Project,
+    Source,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]

@@ -1,5 +1,6 @@
 mod context;
 mod cost;
+mod efficiency;
 mod flow;
 mod report;
 mod scan;
@@ -30,6 +31,18 @@ pub fn run(cli: Cli) -> Result<()> {
             &cli.source,
             prices.as_deref(),
             by,
+            cli.format,
+        ),
+        Command::Efficiency { by, top, prices } => efficiency::run(
+            &registry,
+            &env,
+            &filter,
+            &cli.source,
+            efficiency::Params {
+                price_file: prices.as_deref(),
+                by,
+                top,
+            },
             cli.format,
         ),
         Command::Flow { section, top } => flow::run(
