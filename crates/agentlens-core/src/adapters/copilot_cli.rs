@@ -167,15 +167,26 @@ fn read_usage_rows(path: &Path) -> (HashMap<String, Vec<UsageRow>>, Option<Strin
     }
     let subagent_cols =
         have.iter().any(|c| c == "agent_id") && have.iter().any(|c| c == "parent_tool_call_id");
+    let has = |c: &str| have.iter().any(|h| h == c);
     let sql = format!(
         "SELECT session_id, model, input_tokens, output_tokens, cache_read_tokens, \
-         cache_write_tokens, reasoning_tokens, created_at, {} \
+         cache_write_tokens, reasoning_tokens, created_at, {}, {}, {} \
          FROM assistant_usage_events ORDER BY created_at, id",
         if subagent_cols {
             "(agent_id IS NOT NULL OR parent_tool_call_id IS NOT NULL)"
         } else {
             "0"
-        }
+        },
+        if has("request_multiplier") {
+            "request_multiplier"
+        } else {
+            "NULL"
+        },
+        if has("initiator") {
+            "initiator"
+        } else {
+            "NULL"
+        },
     );
     let result = conn.prepare(&sql).and_then(|mut stmt| {
         let rows = stmt.query_map([], |r| {
@@ -199,6 +210,14 @@ fn read_usage_rows(path: &Path) -> (HashMap<String, Vec<UsageRow>>, Option<Strin
                         cost_usd: None,
                         measured: true,
                         subagent: r.get::<_, i64>(8)? != 0,
+                        // Only requests the user started are charged; agent
+                        // follow-ups ride along.
+                        premium_requests: r.get::<_, Option<f64>>(9)?.map(|m| {
+                            match r.get::<_, Option<String>>(10).ok().flatten().as_deref() {
+                                Some("user") | None => m,
+                                Some(_) => 0.0,
+                            }
+                        }),
                     },
                 },
             ))
@@ -463,6 +482,11 @@ fn shutdown_usage(data: &Value) -> Vec<Usage> {
                 cost_usd: None,
                 measured: true,
                 subagent: false,
+                // `requests.cost` is the number of premium requests charged.
+                premium_requests: m
+                    .get("requests")
+                    .and_then(|r| r.get("cost"))
+                    .and_then(Value::as_f64),
             }
         })
         .collect()

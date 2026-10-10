@@ -262,6 +262,10 @@ pub struct Usage {
     pub measured: bool,
     /// The request was made by a subagent.
     pub subagent: bool,
+    /// Premium requests the client charged for this request (GitHub Copilot).
+    /// A count against a plan allowance, never money.
+    #[serde(default)]
+    pub premium_requests: Option<f64>,
 }
 
 impl Usage {
@@ -283,6 +287,7 @@ impl Default for Usage {
             cost_usd: None,
             measured: true,
             subagent: false,
+            premium_requests: None,
         }
     }
 }

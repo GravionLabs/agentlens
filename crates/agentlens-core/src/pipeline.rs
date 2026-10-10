@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use crate::adapter::{Detection, Registry, SessionFilter};
 use crate::analyzers::context::{self, ContextReport};
+use crate::analyzers::cost::{self, CostReport};
 use crate::analyzers::flow::{self, ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::{self, SkillReport};
 use crate::analyzers::unused::{self, UnusedReport};
@@ -220,6 +221,36 @@ pub fn flow_run(
         tool_errors: flow::errors(&sessions),
         hooks: flow::hooks(&sessions),
         warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
+        errors,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CostRun {
+    pub report: CostReport,
+    pub warnings: u64,
+    pub errors: Vec<String>,
+}
+
+/// Reads the sessions and prices their usage.
+pub fn cost_run(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    only: &[Source],
+    prices: &crate::prices::PriceTable,
+) -> CostRun {
+    let mut sessions: Vec<SessionEvents> = Vec::new();
+    let mut errors = Vec::new();
+    for r in registry.sessions(env, filter, only) {
+        match r {
+            Ok(se) => sessions.push(se),
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+    CostRun {
+        warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
+        report: cost::by_model(&sessions, prices),
         errors,
     }
 }

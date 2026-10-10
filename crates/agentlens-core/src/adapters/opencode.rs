@@ -236,6 +236,7 @@ fn usage_of(tokens: &Value, cost: Option<f64>, model: Option<String>, subagent: 
         cost_usd: cost,
         measured: true,
         subagent,
+        premium_requests: None,
     }
 }
 
