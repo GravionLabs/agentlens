@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::inventory::Inventory;
+use crate::inventory::{Inventory, SkillEntry};
 use crate::model::{EventKind, SessionEvents, SkillInvoked, SkillTrigger, Source, Usage};
 use crate::tokens::{TokenEstimator, Tokens};
 
@@ -136,8 +136,15 @@ pub fn analyze(
     let mut ignored: BTreeMap<String, u32> = BTreeMap::new();
 
     for entry in &inventory.skills {
-        accs.entry(entry.name.clone())
-            .or_insert_with(|| Acc::new(&entry.name, true, entry.clients.clone()));
+        let acc = accs
+            .entry(entry.name.clone())
+            .or_insert_with(|| Acc::new(&entry.name, true, Vec::new()));
+        for c in &entry.clients {
+            if !acc.stats.clients.contains(c) {
+                acc.stats.clients.push(*c);
+            }
+        }
+        acc.stats.clients.sort();
     }
 
     for se in sessions {
@@ -174,11 +181,14 @@ pub fn analyze(
         }
     }
 
-    // Several files with one name: the first (sorted by name, then file) wins, so it is applied last.
-    for entry in inventory.skills.iter().rev() {
-        if let Some(acc) = accs.get_mut(&entry.name) {
-            acc.stats.baseline = baseline(entry, sessions);
-        }
+    // Several files may share a name; the skill is listed wherever any copy is visible.
+    for (name, acc) in accs.iter_mut() {
+        let entries: Vec<&SkillEntry> = inventory
+            .skills
+            .iter()
+            .filter(|s| &s.name == name)
+            .collect();
+        acc.stats.baseline = baseline(&entries, sessions);
     }
 
     report.skills = accs.into_values().map(Acc::finish).collect();
@@ -326,31 +336,34 @@ impl Acc {
 }
 
 /// Listing tokens × the requests of every session in which the skill is listed.
-fn baseline(entry: &crate::inventory::SkillEntry, sessions: &[SessionEvents]) -> BaselineCost {
-    let mut requests = 0u64;
+/// Per session the first visible copy (sorted by file) decides the listing size.
+fn baseline(entries: &[&SkillEntry], sessions: &[SessionEvents]) -> BaselineCost {
+    let (mut requests, mut tokens) = (0u64, 0u64);
     for se in sessions {
-        let listed = entry.locations.iter().any(|loc| {
-            loc.kind.clients().contains(&se.session.source)
-                && match loc.project_root() {
-                    None => true,
-                    Some(root) => se
-                        .session
-                        .project_dir
-                        .as_deref()
-                        .is_some_and(|d| d.starts_with(root)),
-                }
+        let visible = entries.iter().find(|entry| {
+            entry.locations.iter().any(|loc| {
+                loc.kind.clients().contains(&se.session.source)
+                    && loc.project.as_deref().is_none_or(|root| {
+                        se.session
+                            .project_dir
+                            .as_deref()
+                            .is_some_and(|d| d.starts_with(root))
+                    })
+            })
         });
-        if listed {
-            requests += se
+        if let Some(entry) = visible {
+            let n = se
                 .events
                 .iter()
                 .filter(|e| matches!(e.kind, EventKind::Usage(_)))
                 .count() as u64;
+            requests += n;
+            tokens += entry.baseline_tokens.count * n;
         }
     }
     BaselineCost {
         requests,
-        tokens: Tokens::estimated(entry.baseline_tokens.count * requests),
+        tokens: Tokens::estimated(tokens),
     }
 }
 
@@ -403,9 +416,22 @@ mod tests {
     }
 
     fn entry(name: &str, baseline: u64, body: u64, kind: LocationKind, dir: &str) -> SkillEntry {
+        let project = matches!(
+            kind,
+            LocationKind::ProjectGithub | LocationKind::ProjectClaude
+        )
+        .then(|| {
+            std::path::Path::new(dir)
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .to_path_buf()
+        });
         let loc = Location {
             kind,
             dir: dir.into(),
+            project,
         };
         SkillEntry {
             name: name.into(),
@@ -652,5 +678,95 @@ mod tests {
             "unused skills are reported with their baseline cost"
         );
         assert_eq!(r.requests_by_source[&Source::CopilotCli], 10);
+    }
+}
+
+#[cfg(test)]
+mod duplicate_tests {
+    use super::*;
+    use crate::inventory::{Location, LocationKind};
+    use crate::model::{Event, Session};
+
+    fn entry(file: &str, kind: LocationKind, project: Option<&str>, baseline: u64) -> SkillEntry {
+        SkillEntry {
+            name: "same".into(),
+            description: None,
+            file: file.into(),
+            clients: kind.clients().to_vec(),
+            locations: vec![Location {
+                kind,
+                dir: file.into(),
+                project: project.map(Into::into),
+            }],
+            baseline_tokens: Tokens::estimated(baseline),
+            body_tokens: Tokens::estimated(0),
+            body_bytes: 0,
+        }
+    }
+
+    fn session(source: Source, project: &str, requests: usize) -> SessionEvents {
+        let mut s = Session::new(format!("{source:?}"), source);
+        s.project_dir = Some(project.into());
+        let events = (0..requests)
+            .map(|_| Event {
+                at: None,
+                kind: EventKind::Usage(Usage::default()),
+            })
+            .collect();
+        SessionEvents {
+            session: s,
+            events,
+            warnings: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_skill_with_copies_for_different_clients_is_listed_for_each_client() {
+        // ~/.agents (not Claude Code) sorts before ~/.claude; both copies exist.
+        let inv = Inventory {
+            skills: vec![
+                entry(
+                    "/h/.agents/skills/same/SKILL.md",
+                    LocationKind::UserAgents,
+                    None,
+                    10,
+                ),
+                entry(
+                    "/h/.claude/skills/same/SKILL.md",
+                    LocationKind::UserClaude,
+                    None,
+                    20,
+                ),
+            ],
+            ..Inventory::default()
+        };
+        let sessions = [
+            session(Source::ClaudeCode, "/p", 3),
+            session(Source::OpenCode, "/p", 2),
+        ];
+        let r = analyze(&inv, &sessions, &crate::tokens::CharsPerToken);
+        let b = &r.skills[0].baseline;
+        assert_eq!(b.requests, 5);
+        // OpenCode sees the first copy (10), Claude Code only the second (20).
+        assert_eq!(b.tokens.count, 2 * 10 + 3 * 20);
+    }
+
+    #[test]
+    fn project_scoped_plugins_only_count_for_sessions_in_that_project() {
+        let inv = Inventory {
+            skills: vec![entry(
+                "/plugins/x/skills/same/SKILL.md",
+                LocationKind::Plugin,
+                Some("/work/helix"),
+                10,
+            )],
+            ..Inventory::default()
+        };
+        let sessions = [
+            session(Source::ClaudeCode, "/work/helix/app", 4),
+            session(Source::ClaudeCode, "/work/other", 6),
+        ];
+        let r = analyze(&inv, &sessions, &crate::tokens::CharsPerToken);
+        assert_eq!(r.skills[0].baseline.requests, 4);
     }
 }
