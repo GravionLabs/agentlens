@@ -635,7 +635,7 @@ fn efficiency_reports_cache_hit_rate_and_subagent_share() {
             .arg(&file),
     );
     let row = &v["cache"][0];
-    assert_eq!(row["key"], "ctx1");
+    assert_eq!(row["key"], "context");
     assert_eq!(
         (
             row["input"].as_u64(),
