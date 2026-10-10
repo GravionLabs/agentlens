@@ -7,6 +7,7 @@ pub mod analyzers;
 pub mod env;
 pub mod inventory;
 pub mod model;
+pub mod pipeline;
 pub mod tokens;
 
 /// Version of this crate, for report metadata.

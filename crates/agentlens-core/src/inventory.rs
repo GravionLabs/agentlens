@@ -59,6 +59,9 @@ impl LocationKind {
 pub struct Location {
     pub kind: LocationKind,
     pub dir: PathBuf,
+    /// The project this location is limited to (project-level directories and
+    /// project-scoped plugins); `None` for user-level locations.
+    pub project: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,19 +103,6 @@ impl Inventory {
     }
 }
 
-impl Location {
-    /// The project a project-level location belongs to (`<project>/.claude/skills` -> `<project>`).
-    pub fn project_root(&self) -> Option<&Path> {
-        use LocationKind::*;
-        match self.kind {
-            ProjectClaude | ProjectAgents | ProjectGithub | ProjectOpenCode => {
-                self.dir.parent()?.parent()
-            }
-            _ => None,
-        }
-    }
-}
-
 /// Skill directories of the user and of the given projects.
 pub fn locations(env: &Env, projects: &[PathBuf]) -> Vec<Location> {
     let home = env.home();
@@ -120,18 +110,22 @@ pub fn locations(env: &Env, projects: &[PathBuf]) -> Vec<Location> {
         Location {
             kind: LocationKind::UserClaude,
             dir: claude_dir(env).join("skills"),
+            project: None,
         },
         Location {
             kind: LocationKind::UserAgents,
             dir: home.join(".agents/skills"),
+            project: None,
         },
         Location {
             kind: LocationKind::UserCopilot,
             dir: copilot_dir(env).join("skills"),
+            project: None,
         },
         Location {
             kind: LocationKind::UserOpenCode,
             dir: config_home(env).join("opencode/skills"),
+            project: None,
         },
     ];
     for project in projects {
@@ -144,6 +138,7 @@ pub fn locations(env: &Env, projects: &[PathBuf]) -> Vec<Location> {
             out.push(Location {
                 kind,
                 dir: project.join(rel),
+                project: Some(project.clone()),
             });
         }
     }
@@ -170,6 +165,7 @@ fn config_home(env: &Env) -> PathBuf {
 }
 
 /// Skills of installed Claude Code plugins (`plugins/installed_plugins.json`).
+/// Project-scoped installs only apply to their project.
 fn plugin_locations(env: &Env) -> Vec<Location> {
     let file = claude_dir(env).join("plugins/installed_plugins.json");
     let Ok(text) = fs::read_to_string(file) else {
@@ -178,21 +174,31 @@ fn plugin_locations(env: &Env) -> Vec<Location> {
     let Ok(json) = serde_json::from_str::<Value>(&text) else {
         return Vec::new();
     };
-    let paths: BTreeSet<PathBuf> = json
+    let installs: BTreeSet<(PathBuf, Option<PathBuf>)> = json
         .get("plugins")
         .and_then(Value::as_object)
         .into_iter()
         .flat_map(|m| m.values())
         .filter_map(Value::as_array)
         .flatten()
-        .filter_map(|i| i.get("installPath").and_then(Value::as_str))
-        .map(|p| PathBuf::from(p).join("skills"))
+        .filter_map(|i| {
+            let dir = PathBuf::from(i.get("installPath").and_then(Value::as_str)?).join("skills");
+            let project = match i.get("scope").and_then(Value::as_str) {
+                Some("project") | Some("local") => i
+                    .get("projectPath")
+                    .and_then(Value::as_str)
+                    .map(PathBuf::from),
+                _ => None,
+            };
+            Some((dir, project))
+        })
         .collect();
-    paths
+    installs
         .into_iter()
-        .map(|dir| Location {
+        .map(|(dir, project)| Location {
             kind: LocationKind::Plugin,
             dir,
+            project,
         })
         .collect()
 }

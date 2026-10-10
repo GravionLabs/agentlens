@@ -13,8 +13,13 @@ publish = false
 [workspace.dependencies]
 agentlens-core = { path = "crates/agentlens-core" }
 anyhow = "1"
+assert_cmd = "2"
+clap = { version = "4", features = ["derive"] }
+comfy-table = "8"
+csv = "1"
 insta = { version = "1", features = ["json"] }
 jiff = { version = "0.2", features = ["serde"] }
+predicates = "3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml_ng = "0.10"
