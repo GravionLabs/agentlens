@@ -38,4 +38,4 @@ cargo test --workspace
 
 ## Releases
 
-Pushing a tag `v*` runs `.github/workflows/release.yml`: a plain matrix build (no cargo-dist) on native runners for Linux x86_64/aarch64, macOS x86_64/aarch64 and Windows x86_64, which packages each binary with a SHA-256 file and attaches everything, plus a combined `SHA256SUMS`, to a GitHub release. Pull requests that change the workflow run the build as a dry run without publishing.
+Pushing a tag `v*` runs `.github/workflows/release.yml`: a plain matrix build (no cargo-dist) on native runners for Linux x86_64/aarch64, macOS aarch64 (Apple silicon only) and Windows x86_64, which packages each binary with a SHA-256 file and attaches everything, plus a combined `SHA256SUMS`, to a GitHub release. Pull requests that change the workflow run the build as a dry run without publishing.
