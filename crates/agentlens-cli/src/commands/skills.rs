@@ -3,7 +3,7 @@ use agentlens_core::analyzers::skills::SkillStats;
 use agentlens_core::env::Env;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::skill_run;
-use agentlens_core::tokens::{CharsPerToken, Tokens};
+use agentlens_core::tokens::{TokenEstimator, Tokens};
 use anyhow::Result;
 
 use crate::args::Format;
@@ -19,9 +19,10 @@ pub fn run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    estimator: &dyn TokenEstimator,
     format: Format,
 ) -> Result<()> {
-    let run = skill_run(registry, env, filter, only, &CharsPerToken);
+    let run = skill_run(registry, env, filter, only, estimator);
     let mut skills: Vec<&SkillStats> = run.report.skills.iter().collect();
     skills.sort_by(|a, b| {
         b.overhead_tokens()

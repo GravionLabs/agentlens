@@ -3,7 +3,7 @@ use agentlens_core::analyzers::context::ContextRow;
 use agentlens_core::env::Env;
 use agentlens_core::model::{ContextKind, Source};
 use agentlens_core::pipeline::context_run;
-use agentlens_core::tokens::{CharsPerToken, Tokens};
+use agentlens_core::tokens::{TokenEstimator, Tokens};
 use anyhow::Result;
 
 use crate::args::{ContextView, Format};
@@ -39,10 +39,11 @@ pub fn run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    estimator: &dyn TokenEstimator,
     view: ContextView,
     format: Format,
 ) -> Result<()> {
-    let run = context_run(registry, env, filter, only, &CharsPerToken);
+    let run = context_run(registry, env, filter, only, estimator);
     let rows: Vec<&ContextRow> = run
         .report
         .rows
