@@ -216,3 +216,43 @@ jobs:
           fi
           gh release edit "$tag" --notes-file RELEASE_NOTES.md --draft=false \
             --title "$tag" --repo "${{ github.repository }}"
+
+  update-changelog:
+    name: update changelog
+    # Runs after the release is published so the new tag is part of the history. A
+    # commit pushed with the workflow token does not start another run.
+    needs: [determine-version, publish]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Generate the changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+        env:
+          OUTPUT: CHANGELOG.generated.md
+      - name: Commit the changelog
+        run: |
+          # Release PRs are squash-merged, so git-cliff can find nothing to list. An
+          # empty result must never replace the existing changelog.
+          if ! grep -q '^### ' CHANGELOG.generated.md; then
+            echo "git-cliff found no conventional commits; the changelog stays as it is."
+            exit 0
+          fi
+          mv CHANGELOG.generated.md CHANGELOG.md
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "The changelog is up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "chore: update the changelog for v${{ needs.determine-version.outputs.semver }}"
+          git pull --rebase origin main
+          git push origin HEAD:main
