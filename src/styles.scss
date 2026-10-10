@@ -1,4 +1,6 @@
 :root {
+  /* Native controls (select popups, checkboxes) follow the theme. */
+  color-scheme: light dark;
   --bg: #fafafa;
   --panel: #ffffff;
   --text: #1d2327;
@@ -16,6 +18,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #0f1419;
     --panel: #171d24;
     --text: #e6e9ec;
@@ -59,4 +62,27 @@ h2 {
 
 .view {
   display: block;
+}
+
+select,
+input[type="text"],
+input[type="search"] {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+
+/* The popup list of a select is drawn by the system: give it the theme colors. */
+select option {
+  background: var(--panel);
+  color: var(--text);
+}
+
+select:focus-visible,
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
