@@ -103,6 +103,11 @@ pub trait Adapter: Send + Sync {
     fn sessions<'a>(&'a self, env: &'a Env, filter: &'a SessionFilter) -> SessionIter<'a>;
 }
 
+/// Clients stamp a request a few milliseconds apart from the span or log record
+/// of the same request (Copilot CLI: 2 to 4 ms). Local usage this close outside
+/// the exported range still belongs to it.
+const MERGE_TOLERANCE_MS: i64 = 250;
+
 /// Merges an export (OpenTelemetry) of a session into its local copy.
 ///
 /// The export's usage events carry what the client measured itself (cost, skill
@@ -121,6 +126,11 @@ pub fn merge_export(local: SessionEvents, export: SessionEvents) -> SessionEvent
         // The export holds no timed usage: nothing to replace.
         return local;
     };
+    let slack = jiff::SignedDuration::from_millis(MERGE_TOLERANCE_MS);
+    let (from, to) = (
+        from.checked_sub(slack).unwrap_or(from),
+        to.checked_add(slack).unwrap_or(to),
+    );
     let in_range = |e: &Event| e.at.is_some_and(|t| t >= from && t <= to);
     let mut merged = local;
     merged
