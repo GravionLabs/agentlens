@@ -13,7 +13,7 @@ AgentLens reads the local session files of each client directly. OpenTelemetry (
 
 Not imported: metrics (`claude_code.token.usage` and others) are aggregates without a request or timestamp, and traces.
 
-A session that is in the local Claude Code data and in an export (same `session.id`) is counted once, and the local copy is used.
+A session that is in the local Claude Code data and in an export (same `session.id`) is counted once. The export's requests (with the cost and skill attribution Claude Code measured) replace the local usage inside the time range the export covers; local requests outside that range stay, so a partial export does not undercount. Tool calls, skills, compactions, context items, project and branch come from the local copy.
 
 ## Claude Code
 

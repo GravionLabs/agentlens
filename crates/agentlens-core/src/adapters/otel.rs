@@ -37,6 +37,10 @@ impl Adapter for OtelAdapter {
         Source::Otel
     }
 
+    fn is_export(&self) -> bool {
+        true
+    }
+
     fn sources(&self) -> Vec<Source> {
         vec![Source::Otel, Source::ClaudeCode]
     }

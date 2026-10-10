@@ -1,7 +1,6 @@
 mod support;
 
 use agentlens_core::adapter::{Adapter, SessionFilter};
-use agentlens_core::adapters::claude_code::ClaudeCodeAdapter;
 use agentlens_core::adapters::otel::OtelAdapter;
 use agentlens_core::adapters::registry_with_otel;
 use agentlens_core::model::{EventKind, SessionEvents, SkillTrigger, Source, ToolStatus, Usage};
@@ -152,36 +151,100 @@ fn other_signals_and_unknown_records_are_counted_in_one_warning() {
     }
 }
 
+fn export_line(session: &str, requests: &[(&str, u64, &str)]) -> String {
+    let records: Vec<String> = requests
+        .iter()
+        .map(|(at, input, skill)| {
+            format!(
+                r#"{{"eventName":"claude_code.api_request","attributes":[{{"key":"event.timestamp","value":{{"stringValue":"{at}"}}}},{{"key":"input_tokens","value":{{"intValue":"{input}"}}}},{{"key":"cost_usd","value":{{"doubleValue":0.5}}}},{{"key":"skill.name","value":{{"stringValue":"{skill}"}}}}]}}"#
+            )
+        })
+        .collect();
+    format!(
+        r#"{{"resourceLogs":[{{"resource":{{"attributes":[{{"key":"session.id","value":{{"stringValue":"{session}"}}}}]}},"scopeLogs":[{{"logRecords":[{}]}}]}}]}}"#,
+        records.join(",")
+    ) + "\n"
+}
+
+fn merged_inputs(home: &TempHome, only: &[Source]) -> Vec<SessionEvents> {
+    let registry = registry_with_otel(vec![home.path().join("export.jsonl")]);
+    registry
+        .sessions(&home.env(), &SessionFilter::default(), only)
+        .map(|r| r.unwrap())
+        .collect()
+}
+
 #[test]
-fn a_session_present_locally_is_counted_once_and_the_local_one_wins() {
+fn an_export_enriches_the_local_copy_of_the_session() {
     let home = TempHome::new();
     home.copy_fixture(
-        "claude_code/basic.jsonl",
-        ".claude/projects/-work-demo/basic.jsonl",
+        "claude_code/context.jsonl",
+        ".claude/projects/-work-demo/context.jsonl",
     );
-    let env = home.env();
-    let local = ClaudeCodeAdapter
-        .sessions(&env, &SessionFilter::default())
-        .map(|r| r.unwrap())
-        .next()
-        .unwrap();
-    // An export of the same session.
-    let line = format!(
-        r#"{{"resourceLogs":[{{"resource":{{"attributes":[{{"key":"session.id","value":{{"stringValue":"{}"}}}}]}},"scopeLogs":[{{"logRecords":[{{"eventName":"claude_code.user_prompt","attributes":[]}}]}}]}}]}}"#,
-        local.session.id
+    // The local session has requests at 09:00:05, 09:00:10 and 09:00:30.
+    home.write(
+        "export.jsonl",
+        export_line(
+            "context",
+            &[
+                ("2026-10-02T09:00:05Z", 11, "demo"),
+                ("2026-10-02T09:00:10Z", 22, "demo"),
+            ],
+        ),
     );
-    home.write("export.jsonl", line + "\n");
-    let registry = registry_with_otel(vec![home.path().join("export.jsonl")]);
-    let all: Vec<_> = registry
-        .sessions(&env, &SessionFilter::default(), &[Source::ClaudeCode])
-        .map(|r| r.unwrap())
-        .filter(|s| s.session.id == local.session.id)
-        .collect();
-    assert_eq!(all.len(), 1);
-    assert_eq!(all[0].events, local.events, "the local session wins");
-    // `--source otel` selects the import.
-    let only_otel: Vec<_> = registry
-        .sessions(&env, &SessionFilter::default(), &[Source::Otel])
-        .collect();
+    let all = merged_inputs(&home, &[Source::ClaudeCode]);
+    assert_eq!(all.len(), 1, "counted once");
+    let se = &all[0];
+    let u = usages(se);
+    assert_eq!(u.len(), 3);
+    // The first two come from the export (measured cost, skill attribution) ...
+    assert_eq!(
+        (u[0].input, u[0].cost_usd, u[0].skill.as_deref()),
+        (11, Some(0.5), Some("demo"))
+    );
+    assert_eq!(u[1].input, 22);
+    // ... the last one is outside its range and stays local.
+    assert_eq!(
+        (u[2].input, u[2].cost_usd, u[2].skill.clone()),
+        (20, None, None)
+    );
+    // Project, compaction and context items are local.
+    assert_eq!(
+        se.session.project_dir.as_deref(),
+        Some(std::path::Path::new("/work/demo"))
+    );
+    assert_eq!(
+        se.events
+            .iter()
+            .filter(|e| matches!(e.kind, EventKind::Compaction))
+            .count(),
+        1
+    );
+    assert!(
+        se.events
+            .iter()
+            .any(|e| matches!(e.kind, EventKind::ContextItem(_)))
+    );
+}
+
+#[test]
+fn exported_sessions_without_a_local_copy_stay_and_source_otel_selects_the_import() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/context.jsonl",
+        ".claude/projects/-work-demo/context.jsonl",
+    );
+    home.write(
+        "export.jsonl",
+        export_line("only-in-export", &[("2026-10-03T09:00:05Z", 5, "demo")]),
+    );
+    let all = merged_inputs(&home, &[]);
+    let ids: Vec<_> = all.iter().map(|s| s.session.id.as_str()).collect();
+    assert!(
+        ids.contains(&"context") && ids.contains(&"only-in-export"),
+        "{ids:?}"
+    );
+    let only_otel = merged_inputs(&home, &[Source::Otel]);
     assert_eq!(only_otel.len(), 1);
+    assert_eq!(only_otel[0].session.id, "only-in-export");
 }
