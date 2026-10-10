@@ -1,0 +1,4 @@
+{"type":"session.start","data":{"sessionId":"cp-2","version":1,"context":{"cwd":"/work/other"}},"id":"f1","timestamp":"2026-07-16T04:00:00.000Z","parentId":null}
+{"type":"user.message","data":{"content":"synthetic prompt"},"id":"f2","timestamp":"2026-07-16T04:00:01.000Z","parentId":"f1"}
+{"type":"session.model_change","data":{"newModel":"model-b"},"id":"f3","timestamp":"2026-07-16T04:00:02.000Z","parentId":"f2"}
+{"type":"session.shutdown","data":{"shutdownType":"routine","currentModel":"model-b","modelMetrics":{"model-a":{"requests":{"count":2,"cost":1},"usage":{"inputTokens":1000,"outputTokens":50,"cacheReadTokens":700,"cacheWriteTokens":100}},"model-b":{"requests":{"count":1,"cost":3},"usage":{"inputTokens":200,"outputTokens":20,"cacheReadTokens":0,"cacheWriteTokens":0}}}},"id":"f4","timestamp":"2026-07-16T04:30:00.000Z","parentId":"f3"}
