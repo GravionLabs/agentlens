@@ -55,6 +55,13 @@ expression: report
         "cache_read": 0,
         "cache_write": 0
       },
+      "attributed": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cache_read": 0,
+        "cache_write": 0
+      },
       "baseline": {
         "requests": 3,
         "tokens": {
@@ -108,6 +115,13 @@ expression: report
         "cache_read": 0,
         "cache_write": 0
       },
+      "attributed": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cache_read": 0,
+        "cache_write": 0
+      },
       "baseline": {
         "requests": 3,
         "tokens": {
@@ -149,6 +163,13 @@ expression: report
         "uncached_tokens": 0
       },
       "follow_on": {
+        "requests": 0,
+        "input": 0,
+        "output": 0,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "attributed": {
         "requests": 0,
         "input": 0,
         "output": 0,

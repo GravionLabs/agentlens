@@ -461,6 +461,7 @@ impl Parser<'_> {
             measured: true,
             subagent,
             premium_requests: None,
+            skill: None,
         };
         let key =
             str_of(msg, "id").map(|m| format!("{m}:{}", str_of(line, "requestId").unwrap_or("")));
