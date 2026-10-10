@@ -84,3 +84,7 @@ cargo test --workspace
 ```
 
 See [AGENTS.md](AGENTS.md) for the architecture and the working conventions.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

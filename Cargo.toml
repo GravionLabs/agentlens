@@ -9,6 +9,7 @@ rust-version = "1.94"
 authors = ["Jerome Kaufmann"]
 repository = "https://github.com/GravionLabs/agentlens"
 publish = false
+license = "MIT"
 
 [workspace.dependencies]
 agentlens-core = { path = "crates/agentlens-core" }
