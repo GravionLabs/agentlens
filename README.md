@@ -14,7 +14,7 @@ Early development. The plan lives in the GitHub issues and the [AgentLens projec
 
 ## Installation
 
-Download the archive for your platform from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` on your `PATH`:
+Every push to `main` publishes a release. Download the archive for your platform from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` on your `PATH`:
 
 | Platform | Archive |
 |---|---|
