@@ -1,0 +1,121 @@
+:root {
+  /* Native controls (select popups, checkboxes) follow the theme. */
+  color-scheme: light dark;
+  --bg: #fafafa;
+  --panel: #ffffff;
+  --text: #1d2327;
+  --muted: #5c6770;
+  --line: #dde1e5;
+  --accent: #2563eb;
+  --warn: #b45309;
+  --bad: #b91c1c;
+  --good: #15803d;
+  --c-baseline: #d97706;
+  --c-load: #2563eb;
+  --c-carry: #7c3aed;
+  --c-follow: #059669;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1419;
+    --panel: #171d24;
+    --text: #e6e9ec;
+    --muted: #9aa5b1;
+    --line: #2a333d;
+    --accent: #60a5fa;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --good: #4ade80;
+    --c-baseline: #f59e0b;
+    --c-load: #60a5fa;
+    --c-carry: #a78bfa;
+    --c-follow: #34d399;
+  }
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    15px/1.5 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h2 {
+  margin: 0 0 4px;
+  font-size: 1.3rem;
+}
+
+.view {
+  display: block;
+}
+
+select,
+input[type="text"],
+input[type="search"] {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+
+/* The popup list of a select is drawn by the system: give it the theme colors. */
+select option {
+  background: var(--panel);
+  color: var(--text);
+}
+
+select:focus-visible,
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Every control has the same height, so rows of mixed controls line up. */
+select,
+input[type="text"],
+input[type="search"],
+button {
+  height: 32px;
+}
+
+input[type="checkbox"] {
+  margin: 0;
+}
+
+th,
+td {
+  vertical-align: middle;
+}
+
+/* The view being reloaded stays visible but quiet. */
+main.busy > router-outlet ~ * {
+  opacity: 0.55;
+  transition: opacity 0.15s 0.2s;
+}
+
+main > router-outlet ~ * {
+  transition: opacity 0.1s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main > router-outlet ~ * {
+    transition: none;
+  }
+}

@@ -12,6 +12,7 @@ pub mod model;
 pub mod pipeline;
 pub mod prices;
 pub mod report;
+pub mod since;
 pub mod tokens;
 
 /// Version of this crate, for report metadata.

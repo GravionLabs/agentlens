@@ -21,13 +21,22 @@ client files ─► Adapter ─► normalized events ─► Analyzer ─► repo
 - **Timestamps** are `jiff::Timestamp` (UTC instants) everywhere in the model.
 - **Privacy:** tests and fixtures use synthetic data only (no real prompts, file contents, paths of real projects or secrets).
 
+## Desktop application
+
+- `src-tauri` (crate `agentlens-app`) is a thin shell: `src/api.rs` holds one plain function per analysis taking the CLI's filter and returning the core's report types in an `Answer { data, warnings, errors }`; `src/lib.rs` only wraps them as Tauri commands. New logic belongs in `agentlens-core` so the CLI benefits too.
+- `src` is Angular 22 (standalone components, signals, pnpm). Views call commands through `analysis()` in `src/app/core`; types in `types.ts` mirror the JSON, and the samples in `src/app/core/samples` come from the Rust tests (`UPDATE_SAMPLES=1`). A change in a core report type needs a matching change in `types.ts`.
+- The CLI workflow (`ci.yml`) excludes the app crate and needs no system libraries; `app.yml` checks the frontend and the crate.
+- Estimates carry a tilde and missing data is `n/a`, as in the CLI. Prettier covers the frontend only.
+
 ## Verification
 
 ```sh
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo clippy --workspace --exclude agentlens-app --all-targets -- -D warnings
+cargo test --workspace --exclude agentlens-app
 ```
+
+For the application: `pnpm lint && pnpm format:check && pnpm test && pnpm build` and `cargo test -p agentlens-app`.
 
 ## Issue and PR conventions
 
@@ -38,4 +47,4 @@ cargo test --workspace
 
 ## Releases
 
-Pushing a tag `v*` runs `.github/workflows/release.yml`: a plain matrix build (no cargo-dist) on native runners for Linux x86_64/aarch64, macOS aarch64 (Apple silicon only) and Windows x86_64, which packages each binary with a SHA-256 file and attaches everything, plus a combined `SHA256SUMS`, to a GitHub release. Pull requests that change the workflow run the build as a dry run without publishing.
+A push to `main` runs `.github/workflows/release.yml`: GitVersion (`GitVersion.yml`, through the shared `GravionLabs/ci` action like the other repositories) determines the version, a plain matrix build (no cargo-dist) on native runners builds the CLI for Linux x86_64/aarch64, macOS aarch64 (Apple silicon only) and Windows x86_64 with that version, and a GitHub release `v<version>` is created with the packaged binaries (each with a SHA-256 file), a combined `SHA256SUMS` and notes from the conventional commits (`cliff.toml`). The version numbers in `Cargo.toml`, `package.json` and `tauri.conf.json` are placeholders; the workflow sets the Cargo version for the build. Pull requests that change the release files run the build as a dry run without publishing. Application installers are not built yet.

@@ -1,0 +1,50 @@
+{
+  "data": [
+    {
+      "source": "claude-code",
+      "found": true,
+      "roots": [
+        "/home/user/.claude/projects"
+      ],
+      "note": null,
+      "sessions": 1,
+      "events": 13,
+      "warnings": 0,
+      "errors": []
+    },
+    {
+      "source": "opencode",
+      "found": false,
+      "roots": [],
+      "note": "/home/user/.local/share/opencode/opencode.db does not exist",
+      "sessions": 0,
+      "events": 0,
+      "warnings": 0,
+      "errors": []
+    },
+    {
+      "source": "copilot-cli",
+      "found": true,
+      "roots": [
+        "/home/user/.copilot/session-state"
+      ],
+      "note": null,
+      "sessions": 1,
+      "events": 12,
+      "warnings": 2,
+      "errors": []
+    },
+    {
+      "source": "vscode-copilot",
+      "found": false,
+      "roots": [],
+      "note": "no VS Code user directory with chat storage found",
+      "sessions": 0,
+      "events": 0,
+      "warnings": 0,
+      "errors": []
+    }
+  ],
+  "warnings": 2,
+  "errors": []
+}

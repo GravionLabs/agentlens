@@ -14,7 +14,7 @@ Early development. The plan lives in the GitHub issues and the [AgentLens projec
 
 ## Installation
 
-Download the archive for your platform from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` on your `PATH`:
+Every push to `main` publishes a release. Download the archive for your platform from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` on your `PATH`:
 
 | Platform | Archive |
 |---|---|
@@ -68,12 +68,31 @@ OpenTelemetry exports of Claude Code can be added with `--otel FILE` or inspecte
 
 Supported sources today: Claude Code, OpenCode (SQLite database), GitHub Copilot CLI and GitHub Copilot Chat in VS Code and VS Code Insiders (`chatSessions` files, including the `.jsonl` operation log). Copilot CLI sessions without per-request rows in `session-store.db` fall back to the session totals from `session.shutdown`, which cannot be split per request. VS Code reports prompt and completion tokens per request without a cache split, plus the share of system instructions and tool definitions in the prompt, which `agentlens context` uses as reported token counts. Cost for Copilot sources is computed with the vendor's API list prices when the model is in the price table; Copilot itself bills premium requests, so treat it as a comparison figure, not an invoice.
 
+## Application
+
+The desktop application shows the same analyses as the CLI with shared filters (period, sources, project): sources, skills, context, unused, flow, cost, efficiency, compare and a timeline of single sessions. It reads the same client files and never writes to them, and it shows the same numbers with the same marking (`~` estimated, `n/a` not recorded).
+
+Prerequisites: Node 24 with pnpm, the Rust toolchain from `rust-toolchain.toml`, and the Tauri system libraries (Linux: `libwebkit2gtk-4.1-dev build-essential libssl-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev patchelf`; macOS: Xcode command line tools; Windows: the WebView2 runtime and the MSVC build tools).
+
+```sh
+pnpm install
+pnpm tauri dev        # the application with live reload
+pnpm tauri build      # a release build and installers
+pnpm start            # only the frontend in a browser, with sample data (no Tauri)
+pnpm lint && pnpm format:check && pnpm test && pnpm build
+cargo test -p agentlens-app
+```
+
+The frontend only calls commands of the `agentlens-app` crate; it never reads client files. The JSON samples in `src/app/core/samples` are written by a Rust test (`UPDATE_SAMPLES=1 cargo test -p agentlens-app`) and the TypeScript types and tests are built on them.
+
 ## Layout
 
 | Path | Purpose |
 |---|---|
 | `crates/agentlens-core` | normalized event model, adapters, analyzers |
 | `crates/agentlens-cli` | the `agentlens` binary |
+| `src-tauri` | the desktop application (Tauri 2), a thin shell over the core |
+| `src` | the application frontend (Angular 22) |
 
 ## Development
 

@@ -1,0 +1,101 @@
+{
+  "data": {
+    "sessions": 2,
+    "rows": [
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "skill-listing",
+        "owner": "skills",
+        "items": 1,
+        "bytes": 800,
+        "tokens": 200,
+        "requests": 3,
+        "overhead_tokens": 600
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "instruction-file",
+        "owner": "/work/demo/CLAUDE.md",
+        "items": 1,
+        "bytes": 400,
+        "tokens": 100,
+        "requests": 3,
+        "overhead_tokens": 300
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "mcp-instructions",
+        "owner": "srv",
+        "items": 1,
+        "bytes": 300,
+        "tokens": 75,
+        "requests": 3,
+        "overhead_tokens": 225
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "tool-definition",
+        "owner": "srv",
+        "items": 1,
+        "bytes": 150,
+        "tokens": 38,
+        "requests": 3,
+        "overhead_tokens": 114
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "agent-listing",
+        "owner": "agents",
+        "items": 1,
+        "bytes": 100,
+        "tokens": 25,
+        "requests": 3,
+        "overhead_tokens": 75
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "tool-listing",
+        "owner": "srv",
+        "items": 2,
+        "bytes": 29,
+        "tokens": 8,
+        "requests": 6,
+        "overhead_tokens": 24
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "tool-listing",
+        "owner": "built-in",
+        "items": 1,
+        "bytes": 8,
+        "tokens": 2,
+        "requests": 3,
+        "overhead_tokens": 6
+      }
+    ],
+    "unavailable": {
+      "copilot-cli": 1
+    },
+    "first_request": {
+      "claude-code": {
+        "sessions": 1,
+        "total_tokens": 1010,
+        "max_tokens": 1010
+      },
+      "copilot-cli": {
+        "sessions": 1,
+        "total_tokens": 99999,
+        "max_tokens": 99999
+      }
+    }
+  },
+  "warnings": 2,
+  "errors": []
+}

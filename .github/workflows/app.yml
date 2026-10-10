@@ -1,0 +1,73 @@
+name: App
+
+# Checks for the desktop application. They run when the frontend, the Tauri
+# crate or this workflow change; the CLI workflow (ci.yml) excludes the app crate
+# and needs no system libraries.
+on:
+  pull_request:
+    paths:
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "angular.json"
+      - "tsconfig*.json"
+      - "eslint.config.mjs"
+      - "vitest.*"
+      - "src/**"
+      - "src-tauri/**"
+      - "crates/agentlens-core/**"
+      - ".github/workflows/app.yml"
+  push:
+    branches: [main, "release/**"]
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: frontend (lint, format, test, build)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm build
+
+  tauri:
+    name: application crate (clippy, test)
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the Tauri system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev \
+            libxdo-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      # The Tauri macros read the built frontend.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: cargo clippy -p agentlens-app --all-targets -- -D warnings
+      - run: cargo test -p agentlens-app

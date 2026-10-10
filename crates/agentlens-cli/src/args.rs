@@ -1,8 +1,8 @@
 use agentlens_core::adapter::SessionFilter;
 use agentlens_core::model::Source;
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use jiff::{Span, Timestamp, tz::TimeZone};
+use jiff::Timestamp;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -171,31 +171,7 @@ pub fn days_ago(days: u32, now: Timestamp) -> Result<Timestamp> {
 
 /// `30d`, `12h`, `4w` (relative to `now`), a date (`2026-10-01`, midnight UTC) or an RFC 3339 instant.
 pub fn parse_since(text: &str, now: Timestamp) -> Result<Timestamp> {
-    let text = text.trim();
-    let split = text
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(text.len());
-    let (digits, unit) = text.split_at(split);
-    if !digits.is_empty() && matches!(unit, "h" | "d" | "w") {
-        let n: i64 = digits.parse().context("invalid number in --since")?;
-        let span = match unit {
-            "h" => Span::new().hours(n),
-            "d" => Span::new().days(n),
-            _ => Span::new().weeks(n),
-        };
-        let zoned = now
-            .to_zoned(TimeZone::UTC)
-            .checked_sub(span)
-            .context("--since is out of range")?;
-        return Ok(zoned.timestamp());
-    }
-    if let Ok(date) = text.parse::<jiff::civil::Date>() {
-        return Ok(date.at(0, 0, 0, 0).to_zoned(TimeZone::UTC)?.timestamp());
-    }
-    if let Ok(ts) = text.parse::<Timestamp>() {
-        return Ok(ts);
-    }
-    bail!("cannot parse --since `{text}`: use a duration like 30d or a date like 2026-10-01")
+    agentlens_core::since::parse_since(text, now).map_err(|e| anyhow::anyhow!("--since: {e}"))
 }
 
 #[cfg(test)]
