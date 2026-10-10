@@ -4,7 +4,7 @@ members = ["crates/agentlens-core", "crates/agentlens-cli", "src-tauri"]
 default-members = ["crates/agentlens-core", "crates/agentlens-cli"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.94"
 authors = ["Jerome Kaufmann"]

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.0
+
+### Desktop application
+
+- A Tauri 2 + Angular 22 application on `agentlens-core` (`pnpm tauri dev`, see the README): sources, skills, context, unused, flow (growth, errors, hooks), cost (with grouping and what-if prices), efficiency, compare and a timeline of single sessions, with shared filters (period, sources, project).
+- The same numbers and marking as the CLI (`~` estimated, `n/a` not recorded); loading indicator, light and dark theme, app icon.
+- CI checks the frontend and the application crate in a separate workflow; the CLI workflow needs no system libraries.
+
+### Other changes
+
+- An OpenTelemetry export now enriches the local copy of a session instead of losing against it: its measured requests (cost, skill attribution) replace the local usage in the range the export covers.
+- MIT license.
+- ADR 0003 records the decision for the desktop application.
+
+### Not included
+
+- Installers for the application (release binaries remain CLI only).
+- Exact token counts through `count_tokens`, the legacy OpenCode JSON storage and OpenTelemetry traces of Copilot CLI and VS Code Copilot (milestone M5 Backlog).
+
 ## 0.3.0
 
 First tagged release. It covers the milestones M0 to M3.
