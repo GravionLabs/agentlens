@@ -197,6 +197,81 @@ pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, group: Grouping)
     }
 }
 
+/// Actual cost of one model next to what the same tokens would cost with another model.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct WhatIfRow {
+    pub model: String,
+    /// Requests that went into the comparison.
+    pub requests: u64,
+    pub actual_usd: f64,
+    pub what_if_usd: f64,
+    /// Requests left out: no actual price or no price for the what-if model.
+    pub excluded_requests: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WhatIfReport {
+    /// The model whose prices were applied.
+    pub target: String,
+    /// Sorted by actual cost, largest first.
+    pub rows: Vec<WhatIfRow>,
+    pub total: WhatIfRow,
+}
+
+/// Recomputes the usage with the prices of `target`. The caller checks that
+/// `target` has a price; without one every request is excluded.
+pub fn what_if(sessions: &[SessionEvents], prices: &PriceTable, target: &str) -> WhatIfReport {
+    let mut rows: BTreeMap<String, WhatIfRow> = BTreeMap::new();
+    for se in sessions {
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            let model = u
+                .model
+                .clone()
+                .or_else(|| se.session.model.clone())
+                .unwrap_or_else(|| "unknown".into());
+            let row = rows.entry(model.clone()).or_insert_with(|| WhatIfRow {
+                model: model.clone(),
+                ..WhatIfRow::default()
+            });
+            let mut usage = u.clone();
+            usage.model = Some(model);
+            match (prices.cost(&usage), prices.compute(target, &usage)) {
+                (Some(actual), Some(alt)) => {
+                    row.requests += 1;
+                    row.actual_usd += actual.usd;
+                    row.what_if_usd += alt;
+                }
+                _ => row.excluded_requests += 1,
+            }
+        }
+    }
+    let mut total = WhatIfRow {
+        model: "total".into(),
+        ..WhatIfRow::default()
+    };
+    for r in rows.values() {
+        total.requests += r.requests;
+        total.actual_usd += r.actual_usd;
+        total.what_if_usd += r.what_if_usd;
+        total.excluded_requests += r.excluded_requests;
+    }
+    let mut rows: Vec<WhatIfRow> = rows.into_values().collect();
+    rows.sort_by(|a, b| {
+        b.actual_usd
+            .partial_cmp(&a.actual_usd)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.model.cmp(&b.model))
+    });
+    WhatIfReport {
+        target: target.to_owned(),
+        rows,
+        total,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,5 +395,39 @@ mod tests {
         );
         let branches = analyze(&sessions, &prices, Grouping::Branch);
         assert!(branches.rows.iter().any(|r| r.key == NO_BRANCH));
+    }
+
+    #[test]
+    fn what_if_applies_the_other_models_prices_to_the_same_tokens() {
+        let se = session(vec![
+            usage(Some("claude-sonnet-5-5"), 1_000_000, 0, None), // actual $2, haiku 4.5 $1
+            usage(Some("claude-sonnet-5-5"), 0, 1_000_000, None), // actual $10, haiku 4.5 $5
+            usage(Some("claude-opus-5-5"), 1_000_000, 0, Some(9.0)), // reported $9, haiku $1
+            usage(Some("mystery"), 5, 5, None),                   // no actual price: excluded
+        ]);
+        let r = what_if(&[se], &PriceTable::bundled(), "claude-haiku-4-5");
+        let sonnet = r
+            .rows
+            .iter()
+            .find(|x| x.model == "claude-sonnet-5-5")
+            .unwrap();
+        assert_eq!(sonnet.requests, 2);
+        assert!((sonnet.actual_usd - 12.0).abs() < 1e-9);
+        assert!((sonnet.what_if_usd - 6.0).abs() < 1e-9);
+        assert!((r.total.actual_usd - 21.0).abs() < 1e-9);
+        assert!((r.total.what_if_usd - 7.0).abs() < 1e-9);
+        assert_eq!((r.total.requests, r.total.excluded_requests), (3, 1));
+        assert_eq!(
+            r.rows[0].model, "claude-sonnet-5-5",
+            "sorted by actual cost"
+        );
+    }
+
+    #[test]
+    fn a_target_without_a_price_excludes_everything() {
+        let se = session(vec![usage(Some("claude-sonnet-5-5"), 1_000_000, 0, None)]);
+        let r = what_if(&[se], &PriceTable::bundled(), "unknown-model");
+        assert_eq!((r.total.requests, r.total.excluded_requests), (0, 1));
+        assert_eq!(r.total.what_if_usd, 0.0);
     }
 }

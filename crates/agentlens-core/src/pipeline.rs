@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::adapter::{Detection, Registry, SessionFilter};
 use crate::analyzers::context::{self, ContextReport};
-use crate::analyzers::cost::{self, CostReport, Grouping};
+use crate::analyzers::cost::{self, CostReport, Grouping, WhatIfReport};
 use crate::analyzers::efficiency::{self, CacheBy, EfficiencyReport};
 use crate::analyzers::flow::{self, ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::{self, SkillReport};
@@ -229,6 +229,8 @@ pub fn flow_run(
 #[derive(Debug, Clone)]
 pub struct CostRun {
     pub report: CostReport,
+    /// Set if a what-if model was requested.
+    pub what_if: Option<WhatIfReport>,
     pub warnings: u64,
     pub errors: Vec<String>,
 }
@@ -241,6 +243,7 @@ pub fn cost_run(
     only: &[Source],
     prices: &crate::prices::PriceTable,
     group: Grouping,
+    what_if: Option<&str>,
 ) -> CostRun {
     let mut sessions: Vec<SessionEvents> = Vec::new();
     let mut errors = Vec::new();
@@ -253,6 +256,7 @@ pub fn cost_run(
     CostRun {
         warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
         report: cost::analyze(&sessions, prices, group),
+        what_if: what_if.map(|m| cost::what_if(&sessions, prices, m)),
         errors,
     }
 }

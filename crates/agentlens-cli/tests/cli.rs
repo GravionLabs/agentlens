@@ -687,3 +687,66 @@ fn efficiency_csv_and_grouping_by_project() {
             .starts_with("/work/demo,claude-code,3,40,1000,1850,0.346021")
     );
 }
+
+#[test]
+fn cost_what_if_reprices_the_same_tokens() {
+    let home = home_with_context();
+    let file = price_file(&home);
+    let v = json(
+        agentlens(&home)
+            .args([
+                "cost",
+                "--format",
+                "json",
+                "--what-if",
+                "claude-sonnet-5-5",
+                "--prices",
+            ])
+            .arg(&file),
+    );
+    let w = &v["what_if"];
+    assert_eq!(w["target"], "claude-sonnet-5-5");
+    // (40 x 2 + 15 x 10 + 1000 x 0.1 + 1850 x 2.5) / 1e6
+    assert!((w["total"]["what_if_usd"].as_f64().unwrap() - 0.004955).abs() < 1e-9);
+    assert!((w["total"]["actual_usd"].as_f64().unwrap() - 0.003345).abs() < 1e-9);
+    assert_eq!(w["total"]["excluded_requests"], 0);
+    agentlens(&home)
+        .args(["cost", "--what-if", "claude-sonnet-5-5", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "What if everything ran on claude-sonnet-5-5?",
+        ))
+        .stdout(predicate::str::contains("+48%"));
+    let csv = agentlens(&home)
+        .args([
+            "cost",
+            "--format",
+            "csv",
+            "--what-if",
+            "claude-sonnet-5-5",
+            "--prices",
+        ])
+        .arg(&file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(
+        String::from_utf8(csv)
+            .unwrap()
+            .starts_with("model,requests,actual_usd,what_if_usd,excluded_requests")
+    );
+}
+
+#[test]
+fn cost_what_if_needs_a_priced_model() {
+    let home = home_with_context();
+    agentlens(&home)
+        .args(["cost", "--what-if", "no-such-model"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no price for the what-if model"));
+}
