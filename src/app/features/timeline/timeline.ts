@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { compact, day, number, sourceLabel, usd } from "../../core/format";
+import { compact, day, number, sourceLabel, timeOfDay, usd } from "../../core/format";
 import type { SessionSummary, Timeline as TimelineData } from "../../core/types";
 import { Legend } from "../../ui/legend";
 import { Status } from "../../ui/status";
@@ -84,6 +84,7 @@ const MARKER_LEGEND = [
           @for (mk of markers(); track $index) {
             <line
               class="marker"
+              [class.strong]="mk.strong"
               [attr.x1]="mk.x"
               [attr.x2]="mk.x"
               [attr.y1]="m.top"
@@ -116,7 +117,7 @@ const MARKER_LEGEND = [
                 <span class="dot" [style.background]="color(mk.kind.type)"></span>
                 before request {{ mk.request + 1 }}: {{ text(mk) }}
                 @if (mk.at) {
-                  <span class="muted">({{ mk.at }})</span>
+                  <span class="muted" [title]="mk.at">{{ time(mk.at) }}</span>
                 }
               </li>
             }
@@ -178,8 +179,15 @@ const MARKER_LEGEND = [
       fill: var(--accent);
     }
     .marker {
-      stroke-width: 1.5;
+      stroke-width: 1;
       stroke-dasharray: 4 3;
+      opacity: 0.55;
+    }
+    /* A compaction is the event that changes the picture: solid and thick. */
+    .marker.strong {
+      stroke-width: 2.5;
+      stroke-dasharray: none;
+      opacity: 1;
     }
     .events {
       list-style: none;
@@ -236,6 +244,7 @@ export class Timeline {
   protected readonly usd = usd;
   protected readonly compact = compact;
   protected readonly label = sourceLabel;
+  protected readonly time = timeOfDay;
 
   protected readonly ticks = computed(() => yTicks(this.scale().max));
   protected readonly line = computed(() => linePath(this.timeline()?.points ?? [], this.scale()));
@@ -248,6 +257,7 @@ export class Timeline {
     return t.markers.map((mk) => ({
       x: markerX(mk, this.scale(), first),
       color: MARKER_COLORS[mk.kind.type],
+      strong: mk.kind.type === "compaction",
       text: markerLabel(mk.kind),
     }));
   });

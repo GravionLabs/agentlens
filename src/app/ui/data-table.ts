@@ -11,6 +11,8 @@ export interface Column<T> {
   /** `true` marks the displayed value as an estimate (shown with a tilde by `text`). */
   estimated?: (row: T) => boolean;
   title?: string;
+  /** A tooltip for the cell, e.g. the full path behind a shortened one. */
+  hover?: (row: T) => string | null;
 }
 
 /** A sortable table with an optional text filter on the first column. */
@@ -47,7 +49,11 @@ export interface Column<T> {
           @for (row of rows(); track $index) {
             <tr [class.dim]="dim()(row)">
               @for (c of columns(); track c.key) {
-                <td [class.num]="c.numeric" [class.est]="c.estimated?.(row)">
+                <td
+                  [class.num]="c.numeric"
+                  [class.est]="c.estimated?.(row)"
+                  [attr.title]="c.hover?.(row) ?? null"
+                >
                   {{ cell(c, row) }}
                 </td>
               }

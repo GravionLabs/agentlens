@@ -288,3 +288,29 @@ fn attachments_become_context_items_with_sizes_only() {
     );
     assert_eq!(usages(&se).len(), 3);
 }
+
+#[test]
+fn the_same_session_under_two_project_directories_counts_once() {
+    let home = TempHome::new();
+    let full = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/claude_code/basic.jsonl"),
+    )
+    .unwrap();
+    // The older copy is shorter; the longer one wins wherever it is.
+    let short: String = full.lines().take(3).collect::<Vec<_>>().join("\n") + "\n";
+    home.write(".claude/projects/-work-a/same.jsonl", short);
+    home.write(".claude/projects/-work-b/same.jsonl", full.clone());
+    home.write(".claude/projects/-work-b/other.jsonl", full);
+    let all = read_all(&home);
+    let ids: Vec<_> = all.iter().map(|s| s.session.id.as_str()).collect();
+    assert_eq!(ids.iter().filter(|i| **i == "same").count(), 1, "{ids:?}");
+    assert_eq!(all.len(), 2);
+    let same = all.iter().find(|s| s.session.id == "same").unwrap();
+    let other = all.iter().find(|s| s.session.id == "other").unwrap();
+    assert_eq!(
+        same.events.len(),
+        other.events.len(),
+        "the complete copy was kept"
+    );
+}

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, percent, sourceLabel } from "../../core/format";
+import { number, pathLabel, percent, shortId, sourceLabel } from "../../core/format";
 import type { CacheRow, EfficiencyReport, SubagentShare } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
@@ -83,7 +83,14 @@ export class Efficiency {
   protected readonly subagents = computed(() => this.res.value()?.data.subagents ?? []);
 
   protected readonly cacheColumns: Column<CacheRow>[] = [
-    { key: "key", label: "Group", value: (r) => r.key },
+    {
+      key: "key",
+      label: "Group",
+      value: (r) => r.key,
+      text: (r) =>
+        r.key.length > 30 && !r.key.startsWith("/") ? shortId(r.key) : pathLabel(r.key),
+      hover: (r) => r.key,
+    },
     { key: "source", label: "Source", value: (r) => r.source, text: (r) => sourceLabel(r.source) },
     {
       key: "requests",

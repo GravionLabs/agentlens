@@ -2,11 +2,12 @@
 
 pub mod api;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use api::{Answer, Context, Filters};
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
+use tauri_plugin_updater::{Update, UpdaterExt};
 
 type Shared<'a> = State<'a, Arc<Context>>;
 
@@ -20,6 +21,11 @@ where
     tauri::async_runtime::spawn_blocking(move || f(&ctx))
         .await
         .map_err(|e| format!("the analysis stopped unexpectedly: {e}"))?
+}
+
+#[tauri::command]
+async fn refresh(ctx: Shared<'_>) -> Result<Answer<()>, String> {
+    blocking(&ctx, api::refresh).await
 }
 
 #[tauri::command]
@@ -104,13 +110,78 @@ async fn timeline(
     blocking(&ctx, move |c| api::timeline(c, &filters, &source, &id)).await
 }
 
+/// The update found by the last check, waiting to be installed.
+#[derive(Default)]
+struct PendingUpdate(Mutex<Option<Update>>);
+
+/// A newer release than the running application.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateInfo {
+    version: String,
+    current_version: String,
+    notes: Option<String>,
+    date: Option<String>,
+}
+
+/// Asks the release page whether a newer version exists. This is the only network
+/// call of the application and it only happens when the user asks for it.
+#[tauri::command]
+async fn update_check(
+    app: AppHandle,
+    pending: State<'_, PendingUpdate>,
+) -> Result<Option<UpdateInfo>, String> {
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| format!("Could not check for updates: {e}"))?;
+    let info = update.as_ref().map(|u| UpdateInfo {
+        version: u.version.clone(),
+        current_version: u.current_version.clone(),
+        notes: u.body.clone(),
+        date: u.date.map(|d| d.to_string()),
+    });
+    *pending.0.lock().unwrap() = update;
+    Ok(info)
+}
+
+/// Downloads and installs the update found by the last check, then restarts.
+#[tauri::command]
+async fn update_install(app: AppHandle, pending: State<'_, PendingUpdate>) -> Result<(), String> {
+    let update = pending.0.lock().unwrap().take();
+    let Some(update) = update else {
+        return Err("There is no update to install; check for updates first".into());
+    };
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| format!("Could not install the update: {e}"))?;
+    app.restart()
+}
+
 /// Starts the application.
 pub fn run() {
     let shared = Context::system().expect("cannot determine the home directory");
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Arc::new(shared))
+        .manage(PendingUpdate::default())
         .invoke_handler(tauri::generate_handler![
-            overview, skills, context, unused, flow, cost, efficiency, compare, sessions, timeline
+            refresh,
+            overview,
+            skills,
+            context,
+            unused,
+            flow,
+            cost,
+            efficiency,
+            compare,
+            sessions,
+            timeline,
+            update_check,
+            update_install
         ])
         .run(tauri::generate_context!())
         .expect("error while running AgentLens");

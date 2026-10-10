@@ -153,15 +153,46 @@ pub fn merge_export(local: SessionEvents, export: SessionEvents) -> SessionEvent
     merged
 }
 
+/// Sessions read for one selection, kept for a while by a caching registry.
+type CacheKey = (Option<Timestamp>, Option<PathBuf>, Vec<Source>);
+type Cached = (
+    std::time::Instant,
+    std::sync::Arc<Vec<Result<SessionEvents, String>>>,
+);
+
 /// All adapters known to the program.
 #[derive(Default)]
 pub struct Registry {
     adapters: Vec<Box<dyn Adapter>>,
+    cache: Option<RegistryCache>,
+}
+
+struct RegistryCache {
+    ttl: std::time::Duration,
+    entries: std::sync::Mutex<HashMap<CacheKey, Cached>>,
 }
 
 impl Registry {
     pub fn new() -> Self {
         Registry::default()
+    }
+
+    /// Keeps the sessions of a selection for `ttl`, so that several analyses of
+    /// the same selection read the client files once (the desktop application
+    /// asks for one analysis per view). [`Registry::clear_cache`] forgets them.
+    pub fn with_cache(mut self, ttl: std::time::Duration) -> Registry {
+        self.cache = Some(RegistryCache {
+            ttl,
+            entries: std::sync::Mutex::new(HashMap::new()),
+        });
+        self
+    }
+
+    /// Forgets cached sessions, so the next analysis reads the files again.
+    pub fn clear_cache(&self) {
+        if let Some(c) = &self.cache {
+            c.entries.lock().expect("cache lock").clear();
+        }
     }
 
     pub fn register(&mut self, adapter: Box<dyn Adapter>) {
@@ -183,6 +214,40 @@ impl Registry {
     /// Sessions of all adapters whose source is in `only` (all if empty) that
     /// pass `filter`. Adapters that were not detected are skipped.
     pub fn sessions<'a>(
+        &'a self,
+        env: &'a Env,
+        filter: &'a SessionFilter,
+        only: &'a [Source],
+    ) -> Box<dyn Iterator<Item = Result<SessionEvents, AdapterError>> + 'a> {
+        let Some(cache) = &self.cache else {
+            return self.read_sessions(env, filter, only);
+        };
+        let mut sources = only.to_vec();
+        sources.sort();
+        let key: CacheKey = (filter.since, filter.project.clone(), sources);
+        let fresh = {
+            let entries = cache.entries.lock().expect("cache lock");
+            entries
+                .get(&key)
+                .filter(|(at, _)| at.elapsed() < cache.ttl)
+                .map(|(_, v)| std::sync::Arc::clone(v))
+        };
+        let all = fresh.unwrap_or_else(|| {
+            let read: Vec<Result<SessionEvents, String>> = self
+                .read_sessions(env, filter, only)
+                .map(|r| r.map_err(|e| e.to_string()))
+                .collect();
+            let read = std::sync::Arc::new(read);
+            cache.entries.lock().expect("cache lock").insert(
+                key,
+                (std::time::Instant::now(), std::sync::Arc::clone(&read)),
+            );
+            read
+        });
+        Box::new((0..all.len()).map(move |i| all[i].clone().map_err(AdapterError::Other)))
+    }
+
+    fn read_sessions<'a>(
         &'a self,
         env: &'a Env,
         filter: &'a SessionFilter,
@@ -454,5 +519,71 @@ mod tests {
             })
             .collect();
         assert_eq!(order, [1, -1, 7, 2]);
+    }
+
+    struct Counting(std::sync::Arc<std::sync::atomic::AtomicU32>);
+
+    impl Adapter for Counting {
+        fn id(&self) -> Source {
+            Source::ClaudeCode
+        }
+
+        fn detect(&self, _env: &Env) -> Detection {
+            Detection::found(vec!["/x".into()])
+        }
+
+        fn sessions<'a>(&'a self, _env: &'a Env, _filter: &'a SessionFilter) -> SessionIter<'a> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Box::new(std::iter::once(Ok(SessionEvents::new(Session::new(
+                "a",
+                Source::ClaudeCode,
+            )))))
+        }
+    }
+
+    #[test]
+    fn a_caching_registry_reads_a_selection_once_until_it_is_cleared() {
+        use std::sync::atomic::Ordering::SeqCst;
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let mut r = Registry::new().with_cache(std::time::Duration::from_secs(60));
+        r.register(Box::new(Counting(calls.clone())));
+        let env = Env::for_home("/h");
+        let all = SessionFilter::default();
+        let ids = |f: &SessionFilter| -> Vec<String> {
+            r.sessions(&env, f, &[])
+                .map(|s| s.unwrap().session.id)
+                .collect()
+        };
+        assert_eq!(ids(&all), ["a"]);
+        assert_eq!(ids(&all), ["a"]);
+        assert_eq!(calls.load(SeqCst), 1);
+        // Another selection is read on its own.
+        let recent = SessionFilter {
+            since: Some("2026-01-01T00:00:00Z".parse().unwrap()),
+            project: None,
+        };
+        ids(&recent);
+        assert_eq!(calls.load(SeqCst), 2);
+        r.clear_cache();
+        ids(&all);
+        assert_eq!(calls.load(SeqCst), 3);
+        // Without a cache every call reads.
+        let mut plain = Registry::new();
+        plain.register(Box::new(Counting(calls.clone())));
+        plain.sessions(&env, &all, &[]).count();
+        plain.sessions(&env, &all, &[]).count();
+        assert_eq!(calls.load(SeqCst), 5);
+    }
+
+    #[test]
+    fn an_expired_entry_is_read_again() {
+        use std::sync::atomic::Ordering::SeqCst;
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let mut r = Registry::new().with_cache(std::time::Duration::ZERO);
+        r.register(Box::new(Counting(calls.clone())));
+        let env = Env::for_home("/h");
+        r.sessions(&env, &SessionFilter::default(), &[]).count();
+        r.sessions(&env, &SessionFilter::default(), &[]).count();
+        assert_eq!(calls.load(SeqCst), 2);
     }
 }

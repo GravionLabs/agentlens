@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, sourceLabel, tokens } from "../../core/format";
+import { number, pathLabel, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { ContextKind, ContextReport, ContextRow } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
@@ -14,6 +14,27 @@ const VIEWS: { id: View; label: string }[] = [
   { id: "agents", label: "Agents" },
   { id: "skills", label: "Skills" },
 ];
+
+type Grouping = "owner" | "project";
+
+/** Sums the rows of all projects: one row per source, kind and owner. */
+export function byOwner(rows: ContextRow[]): ContextRow[] {
+  const sums = new Map<string, ContextRow>();
+  for (const r of rows) {
+    const key = `${r.source}|${r.kind}|${r.owner}`;
+    const sum = sums.get(key);
+    if (!sum) {
+      sums.set(key, { ...r, project: null });
+    } else {
+      sum.items += r.items;
+      sum.bytes += r.bytes;
+      sum.tokens += r.tokens;
+      sum.requests += r.requests;
+      sum.overhead_tokens += r.overhead_tokens;
+    }
+  }
+  return [...sums.values()];
+}
 
 export function inView(kind: ContextKind, view: View): boolean {
   switch (view) {
@@ -55,8 +76,20 @@ export function inView(kind: ContextKind, view: View): boolean {
           </button>
         }
       </div>
+      <div class="views" role="group" aria-label="Grouping">
+        <button type="button" [class.on]="grouping() === 'owner'" (click)="grouping.set('owner')">
+          By owner
+        </button>
+        <button
+          type="button"
+          [class.on]="grouping() === 'project'"
+          (click)="grouping.set('project')"
+        >
+          By project
+        </button>
+      </div>
       <app-data-table
-        [columns]="columns"
+        [columns]="columns()"
         [data]="rows()"
         [initialSort]="{ key: 'overhead', descending: true }"
         [filterable]="true"
@@ -99,9 +132,12 @@ export class Context {
   protected readonly view = signal<View>("all");
   protected readonly views = VIEWS;
 
-  protected readonly rows = computed(() =>
-    (this.res.value()?.data.rows ?? []).filter((r) => inView(r.kind, this.view())),
-  );
+  protected readonly grouping = signal<Grouping>("owner");
+
+  protected readonly rows = computed(() => {
+    const shown = (this.res.value()?.data.rows ?? []).filter((r) => inView(r.kind, this.view()));
+    return this.grouping() === "owner" ? byOwner(shown) : shown;
+  });
 
   protected readonly notes = computed(() => {
     const d = this.res.value()?.data;
@@ -122,11 +158,40 @@ export class Context {
     return out;
   });
 
-  protected readonly columns: Column<ContextRow>[] = [
-    { key: "source", label: "Source", value: (r) => r.source, text: (r) => sourceLabel(r.source) },
-    { key: "project", label: "Project", value: (r) => r.project, text: (r) => r.project ?? "-" },
+  protected readonly columns = computed<Column<ContextRow>[]>(() => {
+    const project: Column<ContextRow>[] =
+      this.grouping() === "project"
+        ? [
+            {
+              key: "project",
+              label: "Project",
+              value: (r) => r.project,
+              text: (r) => shortPath(r.project),
+              hover: (r) => r.project,
+            },
+          ]
+        : [];
+    return [
+      {
+        key: "source",
+        label: "Source",
+        value: (r) => r.source,
+        text: (r) => sourceLabel(r.source),
+      },
+      ...project,
+      ...this.valueColumns,
+    ];
+  });
+
+  private readonly valueColumns: Column<ContextRow>[] = [
     { key: "kind", label: "Kind", value: (r) => r.kind },
-    { key: "owner", label: "Owner", value: (r) => r.owner },
+    {
+      key: "owner",
+      label: "Owner",
+      value: (r) => r.owner,
+      text: (r) => pathLabel(r.owner),
+      hover: (r) => r.owner,
+    },
     { key: "items", label: "Items", value: (r) => r.items, numeric: true },
     {
       key: "tokens",

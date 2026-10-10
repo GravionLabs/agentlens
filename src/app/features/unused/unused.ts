@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, sourceLabel, tokens } from "../../core/format";
+import { number, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { UnusedItem, UnusedReport } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
@@ -61,7 +61,13 @@ export class Unused {
   protected readonly columns: Column<UnusedItem>[] = [
     { key: "kind", label: "Kind", value: (i) => i.kind },
     { key: "name", label: "Name", value: (i) => i.name },
-    { key: "project", label: "Project", value: (i) => i.project, text: (i) => i.project ?? "-" },
+    {
+      key: "project",
+      label: "Project",
+      value: (i) => i.project,
+      text: (i) => shortPath(i.project),
+      hover: (i) => i.project,
+    },
     {
       key: "clients",
       label: "Clients",

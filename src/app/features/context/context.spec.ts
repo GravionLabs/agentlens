@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ContextKind } from "../../core/types";
-import { inView } from "./context";
+import type { ContextRow } from "../../core/types";
+import { byOwner, inView } from "./context";
 
 describe("context views", () => {
   const kinds: ContextKind[] = [
@@ -23,5 +24,37 @@ describe("context views", () => {
     expect(kinds.filter((k) => inView(k, "agents"))).toEqual(["agent-listing"]);
     expect(kinds.filter((k) => inView(k, "skills"))).toEqual(["skill-listing"]);
     expect(kinds.filter((k) => inView(k, "all"))).toEqual(kinds);
+  });
+});
+
+describe("context grouping", () => {
+  const row = (project: string, tokens: number, requests: number): ContextRow => ({
+    source: "claude-code",
+    project,
+    kind: "mcp-instructions",
+    owner: "srv",
+    items: 1,
+    bytes: 10,
+    tokens,
+    requests,
+    overhead_tokens: tokens * requests,
+  });
+
+  it("sums the projects of one owner into a single row", () => {
+    const rows = byOwner([
+      row("/a", 10, 2),
+      row("/b", 5, 4),
+      { ...row("/a", 1, 1), owner: "other" },
+    ]);
+    expect(rows).toHaveLength(2);
+    const srv = rows.find((r) => r.owner === "srv")!;
+    expect(srv).toMatchObject({
+      items: 2,
+      bytes: 20,
+      tokens: 15,
+      requests: 6,
+      overhead_tokens: 40,
+    });
+    expect(srv.project).toBeNull();
   });
 });

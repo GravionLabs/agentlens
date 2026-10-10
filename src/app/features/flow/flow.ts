@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, percent, seconds, shortId, sourceLabel } from "../../core/format";
+import { number, percent, seconds, shortId, shortPath, sourceLabel } from "../../core/format";
 import type {
   FlowData,
   HookStats,
@@ -160,8 +160,20 @@ export class Flow {
 
   protected readonly growthColumns: Column<SessionGrowth>[] = [
     { key: "source", label: "Source", value: (g) => g.source, text: (g) => sourceLabel(g.source) },
-    { key: "session", label: "Session", value: (g) => g.session, text: (g) => shortId(g.session) },
-    { key: "project", label: "Project", value: (g) => g.project, text: (g) => g.project ?? "-" },
+    {
+      key: "session",
+      label: "Session",
+      value: (g) => g.session,
+      text: (g) => shortId(g.session),
+      hover: (g) => g.session,
+    },
+    {
+      key: "project",
+      label: "Project",
+      value: (g) => g.project,
+      text: (g) => shortPath(g.project),
+      hover: (g) => g.project,
+    },
     { key: "model", label: "Model", value: (g) => g.model, text: (g) => g.model ?? "-" },
     { key: "requests", label: "Requests", value: (g) => g.requests, numeric: true },
     {
@@ -187,9 +199,13 @@ export class Flow {
     },
     {
       key: "compactions",
-      label: "Size before compaction",
+      label: "Compactions",
       value: (g) => g.compactions.length,
-      text: (g) => g.compactions.map(number).join(" ") || "-",
+      text: (g) => (g.compactions.length > 0 ? String(g.compactions.length) : "-"),
+      hover: (g) =>
+        g.compactions.length > 0
+          ? `Size before each compaction: ${g.compactions.map(number).join(", ")}`
+          : null,
       numeric: true,
     },
     {
