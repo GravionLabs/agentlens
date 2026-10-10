@@ -556,3 +556,64 @@ fn cost_csv_and_a_broken_price_file() {
         .failure()
         .stderr(predicate::str::contains("cannot load prices"));
 }
+
+#[test]
+fn cost_can_be_grouped_by_project_branch_and_issue() {
+    let home = tempfile::tempdir().unwrap();
+    let projects = home.path().join(".claude/projects/-work-demo");
+    fs::create_dir_all(&projects).unwrap();
+    let text = fs::read_to_string(fixtures().join("context.jsonl")).unwrap();
+    fs::write(
+        projects.join("a.jsonl"),
+        text.replace("\"main\"", "\"feat/42-login\""),
+    )
+    .unwrap();
+    fs::write(projects.join("b.jsonl"), text.replace("ctx1", "ctx2")).unwrap();
+    let file = price_file(&home);
+    let keys = |by: &str| -> Vec<String> {
+        let v = json(
+            agentlens(&home)
+                .args(["cost", "--format", "json", "--by", by, "--prices"])
+                .arg(&file),
+        );
+        v["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["key"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    assert_eq!(keys("project"), ["/work/demo"]);
+    let mut branches = keys("branch");
+    branches.sort();
+    assert_eq!(branches, ["feat/42-login", "main"]);
+    let mut issues = keys("issue");
+    issues.sort();
+    assert_eq!(issues, ["#42", "(unassigned)"]);
+    let v = json(
+        agentlens(&home)
+            .args(["cost", "--format", "json", "--by", "issue", "--prices"])
+            .arg(&file),
+    );
+    assert_eq!(v["total"]["requests"], 6);
+    agentlens(&home)
+        .args(["cost", "--by", "issue", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("issue"))
+        .stdout(predicate::str::contains("#42"));
+    let csv = agentlens(&home)
+        .args(["cost", "--format", "csv", "--by", "branch", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(
+        String::from_utf8(csv)
+            .unwrap()
+            .starts_with("branch,requests")
+    );
+}

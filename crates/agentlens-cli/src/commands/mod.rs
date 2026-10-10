@@ -23,12 +23,13 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Context { kind } => {
             context::run(&registry, &env, &filter, &cli.source, kind, cli.format)
         }
-        Command::Cost { prices } => cost::run(
+        Command::Cost { by, prices } => cost::run(
             &registry,
             &env,
             &filter,
             &cli.source,
             prices.as_deref(),
+            by,
             cli.format,
         ),
         Command::Flow { section, top } => flow::run(

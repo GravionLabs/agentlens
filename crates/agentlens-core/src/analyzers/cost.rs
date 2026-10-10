@@ -62,8 +62,89 @@ pub struct CostReport {
     pub unpriced_models: BTreeMap<String, u64>,
 }
 
+/// What the cost is grouped by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Grouping {
+    Model,
+    Project,
+    Branch,
+    Issue,
+}
+
+pub const NO_PROJECT: &str = "(no project)";
+pub const NO_BRANCH: &str = "(no branch)";
+pub const UNASSIGNED: &str = "(unassigned)";
+
+/// The issue number a branch name refers to, if any.
+///
+/// A number of 2 to 6 digits counts if it starts a `/` segment (`feat/123-title`,
+/// `123-title`) or follows `issue`, `issues` or `gh` (`issue-123`). A four-digit
+/// year followed by a two-digit month or day is a date, not an issue.
+pub fn issue_number(branch: &str) -> Option<u32> {
+    for segment in branch.split('/') {
+        let tokens: Vec<&str> = segment.split(['-', '_']).collect();
+        for (i, token) in tokens.iter().enumerate() {
+            let is_number =
+                (2..=6).contains(&token.len()) && token.bytes().all(|b| b.is_ascii_digit());
+            if !is_number {
+                continue;
+            }
+            let after_keyword = i > 0
+                && matches!(
+                    tokens[i - 1].to_lowercase().as_str(),
+                    "issue" | "issues" | "gh"
+                );
+            if i != 0 && !after_keyword {
+                continue;
+            }
+            let date = token.len() == 4
+                && (token.starts_with("19") || token.starts_with("20"))
+                && tokens
+                    .get(i + 1)
+                    .is_some_and(|n| n.len() == 2 && n.bytes().all(|b| b.is_ascii_digit()));
+            if !date {
+                return token.parse().ok();
+            }
+        }
+    }
+    None
+}
+
+fn group_key(se: &SessionEvents, group: Grouping) -> Option<String> {
+    match group {
+        Grouping::Model => None,
+        Grouping::Project => Some(
+            se.session
+                .project_dir
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| NO_PROJECT.into()),
+        ),
+        Grouping::Branch => Some(
+            se.session
+                .branch
+                .clone()
+                .unwrap_or_else(|| NO_BRANCH.into()),
+        ),
+        Grouping::Issue => Some(
+            se.session
+                .branch
+                .as_deref()
+                .and_then(issue_number)
+                .map(|n| format!("#{n}"))
+                .unwrap_or_else(|| UNASSIGNED.into()),
+        ),
+    }
+}
+
 /// Cost per model.
 pub fn by_model(sessions: &[SessionEvents], prices: &PriceTable) -> CostReport {
+    analyze(sessions, prices, Grouping::Model)
+}
+
+/// Cost grouped by model, project, branch or issue.
+pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, group: Grouping) -> CostReport {
     let mut rows: BTreeMap<String, CostRow> = BTreeMap::new();
     let mut unpriced: BTreeMap<String, u64> = BTreeMap::new();
     for se in sessions {
@@ -76,9 +157,10 @@ pub fn by_model(sessions: &[SessionEvents], prices: &PriceTable) -> CostReport {
                 .clone()
                 .or_else(|| se.session.model.clone())
                 .unwrap_or_else(|| "unknown".into());
+            let key = group_key(se, group).unwrap_or_else(|| model.clone());
             let row = rows
-                .entry(model.clone())
-                .or_insert_with(|| CostRow::new(&model));
+                .entry(key.clone())
+                .or_insert_with(|| CostRow::new(&key));
             row.requests += 1;
             row.input += u.input;
             row.output += u.output;
@@ -173,5 +255,70 @@ mod tests {
         let r = by_model(&[se, unknown], &PriceTable::bundled());
         assert!((r.rows[0].estimated_usd - 2.0).abs() < 1e-9);
         assert_eq!(r.unpriced_models.get("unknown"), Some(&1));
+    }
+
+    #[test]
+    fn issue_numbers_are_read_from_branch_names() {
+        for (branch, want) in [
+            ("feat/123-title", Some(123)),
+            ("123-title", Some(123)),
+            ("issue-45", Some(45)),
+            ("fix/gh-7890-crash", Some(7890)),
+            ("bugfix/Issues_88", Some(88)),
+            ("main", None),
+            ("feat/oauth2-login", None),
+            ("feat/v2", None),
+            ("release/2026-10-10", None),
+            ("feat/9-too-short", None),
+            ("feat/1234567-too-long", None),
+            ("topic-123", None),
+            ("HEAD", None),
+        ] {
+            assert_eq!(issue_number(branch), want, "{branch}");
+        }
+    }
+
+    fn on(project: &str, branch: Option<&str>, kinds: Vec<EventKind>) -> SessionEvents {
+        let mut se = session(kinds);
+        se.session.project_dir = Some(project.into());
+        se.session.branch = branch.map(Into::into);
+        se
+    }
+
+    #[test]
+    fn groupings_partition_the_total() {
+        let u = || usage(Some("claude-sonnet-5-5"), 1_000_000, 0, None); // $2.00
+        let sessions = [
+            on("/a", Some("feat/12-x"), vec![u(), u()]),
+            on("/a", Some("feat/12-y"), vec![u()]),
+            on("/b", Some("main"), vec![u()]),
+            on("/b", None, vec![u()]),
+        ];
+        let prices = PriceTable::bundled();
+        let total = analyze(&sessions, &prices, Grouping::Model)
+            .total
+            .total_usd();
+        assert!((total - 10.0).abs() < 1e-9);
+        for g in [Grouping::Project, Grouping::Branch, Grouping::Issue] {
+            let r = analyze(&sessions, &prices, g);
+            let sum: f64 = r.rows.iter().map(CostRow::total_usd).sum();
+            assert!((sum - total).abs() < 1e-9, "{g:?}");
+            assert!((r.total.total_usd() - total).abs() < 1e-9);
+        }
+        let issues = analyze(&sessions, &prices, Grouping::Issue);
+        assert_eq!(issues.rows[0].key, "#12");
+        assert!((issues.rows[0].total_usd() - 6.0).abs() < 1e-9);
+        assert_eq!(issues.rows[1].key, UNASSIGNED);
+        let projects = analyze(&sessions, &prices, Grouping::Project);
+        assert_eq!(
+            projects
+                .rows
+                .iter()
+                .map(|r| r.key.as_str())
+                .collect::<Vec<_>>(),
+            ["/a", "/b"]
+        );
+        let branches = analyze(&sessions, &prices, Grouping::Branch);
+        assert!(branches.rows.iter().any(|r| r.key == NO_BRANCH));
     }
 }
