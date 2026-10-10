@@ -23,6 +23,10 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "DIR")]
     pub project: Option<std::path::PathBuf>,
 
+    /// OpenTelemetry export (OTLP JSON lines of Claude Code logs) to analyze as well (repeatable)
+    #[arg(long, global = true, value_name = "FILE")]
+    pub otel: Vec<std::path::PathBuf>,
+
     /// Output format
     #[arg(long, global = true, value_enum, default_value_t = Format::Table)]
     pub format: Format,
@@ -33,6 +37,11 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// Read an OpenTelemetry export and report what it holds
+    ImportOtel {
+        /// OTLP JSON-lines file written by an OpenTelemetry Collector `file` exporter
+        file: std::path::PathBuf,
+    },
     /// Show which sources were found and how many sessions they hold
     Scan,
     /// Show which skills are used and what they cost in tokens

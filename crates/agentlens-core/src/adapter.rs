@@ -80,6 +80,12 @@ pub type SessionIter<'a> = Box<dyn Iterator<Item = Result<SessionEvents, Adapter
 pub trait Adapter: Send + Sync {
     fn id(&self) -> Source;
 
+    /// The sources of the sessions this adapter yields (`--source` selects by
+    /// these). Differs from `id` for imports whose sessions belong to a client.
+    fn sources(&self) -> Vec<Source> {
+        vec![self.id()]
+    }
+
     /// Cheap check whether data for this source exists; must not read sessions.
     fn detect(&self, env: &Env) -> Detection;
 
@@ -125,13 +131,22 @@ impl Registry {
         only: &'a [Source],
     ) -> impl Iterator<Item = Result<SessionEvents, AdapterError>> + 'a {
         self.adapters()
-            .filter(move |a| only.is_empty() || only.contains(&a.id()))
+            .filter(move |a| only.is_empty() || a.sources().iter().any(|s| only.contains(s)))
             .filter(move |a| a.detect(env).found)
             .flat_map(move |a| a.sessions(env, filter))
             .filter(move |r| {
                 r.as_ref()
                     .map(|s| filter.matches(&s.session))
                     .unwrap_or(true)
+            })
+            // A session that several adapters report (local data and an
+            // OpenTelemetry export) counts once: the adapter registered first wins.
+            .filter({
+                let mut seen = std::collections::HashSet::new();
+                move |r| match r {
+                    Ok(s) => seen.insert((s.session.source, s.session.id.clone())),
+                    Err(_) => true,
+                }
             })
     }
 }

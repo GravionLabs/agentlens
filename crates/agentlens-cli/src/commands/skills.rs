@@ -9,6 +9,11 @@ use anyhow::Result;
 use crate::args::Format;
 use crate::output;
 
+fn attributed_tokens(s: &SkillStats) -> u64 {
+    let a = &s.attributed;
+    a.input + a.output + a.cache_read + a.cache_write
+}
+
 pub fn run(
     registry: &Registry,
     env: &Env,
@@ -40,6 +45,8 @@ pub fn run(
                 "follow_on_requests",
                 "follow_on_input",
                 "follow_on_output",
+                "attributed_requests",
+                "attributed_tokens",
             ];
             let rows = skills
                 .iter()
@@ -58,16 +65,20 @@ pub fn run(
                         (s.follow_on.input + s.follow_on.cache_read + s.follow_on.cache_write)
                             .to_string(),
                         s.follow_on.output.to_string(),
+                        s.attributed.requests.to_string(),
+                        attributed_tokens(s).to_string(),
                     ]
                 })
                 .collect();
             print!("{}", output::csv(&header, rows)?);
         }
         Format::Table => {
+            // The measured column only appears where a client attributes usage to skills.
+            let with_attribution = skills.iter().any(|s| s.attributed.requests > 0);
             let rows = skills
                 .iter()
                 .map(|s| {
-                    vec![
+                    let mut row = vec![
                         s.name.clone(),
                         s.invocations.to_string(),
                         s.sessions.to_string(),
@@ -75,20 +86,30 @@ pub fn run(
                         output::tokens(Tokens::estimated(s.carry.tokens)),
                         output::tokens(s.baseline.tokens),
                         output::tokens(Tokens::estimated(s.overhead_tokens())),
-                    ]
+                    ];
+                    if with_attribution {
+                        row.push(if s.attributed.requests > 0 {
+                            output::tokens(Tokens::measured(attributed_tokens(s)))
+                        } else {
+                            "-".into()
+                        });
+                    }
+                    row
                 })
                 .collect();
-            println!(
-                "{}",
-                output::table(
-                    &[
-                        "skill", "uses", "sessions", "load", "carry", "baseline", "overhead"
-                    ],
-                    rows,
-                    1
-                )
-            );
+            let mut header = vec![
+                "skill", "uses", "sessions", "load", "carry", "baseline", "overhead",
+            ];
+            if with_attribution {
+                header.push("attributed");
+            }
+            println!("{}", output::table(&header, rows, 1));
             println!("~ estimated; no ~ means measured. overhead = baseline + load + carry.");
+            if with_attribution {
+                println!(
+                    "attributed = all tokens of the requests the client (OpenTelemetry `skill.name`) attributes to the skill; measured."
+                );
+            }
             println!(
                 "{} sessions, {} skills installed.",
                 run.report.sessions,

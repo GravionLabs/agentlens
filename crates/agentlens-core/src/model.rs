@@ -272,6 +272,10 @@ pub struct Usage {
     /// A count against a plan allowance, never money.
     #[serde(default)]
     pub premium_requests: Option<f64>,
+    /// The skill the client attributes this request to (OpenTelemetry
+    /// `skill.name`), if it reports one.
+    #[serde(default)]
+    pub skill: Option<String>,
 }
 
 impl Usage {
@@ -294,6 +298,7 @@ impl Default for Usage {
             measured: true,
             subagent: false,
             premium_requests: None,
+            skill: None,
         }
     }
 }
