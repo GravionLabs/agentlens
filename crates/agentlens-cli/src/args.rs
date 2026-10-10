@@ -43,6 +43,15 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = ContextView::All)]
         kind: ContextView,
     },
+    /// List installed skills, agents and MCP servers that were not used
+    Unused {
+        /// Length of the period to look at (ignored if --since is given)
+        #[arg(long, value_name = "DAYS", default_value_t = 30)]
+        days: u32,
+        /// Also list items that were used
+        #[arg(long)]
+        all: bool,
+    },
     /// Write a self-contained report
     Report {
         /// Write an HTML file that works offline
@@ -85,6 +94,11 @@ impl Cli {
             project: self.project.clone(),
         })
     }
+}
+
+/// The instant `days` days before `now`.
+pub fn days_ago(days: u32, now: Timestamp) -> Result<Timestamp> {
+    parse_since(&format!("{days}d"), now)
 }
 
 /// `30d`, `12h`, `4w` (relative to `now`), a date (`2026-10-01`, midnight UTC) or an RFC 3339 instant.

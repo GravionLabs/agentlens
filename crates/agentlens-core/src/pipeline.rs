@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use crate::adapter::{Detection, Registry, SessionFilter};
 use crate::analyzers::context::{self, ContextReport};
 use crate::analyzers::skills::{self, SkillReport};
+use crate::analyzers::unused::{self, UnusedReport};
+use crate::catalog;
 use crate::env::Env;
 use crate::instructions;
 use crate::inventory::{self, Inventory};
@@ -138,6 +140,52 @@ pub fn context_run(
             .sum::<u64>()
             + instructions.warnings.len() as u64,
         report: context::analyze(&sessions, &instructions.files, estimator),
+        errors,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UnusedRun {
+    pub report: UnusedReport,
+    pub warnings: u64,
+    pub errors: Vec<String>,
+}
+
+/// Which skills, agents and MCP servers were used in the selected sessions.
+pub fn unused_run(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    only: &[Source],
+    estimator: &dyn TokenEstimator,
+) -> UnusedRun {
+    let mut sessions: Vec<SessionEvents> = Vec::new();
+    let mut errors = Vec::new();
+    for r in registry.sessions(env, filter, only) {
+        match r {
+            Ok(se) => sessions.push(se),
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+    let projects: BTreeSet<PathBuf> = sessions
+        .iter()
+        .filter_map(|s| s.session.project_dir.clone())
+        .collect();
+    let projects: Vec<PathBuf> = projects.into_iter().collect();
+    let inventory = inventory::scan(&inventory::locations(env, &projects), estimator);
+    let instructions = instructions::scan(env, &projects, estimator);
+    let catalog = catalog::scan(env, &projects, estimator);
+    let skill_report = skills::analyze(&inventory, &sessions, estimator);
+    let context_report = context::analyze(&sessions, &instructions.files, estimator);
+    let warnings = sessions
+        .iter()
+        .map(|s| s.warnings.len() as u64)
+        .sum::<u64>()
+        + inventory.warnings.len() as u64
+        + catalog.warnings.len() as u64;
+    UnusedRun {
+        report: unused::analyze(&skill_report, &catalog, &context_report, &sessions),
+        warnings,
         errors,
     }
 }

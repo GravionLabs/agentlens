@@ -245,6 +245,11 @@ fn summarize(tool: &str, args: &Value) -> Option<String> {
             .next()
             .map(str::to_owned);
     }
+    if tool == "task"
+        && let Some(kind) = str_of(args, "agent_type")
+    {
+        return Some(kind.to_owned());
+    }
     ["path", "file_path", "pattern", "skill", "name", "intent"]
         .iter()
         .find_map(|k| str_of(args, k))

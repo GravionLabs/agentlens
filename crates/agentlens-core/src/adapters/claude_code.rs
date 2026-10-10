@@ -578,6 +578,11 @@ fn summarize(tool: &str, input: &Value) -> Option<String> {
             .next()
             .map(str::to_owned);
     }
+    if matches!(tool, "Agent" | "Task")
+        && let Some(kind) = str_of(input, "subagent_type")
+    {
+        return Some(kind.to_owned());
+    }
     [
         "file_path",
         "path",
@@ -602,6 +607,13 @@ mod tests {
             Some("orch")
         );
         assert_eq!(command_name("hello"), None);
+    }
+
+    #[test]
+    fn subagent_calls_are_summarized_by_agent_type() {
+        let input = serde_json::json!({"subagent_type": "Explore", "description": "find things", "prompt": "secret"});
+        assert_eq!(summarize("Agent", &input).as_deref(), Some("Explore"));
+        assert_eq!(summarize("Other", &input).as_deref(), Some("find things"));
     }
 
     #[test]
