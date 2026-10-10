@@ -617,3 +617,73 @@ fn cost_can_be_grouped_by_project_branch_and_issue() {
             .starts_with("branch,requests")
     );
 }
+
+#[test]
+fn efficiency_reports_cache_hit_rate_and_subagent_share() {
+    let home = home_with_context();
+    let file = price_file(&home);
+    let v = json(
+        agentlens(&home)
+            .args([
+                "efficiency",
+                "--format",
+                "json",
+                "--by",
+                "session",
+                "--prices",
+            ])
+            .arg(&file),
+    );
+    let row = &v["cache"][0];
+    assert_eq!(row["key"], "ctx1");
+    assert_eq!(
+        (
+            row["input"].as_u64(),
+            row["cache_read"].as_u64(),
+            row["cache_write"].as_u64()
+        ),
+        (Some(40), Some(1000), Some(1850))
+    );
+    assert!((row["hit_rate"].as_f64().unwrap() - 1000.0 / 2890.0).abs() < 1e-9);
+    let share = &v["subagents"][0];
+    assert_eq!(
+        (
+            share["requests"].as_u64(),
+            share["subagent_requests"].as_u64()
+        ),
+        (Some(3), Some(0))
+    );
+    assert!(
+        share["usd"].as_f64().unwrap() > 0.0,
+        "the price file prices the fixture model"
+    );
+    agentlens(&home)
+        .args(["efficiency", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("34.6%"))
+        .stdout(predicate::str::contains("Subagent share"));
+}
+
+#[test]
+fn efficiency_csv_and_grouping_by_project() {
+    let home = home_with_context();
+    let out = agentlens(&home)
+        .args(["efficiency", "--by", "project", "--format", "csv"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert!(text.starts_with(
+        "key,source,requests,input_tokens,cache_read_tokens,cache_write_tokens,hit_rate"
+    ));
+    assert!(
+        text.lines()
+            .nth(1)
+            .unwrap()
+            .starts_with("/work/demo,claude-code,3,40,1000,1850,0.346021")
+    );
+}

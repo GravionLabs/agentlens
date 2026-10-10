@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use crate::adapter::{Detection, Registry, SessionFilter};
 use crate::analyzers::context::{self, ContextReport};
 use crate::analyzers::cost::{self, CostReport, Grouping};
+use crate::analyzers::efficiency::{self, CacheBy, EfficiencyReport};
 use crate::analyzers::flow::{self, ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::{self, SkillReport};
 use crate::analyzers::unused::{self, UnusedReport};
@@ -252,6 +253,37 @@ pub fn cost_run(
     CostRun {
         warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
         report: cost::analyze(&sessions, prices, group),
+        errors,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EfficiencyRun {
+    pub report: EfficiencyReport,
+    pub warnings: u64,
+    pub errors: Vec<String>,
+}
+
+/// Reads the sessions and analyzes cache reuse and subagent share.
+pub fn efficiency_run(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    only: &[Source],
+    prices: &crate::prices::PriceTable,
+    by: CacheBy,
+) -> EfficiencyRun {
+    let mut sessions: Vec<SessionEvents> = Vec::new();
+    let mut errors = Vec::new();
+    for r in registry.sessions(env, filter, only) {
+        match r {
+            Ok(se) => sessions.push(se),
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+    EfficiencyRun {
+        warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
+        report: efficiency::analyze(&sessions, prices, by),
         errors,
     }
 }
