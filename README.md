@@ -64,7 +64,7 @@ Token values with a leading `~` are estimated (see [ADR 0001](docs/adr/0001-toke
 
 `agentlens compare` puts the clients side by side over the same sessions: sessions, requests, tokens, cache hit rate, tool calls and error rate, skill invocations and their estimated overhead, and session time (first to last event, so idle time is included). A value a client does not record is `n/a`, never 0.
 
-Supported sources today: Claude Code, OpenCode (SQLite database) and GitHub Copilot CLI. Copilot CLI sessions without per-request rows in `session-store.db` fall back to the session totals from `session.shutdown`, which cannot be split per request.
+Supported sources today: Claude Code, OpenCode (SQLite database), GitHub Copilot CLI and GitHub Copilot Chat in VS Code and VS Code Insiders (`chatSessions` files, including the `.jsonl` operation log). Copilot CLI sessions without per-request rows in `session-store.db` fall back to the session totals from `session.shutdown`, which cannot be split per request. VS Code reports prompt and completion tokens per request without a cache split, plus the share of system instructions and tool definitions in the prompt, which `agentlens context` uses as reported token counts. Cost for Copilot sources is computed with the vendor's API list prices when the model is in the price table; Copilot itself bills premium requests, so treat it as a comparison figure, not an invoice.
 
 ## Layout
 
