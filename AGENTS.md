@@ -21,6 +21,13 @@ client files ─► Adapter ─► normalized events ─► Analyzer ─► repo
 - **Timestamps** are `jiff::Timestamp` (UTC instants) everywhere in the model.
 - **Privacy:** tests and fixtures use synthetic data only (no real prompts, file contents, paths of real projects or secrets).
 
+## Desktop application
+
+- `src-tauri` (crate `agentlens-app`) is a thin shell: `src/api.rs` holds one plain function per analysis taking the CLI's filter and returning the core's report types in an `Answer { data, warnings, errors }`; `src/lib.rs` only wraps them as Tauri commands. New logic belongs in `agentlens-core` so the CLI benefits too.
+- `src` is Angular 22 (standalone components, signals, pnpm). Views call commands through `analysis()` in `src/app/core`; types in `types.ts` mirror the JSON, and the samples in `src/app/core/samples` come from the Rust tests (`UPDATE_SAMPLES=1`). A change in a core report type needs a matching change in `types.ts`.
+- The CLI workflow (`ci.yml`) excludes the app crate and needs no system libraries; `app.yml` checks the frontend and the crate.
+- Estimates carry a tilde and missing data is `n/a`, as in the CLI. Prettier covers the frontend only.
+
 ## Verification
 
 ```sh
@@ -28,6 +35,8 @@ cargo fmt --all --check
 cargo clippy --workspace --exclude agentlens-app --all-targets -- -D warnings
 cargo test --workspace --exclude agentlens-app
 ```
+
+For the application: `pnpm lint && pnpm format:check && pnpm test && pnpm build` and `cargo test -p agentlens-app`.
 
 ## Issue and PR conventions
 
