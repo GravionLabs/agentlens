@@ -18,6 +18,7 @@ Early development. The plan lives in the GitHub issues and the [AgentLens projec
 cargo run -p agentlens-cli -- scan                       # which sources exist, how many sessions
 cargo run -p agentlens-cli -- skills --since 30d         # skill usage and token cost
 cargo run -p agentlens-cli -- skills --format json       # also: csv
+cargo run -p agentlens-cli -- report --html report.html  # self-contained page, works offline
 ```
 
 Global flags: `--since <12h|30d|4w|2026-10-01>`, `--source <id>` (repeatable), `--project <dir>`, `--format table|json|csv`.

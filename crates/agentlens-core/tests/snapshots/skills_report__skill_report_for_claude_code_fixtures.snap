@@ -34,6 +34,9 @@ expression: report
       "by_source": {
         "claude-code": 1
       },
+      "uses_by_day": {
+        "2026-10-01": 1
+      },
       "load": {
         "count": 42,
         "measured": false
@@ -84,6 +87,9 @@ expression: report
       "by_source": {
         "claude-code": 1
       },
+      "uses_by_day": {
+        "2026-10-01": 1
+      },
       "load": {
         "count": 17,
         "measured": false
@@ -130,6 +136,7 @@ expression: report
         "nested": 0
       },
       "by_source": {},
+      "uses_by_day": {},
       "load": {
         "count": 0,
         "measured": true

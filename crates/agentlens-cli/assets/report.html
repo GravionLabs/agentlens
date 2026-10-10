@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentLens report</title>
+<style>
+:root {
+  --bg: #fafafa; --panel: #ffffff; --text: #1d2327; --muted: #5c6770; --line: #dde1e5;
+  --baseline: #d97706; --load: #2563eb; --carry: #7c3aed; --follow: #059669;
+  --accent: #2563eb; --warn: #b45309;
+  --series-0: #2563eb; --series-1: #d97706; --series-2: #059669; --series-3: #7c3aed;
+  --series-4: #db2777; --series-5: #0891b2; --series-6: #65a30d; --series-7: #dc2626; --series-other: #94a3b8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1419; --panel: #171d24; --text: #e6e9ec; --muted: #9aa5b1; --line: #2a333d;
+    --baseline: #f59e0b; --load: #60a5fa; --carry: #a78bfa; --follow: #34d399;
+    --accent: #60a5fa; --warn: #fbbf24;
+    --series-0: #60a5fa; --series-1: #f59e0b; --series-2: #34d399; --series-3: #a78bfa;
+    --series-4: #f472b6; --series-5: #22d3ee; --series-6: #a3e635; --series-7: #f87171; --series-other: #64748b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1419; --panel: #171d24; --text: #e6e9ec; --muted: #9aa5b1; --line: #2a333d;
+  --baseline: #f59e0b; --load: #60a5fa; --carry: #a78bfa; --follow: #34d399;
+  --accent: #60a5fa; --warn: #fbbf24;
+  --series-0: #60a5fa; --series-1: #f59e0b; --series-2: #34d399; --series-3: #a78bfa;
+  --series-4: #f472b6; --series-5: #22d3ee; --series-6: #a3e635; --series-7: #f87171; --series-other: #64748b;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.15rem; margin: 0 0 4px; }
+p.sub, .note { color: var(--muted); margin: 0 0 12px; font-size: 0.9rem; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 20px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.card .v { font-size: 1.5rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.card .l { color: var(--muted); font-size: 0.85rem; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { cursor: pointer; user-select: none; color: var(--muted); font-weight: 600; font-size: 0.85rem; position: sticky; top: 0; background: var(--panel); }
+th[aria-sort="ascending"]::after { content: " \25B2"; }
+th[aria-sort="descending"]::after { content: " \25BC"; }
+td.name { font-weight: 600; }
+tr.unused td { color: var(--muted); }
+.est { color: var(--warn); }
+input[type="search"] { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; width: 240px; max-width: 100%; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 12px; font-size: 0.85rem; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+svg { display: block; width: 100%; height: auto; }
+svg text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+svg text.lbl { fill: var(--text); }
+svg line.grid { stroke: var(--line); }
+.empty { color: var(--muted); padding: 12px 0; }
+footer { color: var(--muted); font-size: 0.8rem; margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>AgentLens report</h1>
+  <p class="sub" id="subtitle"></p>
+  <div class="cards" id="cards"></div>
+
+  <section>
+    <h2>Skills</h2>
+    <p class="note">Overhead = baseline + load + carry. <span class="est">~</span> marks estimated values; unmarked values were measured by the client.</p>
+    <div class="controls">
+      <input type="search" id="filter" placeholder="Filter skills" aria-label="Filter skills">
+      <label><input type="checkbox" id="used-only"> used skills only</label>
+    </div>
+    <div class="tablewrap"><table id="skills"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>Cost split</h2>
+    <p class="note">Tokens per skill, top 15 by overhead. Hatched segments are estimates; solid segments were measured.</p>
+    <div class="legend">
+      <span><i style="background:var(--baseline)"></i>baseline: name and description in every request</span>
+      <span><i style="background:var(--load)"></i>load: skill content entering the context</span>
+      <span><i style="background:var(--carry)"></i>carry: loaded content re-sent in later requests</span>
+      <span><i style="background:var(--follow)"></i>follow-on: tokens used by the work after the skill (attributed, not overhead)</span>
+    </div>
+    <div id="split"></div>
+  </section>
+
+  <section>
+    <h2>Usage over time</h2>
+    <p class="note">Skill invocations per day (UTC), top 8 skills by uses.</p>
+    <div class="legend" id="timeline-legend"></div>
+    <div id="timeline"></div>
+  </section>
+
+  <footer id="footer"></footer>
+</main>
+<script id="data" type="application/json">__REPORT_DATA__</script>
+<script>
+(function () {
+  "use strict";
+  var report = JSON.parse(document.getElementById("data").textContent);
+  var meta = report.meta, sk = report.skills, skills = sk.skills;
+  var NS = "http://www.w3.org/2000/svg";
+
+  function el(tag, attrs, text) {
+    var e = document.createElement(tag);
+    if (attrs) for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function svg(tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    if (attrs) for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function fmt(n) { return Math.round(n).toLocaleString("en-US"); }
+  function short(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M";
+    if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + "k";
+    return String(Math.round(n));
+  }
+  function day(ts) { return ts ? ts.slice(0, 10) : ""; }
+
+  function overhead(s) { return s.baseline.tokens.count + s.load.count + s.carry.tokens; }
+  function followOn(s) { var f = s.follow_on; return f.input + f.output + f.cache_read + f.cache_write; }
+
+  // ---- header and cards ----
+  var period = (day(sk.first_event) || "?") + " to " + (day(sk.last_event) || "?");
+  var sources = meta.sources.length ? meta.sources.join(", ") : "all sources";
+  document.getElementById("subtitle").textContent =
+    period + " \u00b7 " + sk.sessions + " sessions \u00b7 " + sources + " \u00b7 generated " + day(meta.generated_at);
+  var used = skills.filter(function (s) { return s.invocations > 0; });
+  var totalOverhead = skills.reduce(function (a, s) { return a + overhead(s); }, 0);
+  var unusedBaseline = skills.filter(function (s) { return s.invocations === 0; })
+    .reduce(function (a, s) { return a + s.baseline.tokens.count; }, 0);
+  var cards = [
+    [used.length + " / " + meta.installed_skills, "skills used / installed"],
+    [fmt(used.reduce(function (a, s) { return a + s.invocations; }, 0)), "invocations"],
+    ["~" + short(totalOverhead), "total skill overhead (tokens)"],
+    ["~" + short(unusedBaseline), "baseline of never-used skills"]
+  ];
+  var cardBox = document.getElementById("cards");
+  cards.forEach(function (c) {
+    var d = el("div", { "class": "card" });
+    d.appendChild(el("div", { "class": "v" }, c[0]));
+    d.appendChild(el("div", { "class": "l" }, c[1]));
+    cardBox.appendChild(d);
+  });
+
+  // ---- table ----
+  var columns = [
+    { key: "name", label: "skill", get: function (s) { return s.name; }, cell: function (s) { return s.name; } },
+    { key: "uses", label: "uses", get: function (s) { return s.invocations; } },
+    { key: "sessions", label: "sessions", get: function (s) { return s.sessions; } },
+    { key: "load", label: "load", get: function (s) { return s.load.count; }, measured: function (s) { return s.load.measured; } },
+    { key: "carry", label: "carry", get: function (s) { return s.carry.tokens; }, measured: function () { return false; } },
+    { key: "baseline", label: "baseline", get: function (s) { return s.baseline.tokens.count; }, measured: function (s) { return s.baseline.tokens.measured; } },
+    { key: "overhead", label: "overhead", get: overhead, measured: function () { return false; } },
+    { key: "follow", label: "follow-on", get: followOn },
+    { key: "last", label: "last used", get: function (s) { return day(s.last_used); }, text: true }
+  ];
+  var sortKey = "overhead", sortDir = -1;
+  var thead = document.querySelector("#skills thead"), tbody = document.querySelector("#skills tbody");
+  var headRow = el("tr");
+  columns.forEach(function (c) {
+    var th = el("th", { scope: "col", tabindex: "0" }, c.label);
+    function sort() {
+      if (sortKey === c.key) sortDir = -sortDir; else { sortKey = c.key; sortDir = c.key === "name" ? 1 : -1; }
+      render();
+    }
+    th.addEventListener("click", sort);
+    th.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); sort(); } });
+    headRow.appendChild(th);
+    c.th = th;
+  });
+  thead.appendChild(headRow);
+
+  function render() {
+    var q = document.getElementById("filter").value.trim().toLowerCase();
+    var onlyUsed = document.getElementById("used-only").checked;
+    var col = columns.filter(function (c) { return c.key === sortKey; })[0];
+    columns.forEach(function (c) {
+      if (c.key === sortKey) c.th.setAttribute("aria-sort", sortDir > 0 ? "ascending" : "descending");
+      else c.th.removeAttribute("aria-sort");
+    });
+    var rows = skills.filter(function (s) {
+      return (!q || s.name.toLowerCase().indexOf(q) >= 0) && (!onlyUsed || s.invocations > 0);
+    });
+    rows.sort(function (a, b) {
+      var x = col.get(a), y = col.get(b);
+      var r = x < y ? -1 : x > y ? 1 : 0;
+      return (r || (a.name < b.name ? -1 : 1)) * (r ? sortDir : 1);
+    });
+    tbody.textContent = "";
+    if (!rows.length) {
+      var tr = el("tr"), td = el("td", { colspan: columns.length, "class": "empty" }, "No skills match.");
+      tr.appendChild(td); tbody.appendChild(tr); return;
+    }
+    rows.forEach(function (s) {
+      var tr = el("tr", s.invocations === 0 ? { "class": "unused" } : null);
+      columns.forEach(function (c) {
+        var td = el("td", c.key === "name" ? { "class": "name" } : null);
+        if (c.key === "name") td.textContent = s.name;
+        else if (c.text) td.textContent = c.get(s) || "-";
+        else {
+          var v = c.get(s);
+          if (c.measured && !c.measured(s) && v > 0) {
+            td.appendChild(el("span", { "class": "est" }, "~"));
+          }
+          td.appendChild(document.createTextNode(fmt(v)));
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+  document.getElementById("filter").addEventListener("input", render);
+  document.getElementById("used-only").addEventListener("change", render);
+  render();
+
+  // ---- cost split ----
+  function pattern(defs, id, color) {
+    var p = svg("pattern", { id: id, width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
+    p.appendChild(svg("rect", { width: 6, height: 6, fill: color, opacity: 0.35 }));
+    p.appendChild(svg("rect", { width: 3, height: 6, fill: color }));
+    defs.appendChild(p);
+  }
+  (function split() {
+    var box = document.getElementById("split");
+    var top = skills.filter(function (s) { return overhead(s) > 0; })
+      .sort(function (a, b) { return overhead(b) - overhead(a); }).slice(0, 15);
+    if (!top.length) { box.appendChild(el("p", { "class": "empty" }, "No skill cost found.")); return; }
+    var rowH = 34, left = 190, right = 150, W = 1000, H = top.length * rowH + 10;
+    var max = Math.max.apply(null, top.map(function (s) { return overhead(s); }));
+    var root = svg("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "Skill cost split" });
+    var defs = svg("defs");
+    pattern(defs, "h-baseline", "var(--baseline)");
+    pattern(defs, "h-load", "var(--load)");
+    pattern(defs, "h-carry", "var(--carry)");
+    root.appendChild(defs);
+    var plot = W - left - right;
+    top.forEach(function (s, i) {
+      var y = i * rowH + 6, x = left;
+      root.appendChild(svg("text", { x: left - 8, y: y + 14, "text-anchor": "end", "class": "lbl" },
+        s.name.length > 26 ? s.name.slice(0, 25) + "\u2026" : s.name));
+      var parts = [
+        ["baseline", s.baseline.tokens.count, s.baseline.tokens.measured, "baseline"],
+        ["load", s.load.count, s.load.measured, "load"],
+        ["carry", s.carry.tokens, false, "carry"]
+      ];
+      parts.forEach(function (p) {
+        var w = p[1] / max * plot;
+        if (w <= 0) return;
+        var fill = p[2] ? "var(--" + p[0] + ")" : "url(#h-" + p[0] + ")";
+        var r = svg("rect", { x: x, y: y, width: Math.max(w, 1), height: 14, fill: fill, stroke: "var(--" + p[0] + ")", "stroke-width": 0.5 });
+        r.appendChild(svg("title", null, s.name + " \u2013 " + p[3] + ": " + (p[2] ? "" : "~") + fmt(p[1]) + " tokens" + (p[2] ? " (measured)" : " (estimated)")));
+        root.appendChild(r);
+        x += w;
+      });
+      var f = followOn(s);
+      if (f > 0) {
+        var fw = Math.max(f / max * plot, 1);
+        var fr = svg("rect", { x: left, y: y + 17, width: Math.min(fw, plot), height: 5, fill: "var(--follow)" });
+        fr.appendChild(svg("title", null, s.name + " \u2013 follow-on: " + fmt(f) + " tokens in " + fmt(s.follow_on.requests) + " requests (attributed)"));
+        root.appendChild(fr);
+      }
+      root.appendChild(svg("text", { x: left + plot + 8, y: y + 12 }, "~" + short(overhead(s))));
+    });
+    box.appendChild(root);
+  })();
+
+  // ---- timeline ----
+  (function timeline() {
+    var box = document.getElementById("timeline"), legend = document.getElementById("timeline-legend");
+    var topSkills = used.slice().sort(function (a, b) { return b.invocations - a.invocations; }).slice(0, 8);
+    var days = {};
+    used.forEach(function (s) { for (var d in s.uses_by_day) days[d] = true; });
+    var keys = Object.keys(days).sort();
+    if (!keys.length) { box.appendChild(el("p", { "class": "empty" }, "No dated invocations found.")); return; }
+    // Fill gaps so the x axis is continuous.
+    var all = [], cur = new Date(keys[0] + "T00:00:00Z"), end = new Date(keys[keys.length - 1] + "T00:00:00Z");
+    while (cur <= end && all.length < 2000) { all.push(cur.toISOString().slice(0, 10)); cur = new Date(cur.getTime() + 864e5); }
+    var names = topSkills.map(function (s) { return s.name; });
+    var series = topSkills.map(function (s, i) { return { name: s.name, color: "var(--series-" + i + ")", data: s.uses_by_day }; });
+    if (used.length > topSkills.length) {
+      var other = {};
+      used.filter(function (s) { return names.indexOf(s.name) < 0; }).forEach(function (s) {
+        for (var d in s.uses_by_day) other[d] = (other[d] || 0) + s.uses_by_day[d];
+      });
+      series.push({ name: "other", color: "var(--series-other)", data: other });
+    }
+    series.forEach(function (s) {
+      var l = el("span"); var i = el("i"); i.style.background = s.color;
+      l.appendChild(i); l.appendChild(document.createTextNode(s.name)); legend.appendChild(l);
+    });
+    var W = 1000, H = 260, L = 36, B = 28, T = 8, R = 8;
+    var totals = all.map(function (d) { return series.reduce(function (a, s) { return a + (s.data[d] || 0); }, 0); });
+    var max = Math.max.apply(null, totals.concat([1]));
+    var root = svg("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "Skill invocations per day" });
+    var ph = H - T - B, pw = W - L - R, bw = pw / all.length;
+    [0, 0.5, 1].forEach(function (f) {
+      var y = T + ph - f * ph;
+      root.appendChild(svg("line", { x1: L, x2: W - R, y1: y, y2: y, "class": "grid" }));
+      root.appendChild(svg("text", { x: L - 6, y: y + 4, "text-anchor": "end" }, String(Math.round(max * f))));
+    });
+    all.forEach(function (d, i) {
+      var y = T + ph;
+      series.forEach(function (s) {
+        var v = s.data[d] || 0;
+        if (!v) return;
+        var h = v / max * ph;
+        y -= h;
+        var r = svg("rect", { x: L + i * bw + bw * 0.1, y: y, width: Math.max(bw * 0.8, 1), height: h, fill: s.color });
+        r.appendChild(svg("title", null, d + " \u2013 " + s.name + ": " + v));
+        root.appendChild(r);
+      });
+    });
+    var step = Math.max(1, Math.ceil(all.length / 8));
+    all.forEach(function (d, i) {
+      if (i % step === 0) root.appendChild(svg("text", { x: L + i * bw + bw / 2, y: H - 8, "text-anchor": "middle" }, d.slice(5)));
+    });
+    box.appendChild(root);
+  })();
+
+  // ---- footer ----
+  var foot = "AgentLens " + meta.tool_version + ". All data stays on this machine; this file works offline.";
+  if (meta.warnings) foot += " " + meta.warnings + " warnings while reading sessions.";
+  if (meta.errors && meta.errors.length) foot += " " + meta.errors.length + " sessions could not be read.";
+  if (sk.ignored_commands && sk.ignored_commands.length) {
+    foot += " " + sk.ignored_commands.reduce(function (a, c) { return a + c.count; }, 0) + " typed commands that are not skills were ignored.";
+  }
+  document.getElementById("footer").textContent = foot;
+})();
+</script>
+</body>
+</html>
