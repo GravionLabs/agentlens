@@ -23,6 +23,11 @@ where
 }
 
 #[tauri::command]
+async fn refresh(ctx: Shared<'_>) -> Result<Answer<()>, String> {
+    blocking(&ctx, api::refresh).await
+}
+
+#[tauri::command]
 async fn overview(
     ctx: Shared<'_>,
     filters: Filters,
@@ -110,7 +115,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(shared))
         .invoke_handler(tauri::generate_handler![
-            overview, skills, context, unused, flow, cost, efficiency, compare, sessions, timeline
+            refresh, overview, skills, context, unused, flow, cost, efficiency, compare, sessions,
+            timeline
         ])
         .run(tauri::generate_context!())
         .expect("error while running AgentLens");
