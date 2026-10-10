@@ -1,4 +1,5 @@
 mod context;
+mod flow;
 mod report;
 mod scan;
 mod skills;
@@ -21,6 +22,15 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Context { kind } => {
             context::run(&registry, &env, &filter, &cli.source, kind, cli.format)
         }
+        Command::Flow { section, top } => flow::run(
+            &registry,
+            &env,
+            &filter,
+            &cli.source,
+            section,
+            top,
+            cli.format,
+        ),
         Command::Unused { days, all } => {
             let mut filter = filter;
             if cli.since.is_none() {

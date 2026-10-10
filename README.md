@@ -34,6 +34,7 @@ cargo run -p agentlens-cli -- skills --since 30d         # skill usage and token
 cargo run -p agentlens-cli -- skills --format json       # also: csv
 cargo run -p agentlens-cli -- report --html report.html  # self-contained page, works offline
 cargo run -p agentlens-cli -- context --kind tools       # static context: tools, MCP, agents, skills, instruction files
+cargo run -p agentlens-cli -- flow --top 10               # context growth and compactions per session
 cargo run -p agentlens-cli -- unused --days 30           # installed skills, agents and MCP servers without use, with their idle cost
 ```
 
@@ -51,6 +52,8 @@ Token values with a leading `~` are estimated (see [ADR 0001](docs/adr/0001-toke
 `agentlens context` shows static context the client adds to every request, with columns `kind` (tool listing, tool definition, MCP instructions, agent listing, skill listing, instruction file), `owner` (MCP server, `built-in`, or file path), `items` (distinct items, once per session), `tokens` (estimated size of those items), `requests` (main-agent requests that followed them) and `overhead` (tokens x requests, estimated). The measured size of the first request of a session bounds everything static. Only Claude Code reports these items today; other sources are listed as not available.
 
 `agentlens unused --days 30` lists installed skills, agents (`.claude/agents`, `.github/agents`, `.opencode/agents`) and configured MCP servers that were not used in the period (`--all` also shows used ones). `idle cost` is the estimated baseline tokens times the requests that carried the item; for MCP servers it comes from the context items the client reports, so servers of other clients show `unknown`. MCP configuration files are read for server names only.
+
+`agentlens flow` shows how sessions unfold. The growth section lists, per session, the measured context size (input plus cache) of the first, last and largest main-agent request, the size right before each compaction and whether the session came within 90% of the model's limit. The limit is the documented window of the model family; where a session exceeds it (larger model variants), the largest size at which that model was compacted is used instead (marked `observed-compaction` in JSON).
 
 Supported sources today: Claude Code, OpenCode (SQLite database) and GitHub Copilot CLI. Copilot CLI sessions without per-request rows in `session-store.db` fall back to the session totals from `session.shutdown`, which cannot be split per request.
 
