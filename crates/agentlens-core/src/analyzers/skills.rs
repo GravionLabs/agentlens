@@ -85,6 +85,9 @@ pub struct SkillStats {
     pub last_used: Option<Timestamp>,
     pub triggers: TriggerCounts,
     pub by_source: BTreeMap<Source, u32>,
+    /// Invocations per UTC day (`YYYY-MM-DD`).
+    #[serde(default)]
+    pub uses_by_day: BTreeMap<String, u32>,
     /// Sum of the load cost; `measured` only if every load was measured.
     pub load: Tokens,
     /// Invocations whose load size could not be determined (counted as 0).
@@ -213,6 +216,7 @@ impl Acc {
                 last_used: None,
                 triggers: TriggerCounts::default(),
                 by_source: BTreeMap::new(),
+                uses_by_day: BTreeMap::new(),
                 load: Tokens::measured(0),
                 unknown_loads: 0,
                 carry: CarryCost::default(),
@@ -253,6 +257,8 @@ impl Acc {
         if let Some(at) = at {
             s.first_used = Some(s.first_used.map_or(at, |f| f.min(at)));
             s.last_used = Some(s.last_used.map_or(at, |l| l.max(at)));
+            let day = at.to_zoned(jiff::tz::TimeZone::UTC).date().to_string();
+            *s.uses_by_day.entry(day).or_default() += 1;
         }
 
         let window_end = se.events[i + 1..]

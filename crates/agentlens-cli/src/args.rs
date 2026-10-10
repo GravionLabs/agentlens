@@ -15,7 +15,7 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Only this source (repeatable): claude-code, opencode, copilot-cli (adapters for the last two follow in M1)
+    /// Only this source (repeatable): claude-code, opencode, copilot-cli
     #[arg(long, global = true, value_name = "ID", value_parser = parse_source)]
     pub source: Vec<Source>,
 
@@ -37,6 +37,12 @@ pub enum Command {
     Scan,
     /// Show which skills are used and what they cost in tokens
     Skills,
+    /// Write a self-contained report
+    Report {
+        /// Write an HTML file that works offline
+        #[arg(long, value_name = "FILE")]
+        html: std::path::PathBuf,
+    },
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
