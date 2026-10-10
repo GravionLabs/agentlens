@@ -1,3 +1,5 @@
+import { PageHeader } from "../../ui/page-header";
+import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { day, number, tokens } from "../../core/format";
@@ -21,15 +23,21 @@ function attributedTokens(s: SkillStats): number {
 
 @Component({
   selector: "app-skills",
-  imports: [Status, StatCards, DataTable, StackedBars, Legend],
+  imports: [PageHeader, Term, Status, StatCards, DataTable, StackedBars, Legend],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <h2>Skills</h2>
-      <p class="muted">
-        Which skills are used and what they cost. <span class="est">~</span> marks estimated values;
-        unmarked values were measured by the client. Overhead = baseline + load + carry.
-      </p>
+      <app-page-header title="Skills" summary="Which skills are used and what they cost in tokens.">
+        <p>
+          <span class="est">~</span> marks <app-term id="measured">estimates</app-term>; unmarked
+          values were measured by the client.
+        </p>
+        <p>
+          <app-term id="overhead">Overhead</app-term> =
+          <app-term id="baseline">baseline</app-term> + <app-term id="load">load</app-term> +
+          <app-term id="carry">carry</app-term>.
+        </p>
+      </app-page-header>
       <app-status
         [loading]="res.isLoading()"
         [error]="res.error()"
@@ -151,6 +159,7 @@ export class Skills {
       {
         key: "load",
         label: "Load",
+        term: "load",
         value: (s) => s.load.count,
         text: (s) => tokens(s.load.count, !s.load.measured && s.load.count > 0),
         estimated: (s) => !s.load.measured && s.load.count > 0,
@@ -160,6 +169,7 @@ export class Skills {
       {
         key: "carry",
         label: "Carry",
+        term: "carry",
         value: (s) => s.carry.tokens,
         text: (s) => tokens(s.carry.tokens, s.carry.tokens > 0),
         estimated: (s) => s.carry.tokens > 0,
@@ -169,6 +179,7 @@ export class Skills {
       {
         key: "baseline",
         label: "Baseline",
+        term: "baseline",
         value: (s) => s.baseline.tokens.count,
         text: (s) =>
           tokens(
@@ -182,6 +193,7 @@ export class Skills {
       {
         key: "overhead",
         label: "Overhead",
+        term: "overhead",
         value: (s) => overhead(s),
         text: (s) => tokens(overhead(s), overhead(s) > 0),
         estimated: (s) => overhead(s) > 0,
@@ -192,6 +204,7 @@ export class Skills {
       cols.push({
         key: "attributed",
         label: "Attributed",
+        term: "attributed",
         value: (s) => (s.attributed.requests > 0 ? attributedTokens(s) : null),
         text: (s) => (s.attributed.requests > 0 ? tokens(attributedTokens(s)) : "-"),
         numeric: true,
@@ -202,6 +215,7 @@ export class Skills {
       {
         key: "follow",
         label: "Follow-on",
+        term: "follow-on",
         value: (s) =>
           s.follow_on.input + s.follow_on.output + s.follow_on.cache_read + s.follow_on.cache_write,
         text: (s) =>

@@ -1,3 +1,4 @@
+import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { minutes, number, percent, sourceLabel, tokens } from "../../core/format";
@@ -31,16 +32,16 @@ export const METRICS: Metric[] = [
 
 @Component({
   selector: "app-compare",
-  imports: [Status],
+  imports: [PageHeader, Status],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <h2>Compare</h2>
-      <p class="muted">
-        The clients side by side over the same sessions. “n/a”: the client does not record it.
-        <span class="est">~</span> marks estimates; session time runs from the first to the last
-        event, so idle time is included.
-      </p>
+      <app-page-header title="Compare" summary="The clients side by side over the same sessions.">
+        <p>
+          “n/a”: the client does not record it. <span class="est">~</span> marks estimates; session
+          time runs from the first to the last event, so idle time is included.
+        </p>
+      </app-page-header>
       <app-status
         [loading]="res.isLoading()"
         [error]="res.error()"

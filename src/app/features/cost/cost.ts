@@ -1,3 +1,5 @@
+import { PageHeader } from "../../ui/page-header";
+import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { number, pathLabel, usd } from "../../core/format";
@@ -26,16 +28,20 @@ export function money(r: CostRow): string {
 
 @Component({
   selector: "app-cost",
-  imports: [Status, DataTable],
+  imports: [PageHeader, Term, Status, DataTable],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <h2>Cost</h2>
-      <p class="muted">
-        Cost the client reported is shown as is; <span class="est">~</span> was computed from the
-        price table. Cache writes are priced as 5-minute writes. Premium requests are a plan
-        allowance, not money.
-      </p>
+      <app-page-header
+        title="Cost"
+        summary="What the usage costs, grouped by model, project, branch or issue."
+      >
+        <p>
+          Cost the client reported is shown as is; <span class="est">~</span> was computed from the
+          price table. Cache writes are priced as 5-minute writes.
+          <app-term id="premium">Premium requests</app-term> are a plan allowance, not money.
+        </p>
+      </app-page-header>
       <form class="controls" (submit)="apply($event)">
         <label>
           <span>Group by</span>
@@ -185,6 +191,7 @@ export class Cost {
     {
       key: "requests",
       label: "Requests",
+      term: "request",
       value: (r) => r.requests,
       text: (r) => number(r.requests),
       numeric: true,
