@@ -1,0 +1,23 @@
+[package]
+name = "agentlens-core"
+description = "Adapters, normalized event model and analyzers for coding-agent sessions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

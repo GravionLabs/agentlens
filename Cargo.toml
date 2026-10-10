@@ -1,0 +1,40 @@
+[workspace]
+resolver = "3"
+members = ["crates/agentlens-core", "crates/agentlens-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+authors = ["Jerome Kaufmann"]
+repository = "https://github.com/GravionLabs/agentlens"
+publish = false
+
+[workspace.dependencies]
+agentlens-core = { path = "crates/agentlens-core" }
+anyhow = "1"
+assert_cmd = "2"
+clap = { version = "4", features = ["derive"] }
+comfy-table = "8"
+csv = "1"
+insta = { version = "1", features = ["json"] }
+jiff = { version = "0.2", features = ["serde"] }
+predicates = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml_ng = "0.10"
+tempfile = "3"
+thiserror = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

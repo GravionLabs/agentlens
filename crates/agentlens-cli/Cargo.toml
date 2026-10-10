@@ -1,0 +1,31 @@
+[package]
+name = "agentlens-cli"
+description = "Command-line interface of AgentLens"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "agentlens"
+path = "src/main.rs"
+
+[dependencies]
+agentlens-core.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+comfy-table.workspace = true
+csv.workspace = true
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+predicates.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
