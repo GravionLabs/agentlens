@@ -22,16 +22,29 @@ import { UpdateStatus } from "./update-status";
       <span class="zoom" role="group" aria-label="Interface size">
         <button
           type="button"
+          class="btn btn-text btn-sm"
           title="Smaller (Ctrl -)"
           aria-label="Smaller"
           (click)="zoom.zoomOut()"
         >
           A−
         </button>
-        <button type="button" title="Reset (Ctrl 0)" aria-label="Reset size" (click)="zoom.reset()">
+        <button
+          type="button"
+          class="btn btn-text btn-sm"
+          title="Reset (Ctrl 0)"
+          aria-label="Reset size"
+          (click)="zoom.reset()"
+        >
           {{ percent() }}%
         </button>
-        <button type="button" title="Larger (Ctrl +)" aria-label="Larger" (click)="zoom.zoomIn()">
+        <button
+          type="button"
+          class="btn btn-text btn-sm"
+          title="Larger (Ctrl +)"
+          aria-label="Larger"
+          (click)="zoom.zoomIn()"
+        >
           A+
         </button>
       </span>
@@ -66,19 +79,6 @@ import { UpdateStatus } from "./update-status";
     }
     .zoom {
       gap: 2px;
-    }
-    .zoom button {
-      background: none;
-      border: 1px solid transparent;
-      border-radius: 4px;
-      color: var(--muted);
-      cursor: pointer;
-      min-width: 32px;
-      padding: 0 6px;
-    }
-    .zoom button:hover {
-      color: var(--text);
-      border-color: var(--line);
     }
     strong {
       color: var(--text);
