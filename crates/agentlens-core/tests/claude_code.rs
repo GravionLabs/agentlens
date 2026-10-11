@@ -352,3 +352,42 @@ fn tool_calls_in_a_skill_folder_become_file_uses_that_keep_only_the_skill_name()
     );
     assert!(!dump.contains("run.sh"));
 }
+
+#[test]
+fn a_typed_skill_command_is_a_user_invocation_with_the_content_the_client_injected() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/typed_skill.jsonl",
+        &format!("{SLUG}/typed_skill.jsonl"),
+    );
+    let se = read_all(&home).remove(0);
+    let skills: Vec<_> = se
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::SkillInvoked(s) => Some(s),
+            _ => None,
+        })
+        .collect();
+    // `/cliff-setup` is a skill the user typed: the message starts with the message tag, and the
+    // skill text follows as a meta message, without a call of the skill tool. `/statusline` and
+    // `/clear` are built in and load nothing.
+    assert_eq!(skills.len(), 1, "{skills:?}");
+    assert_eq!(skills[0].name, "cliff-setup");
+    assert_eq!(skills[0].trigger, SkillTrigger::User);
+    assert!(
+        skills[0].content_bytes.unwrap() > 200,
+        "the injected text is its load"
+    );
+    assert_eq!(
+        skills[0].path.as_deref(),
+        Some(Path::new("/home/u/.claude/skills/cliff-setup"))
+    );
+    // Each typed command is a turn of the user.
+    let turns = se
+        .events
+        .iter()
+        .filter(|e| matches!(e.kind, EventKind::UserTurn))
+        .count();
+    assert_eq!(turns, 3);
+}
