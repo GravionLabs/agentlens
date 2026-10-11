@@ -5,6 +5,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.1] — 2026-10-11
+
+### Bug Fixes
+- Count typed skill commands as user triggers (#269)
+
+
 ## [0.8.0] — 2026-10-11
 
 ### Documentation
