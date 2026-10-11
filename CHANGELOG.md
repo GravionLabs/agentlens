@@ -7,6 +7,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [0.8.0] — 2026-10-11
 
+### Documentation
+- Update CHANGELOG.md for v0.8.0
+
+
 ### Features
 - A download section on the site (#256)
 - A measured flag on every token count that can be an estimate (#246)
