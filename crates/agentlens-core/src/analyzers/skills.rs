@@ -57,8 +57,8 @@ impl UsageSum {
 pub struct CarryCost {
     /// Later requests that carried the skill content.
     pub requests: u64,
-    /// Skill content tokens × requests.
-    pub tokens: u64,
+    /// Skill content tokens × requests. Always an estimate: it is derived, not reported by a client.
+    pub tokens: Tokens,
     /// The part of `tokens` served from the cache.
     pub cache_read_tokens: u64,
     pub uncached_tokens: u64,
@@ -104,7 +104,7 @@ pub struct SkillStats {
 impl SkillStats {
     /// Tokens the skill adds on top of the work itself: baseline + load + carry.
     pub fn overhead_tokens(&self) -> u64 {
-        self.baseline.tokens.count + self.load.count + self.carry.tokens
+        self.baseline.tokens.count + self.load.count + self.carry.tokens.count
     }
 }
 
@@ -328,7 +328,7 @@ impl Acc {
                 (load.count as u128 * u.cache_read as u128 / total as u128) as u64
             };
             s.carry.requests += 1;
-            s.carry.tokens += load.count;
+            s.carry.tokens.count += load.count;
             s.carry.cache_read_tokens += cached;
             s.carry.uncached_tokens += load.count - cached;
         }
@@ -523,7 +523,7 @@ mod tests {
         let r = analyze(&inventory(vec![]), &[measured_session()], &CharsPerToken);
         let c = &find(&r, "demo").carry;
         assert_eq!(c.requests, 2);
-        assert_eq!(c.tokens, 2800);
+        assert_eq!(c.tokens, Tokens::estimated(2800));
         assert_eq!(c.cache_read_tokens, 2796);
         assert_eq!(c.uncached_tokens, 4);
     }

@@ -9,6 +9,7 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::model::{EventKind, SessionEvents, Source, ToolStatus};
+use crate::tokens::Tokens;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SourceStats {
@@ -26,8 +27,8 @@ pub struct SourceStats {
     /// `None` if no tool call has a recorded outcome.
     pub tool_error_rate: Option<f64>,
     pub skill_invocations: u64,
-    /// Estimated baseline + load + carry of the skills (from the skill analysis).
-    pub skill_overhead_tokens: Option<u64>,
+    /// Baseline + load + carry of the skills (from the skill analysis); an estimate.
+    pub skill_overhead_tokens: Option<Tokens>,
     /// Sum of the time between the first and last event of each session.
     pub total_duration_ms: Option<u64>,
     /// Mean over the sessions that have timestamps.
@@ -114,7 +115,7 @@ pub fn analyze(
                 tool_errors: a.errors,
                 tool_error_rate: (a.known > 0).then(|| a.errors as f64 / a.known as f64),
                 skill_invocations: a.skills,
-                skill_overhead_tokens: skill_overhead.get(&source).copied(),
+                skill_overhead_tokens: skill_overhead.get(&source).copied().map(Tokens::estimated),
                 total_duration_ms: (a.timed > 0).then_some(a.duration),
                 mean_session_ms: (a.timed > 0).then(|| a.duration / a.timed),
             }
@@ -184,7 +185,7 @@ mod tests {
             "unknown outcomes do not count"
         );
         assert_eq!(cc.skill_invocations, 1);
-        assert_eq!(cc.skill_overhead_tokens, Some(777));
+        assert_eq!(cc.skill_overhead_tokens, Some(Tokens::estimated(777)));
         // 10 minutes and 2 minutes.
         assert_eq!(cc.total_duration_ms, Some(720_000));
         assert_eq!(cc.mean_session_ms, Some(360_000));

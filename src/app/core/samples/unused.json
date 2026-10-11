@@ -14,7 +14,10 @@
         ],
         "uses": 0,
         "requests": 3,
-        "overhead_tokens": 18
+        "overhead_tokens": {
+          "count": 18,
+          "measured": false
+        }
       }
     ]
   },

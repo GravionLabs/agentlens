@@ -211,9 +211,14 @@ fn context_json_groups_by_kind_and_owner() {
         .find(|r| r["kind"] == "tool-listing" && r["owner"] == "srv")
         .unwrap();
     // Two listed tools of 15 and 14 bytes -> 4 + 4 tokens, three requests follow each.
-    assert_eq!(srv["tokens"], 8);
+    assert_eq!(srv["tokens"]["count"], 8);
+    assert_eq!(
+        srv["tokens"]["measured"], false,
+        "taken from the size in bytes"
+    );
     assert_eq!(srv["requests"], 6, "summed over both items");
-    assert_eq!(srv["overhead_tokens"], 24);
+    assert_eq!(srv["overhead_tokens"]["count"], 24);
+    assert_eq!(srv["overhead_tokens"]["measured"], false);
     assert_eq!(v["first_request"]["claude-code"]["max_tokens"], 1010);
 }
 
@@ -231,11 +236,11 @@ fn context_instructions_view_and_csv() {
     let mut lines = text.lines();
     assert_eq!(
         lines.next().unwrap(),
-        "source,project,kind,owner,items,bytes,tokens,requests,overhead_tokens"
+        "source,project,kind,owner,items,bytes,tokens,requests,overhead_tokens,tokens_measured"
     );
     assert_eq!(
         lines.next().unwrap(),
-        "claude-code,/work/demo,instruction-file,/work/demo/CLAUDE.md,1,400,100,3,300"
+        "claude-code,/work/demo,instruction-file,/work/demo/CLAUDE.md,1,400,100,3,300,false"
     );
     assert!(lines.next().is_none());
 }
@@ -277,11 +282,12 @@ fn unused_lists_idle_agents_and_mcp_servers_with_their_cost() {
     let agent = find("agent", "reviewer");
     assert_eq!(agent["uses"], 0);
     // "reviewerReviews code" = 20 characters = 5 tokens, three requests.
-    assert_eq!(agent["overhead_tokens"], 15);
+    assert_eq!(agent["overhead_tokens"]["count"], 15);
+    assert_eq!(agent["overhead_tokens"]["measured"], false);
     let server = find("mcp-server", "srv");
     assert_eq!(server["uses"], 0);
     // Listings 2 x 4 tokens, definition 38 and instructions 75 tokens, three requests each.
-    assert_eq!(server["overhead_tokens"], 363);
+    assert_eq!(server["overhead_tokens"]["count"], 363);
     assert!(!v.to_string().contains("never-read"));
 }
 

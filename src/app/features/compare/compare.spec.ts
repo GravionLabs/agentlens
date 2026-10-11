@@ -18,6 +18,12 @@ describe("compare metrics", () => {
   it("mark the skill overhead as an estimate", () => {
     const m = METRICS.find((x) => x.label === "Skill overhead")!;
     expect(m.estimated).toBe(true);
-    expect(m.value({ ...sources[0], skill_overhead_tokens: 1234 })).toBe("~1,234");
+    expect(
+      m.value({ ...sources[0], skill_overhead_tokens: { count: 1234, measured: false } }),
+    ).toBe("~1,234");
+    expect(m.value({ ...sources[0], skill_overhead_tokens: null })).toBe("n/a");
+    expect(m.value({ ...sources[0], skill_overhead_tokens: { count: 5, measured: true } })).toBe(
+      "5",
+    );
   });
 });
