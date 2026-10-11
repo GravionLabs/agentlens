@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.5.0
+
+### Application
+
+- New layout: a sidebar on the left holds navigation, filters, refresh and the update status; tables scroll on their own and keep their header; stat cards and rows are more compact.
+- Every page has a one-line summary and an "Explain" link; a Glossary page explains the terms (overhead, baseline, carry and more), and table headers and explanations link to it.
+- Faster loading on real data, refresh, readable tables, and checking for updates and installing them from the application.
+
+### Exact token counts
+
+- `--exact` (with `--exact-model`) counts text through the Anthropic `count_tokens` API instead of estimating it. It needs `ANTHROPIC_API_KEY`, caches results on disk and falls back to estimates with a warning. Instruction files and tool definitions stay estimated; the application always estimates.
+
+### Sources
+
+- OpenCode: sessions of the legacy JSON storage (before 1.2.0) are read next to the SQLite database, without counting a session twice.
+- Copilot CLI and VS Code Copilot: `import-otel` reads the OpenTelemetry file exporter (measured tokens per request, premium requests, tool calls, user turns). The export replaces the local usage of the same moment, within 250 ms.
+
+### Fixes
+
+- A Claude Code session that appears under two project directories is counted once.
+
 ## 0.4.0
 
 ### Desktop application
