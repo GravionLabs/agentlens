@@ -114,7 +114,7 @@ pub fn run(env: &Env, file: &Path, format: Format) -> Result<()> {
             );
             if also_local > 0 {
                 println!(
-                    "{also_local} of these sessions are also in the local Claude Code data; analyses count them once; the export's requests replace the local usage in the range the export covers."
+                    "{also_local} of these sessions are also in the local Claude Code or Copilot CLI data; analyses count them once; the export's requests replace the local usage in the range the export covers."
                 );
             }
             for w in &warnings {

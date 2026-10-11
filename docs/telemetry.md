@@ -10,7 +10,7 @@ AgentLens reads the local session files of each client directly. OpenTelemetry (
 |---|---|---|
 | Claude Code | Log events `claude_code.user_prompt`, `claude_code.api_request`, `claude_code.skill_activated`, `claude_code.tool_result` | Measured tokens and cost per request; `skill.name` of a request gives measured per-skill attribution (the `attributed` column of `agentlens skills`). |
 | Copilot CLI | Spans of the file exporter: `chat` (one model request with its tokens), `execute_tool`, `invoke_agent` (user turns) | Measured tokens per request, premium requests (`github.copilot.cost`) and subagent nesting. See [Copilot CLI](#copilot-cli). |
-| VS Code Copilot | Not yet | Waiting for a real export to verify the format against. AgentLens reads the local chat files instead. |
+| VS Code Copilot | The same spans as Copilot CLI | VS Code uses the same agent host, so the file has the same schema. See [VS Code](#vs-code). |
 
 Not imported: metrics (`claude_code.token.usage`, the `gen_ai.client.*` metrics of Copilot and others) are aggregates without a request or timestamp. Prompts, responses and tool arguments are never read.
 
@@ -92,3 +92,21 @@ Each line is a `span` or a `metric`. AgentLens reads the spans:
 
 Recent Copilot CLI versions also keep these numbers in their local `session-store.db`, and AgentLens reads them from there. The export then changes nothing: the request of the export replaces the local one of the same moment (the two differ by a few milliseconds, so the match allows 250 ms). It adds requests for sessions the store holds no rows for, and sessions that are only in the export.
 
+
+## VS Code
+
+The Copilot agent in VS Code writes the same span schema as Copilot CLI. Switch the file exporter on in the settings (or start VS Code with the `COPILOT_OTEL_*` variables from a terminal), reload the window and chat:
+
+```json
+{
+  "github.copilot.chat.otel.enabled": true,
+  "github.copilot.chat.otel.exporterType": "file",
+  "github.copilot.chat.otel.outfile": "/tmp/copilot-otel/vscode.jsonl"
+}
+```
+
+```sh
+agentlens import-otel /tmp/copilot-otel/vscode.jsonl
+```
+
+The exporter buffers: the file stays empty until a few spans are flushed, so close the window if nothing shows up. Next to the `chat`, `execute_tool` and `invoke_agent` spans the file holds many host spans (`github.copilot.session.timing.*`, `vscode.agent_host.*`) and lines without a `type`. They carry no tokens and are reported as "other spans" and "unknown line", which is expected. The sessions are `copilot-cli` sessions, the same as the CLI's.
