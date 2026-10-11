@@ -14,6 +14,16 @@ import { UpdateStatus } from "./update-status";
       AgentLens
       @if (sampleMode) {
         <span class="sample">sample data</span>
+        <span class="demo-note">
+          Nothing here is read from your machine.
+          <a
+            href="https://github.com/GravionLabs/agentlens/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Install the application</a
+          >
+          to analyze your own sessions.
+        </span>
       } @else if (updates.version(); as v) {
         <strong>v{{ v }}</strong>
       }
@@ -79,6 +89,9 @@ import { UpdateStatus } from "./update-status";
     }
     .zoom {
       gap: 2px;
+    }
+    .demo-note a {
+      color: var(--accent);
     }
     strong {
       color: var(--text);
