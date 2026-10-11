@@ -119,6 +119,13 @@ export const GLOSSARY: GlossaryEntry[] = [
     long: "When a skill is invoked, its full instructions enter the context once. Load is the size of that content.",
   },
   {
+    id: "file-use",
+    term: "File use",
+    group: "Skills",
+    short: "A tool call that read files or ran a script in a skill's folder without loading it.",
+    long: "A skill is not only loaded by the client's skill tool or by typing its name: a model also reads its files and runs the scripts in its folder. AgentLens counts those tool calls per installed skill (only the skill name is kept, never the command or the path), and a skill with file uses is not listed as unused. Looking after a skill does not count: listing, printing, copying or committing its files, and editing them, and neither do the file accesses of a session that edits the skill. It is a signal, not proof. Loads are shown in the uses column; file uses are listed next to them.",
+  },
+  {
     id: "carry",
     term: "Carry",
     group: "Skills",

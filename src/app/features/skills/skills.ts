@@ -13,7 +13,7 @@ import { Status } from "../../ui/status";
 const COLORS = { baseline: "var(--c-baseline)", load: "var(--c-load)", carry: "var(--c-carry)" };
 
 export function overhead(s: SkillStats): number {
-  return s.baseline.tokens.count + s.load.count + s.carry.tokens;
+  return s.baseline.tokens.count + s.load.count + s.carry.tokens.count;
 }
 
 function attributedTokens(s: SkillStats): number {
@@ -151,7 +151,12 @@ export class Skills {
             estimated: !s.baseline.tokens.measured,
           },
           { label: "load", value: s.load.count, color: COLORS.load, estimated: !s.load.measured },
-          { label: "carry", value: s.carry.tokens, color: COLORS.carry, estimated: true },
+          {
+            label: "carry",
+            value: s.carry.tokens.count,
+            color: COLORS.carry,
+            estimated: !s.carry.tokens.measured,
+          },
         ],
       })),
   );
@@ -161,6 +166,14 @@ export class Skills {
       { key: "name", label: "Skill", value: (s) => s.name },
       { key: "uses", label: "Uses", value: (s) => s.invocations, numeric: true },
       { key: "sessions", label: "Sessions", value: (s) => s.sessions, numeric: true },
+      {
+        key: "file_uses",
+        label: "File uses",
+        term: "file-use",
+        value: (s) => s.file_uses,
+        numeric: true,
+        title: "Tool calls that read or ran files in the skill's folder without loading it",
+      },
       {
         key: "load",
         label: "Load",
@@ -175,9 +188,10 @@ export class Skills {
         key: "carry",
         label: "Carry",
         term: "carry",
-        value: (s) => s.carry.tokens,
-        text: (s) => tokens(s.carry.tokens, s.carry.tokens > 0),
-        estimated: (s) => s.carry.tokens > 0,
+        value: (s) => s.carry.tokens.count,
+        text: (s) =>
+          tokens(s.carry.tokens.count, !s.carry.tokens.measured && s.carry.tokens.count > 0),
+        estimated: (s) => !s.carry.tokens.measured && s.carry.tokens.count > 0,
         numeric: true,
         title: "Loaded content sent again with every later request until a compaction",
       },

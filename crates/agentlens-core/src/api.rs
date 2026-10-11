@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use crate::adapter::{Registry, SessionFilter};
 use crate::adapters::default_registry;
+use crate::analyzers::advice::AdviceReport;
 use crate::analyzers::compare::CompareReport;
 use crate::analyzers::context::ContextReport;
 use crate::analyzers::cost::{CostReport, Grouping, WhatIfReport};
@@ -178,6 +179,12 @@ pub fn skills(ctx: &Context, f: &Filters) -> Result<Answer<SkillsData>, String> 
         report: run.report,
     };
     answer(data, run.warnings, run.errors)
+}
+
+pub fn advice(ctx: &Context, f: &Filters) -> Result<Answer<AdviceReport>, String> {
+    let (filter, only) = f.resolve(Timestamp::now())?;
+    let run = pipeline::advice_run(&ctx.registry, &ctx.env, &filter, &only, &CharsPerToken);
+    answer(run.report, run.warnings, run.errors)
 }
 
 pub fn context(ctx: &Context, f: &Filters) -> Result<Answer<ContextReport>, String> {
@@ -412,6 +419,11 @@ pub fn export(
             })
         }
         (_, "html") => Err("only the skills view can be exported as HTML".into()),
+        ("advice", "json") => exported(view, format, advice(ctx, f)?),
+        ("advice", "csv") => {
+            let a = advice(ctx, f)?;
+            csv_file(view, csv_export::advice(&a.data), a.warnings, a.errors)
+        }
         ("skills", "csv") => {
             let a = skills(ctx, f)?;
             let mut list: Vec<_> = a.data.report.skills.iter().collect();

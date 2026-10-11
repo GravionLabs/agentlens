@@ -130,9 +130,10 @@ impl Drop for Client {
     }
 }
 
-const TOOLS: [&str; 10] = [
+const TOOLS: [&str; 11] = [
     "sources",
     "skills",
+    "advice",
     "context",
     "unused",
     "flow",
@@ -241,4 +242,106 @@ fn the_binary_answers_version_and_help() {
         assert!(out.status.success());
         assert!(String::from_utf8_lossy(&out.stdout).contains("agentlens-mcp"));
     }
+}
+
+#[test]
+fn announces_tools_prompts_and_resources() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    // The initialize result was checked by `start`; ask again through a fresh server to read it.
+    let init = client.request(
+        "initialize",
+        json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "0"}
+        }),
+    );
+    let caps = &init["result"]["capabilities"];
+    assert!(caps["tools"].is_object(), "{init}");
+    assert!(caps["prompts"].is_object(), "{init}");
+    assert!(caps["resources"].is_object(), "{init}");
+    assert!(
+        init["result"]["instructions"]
+            .as_str()
+            .unwrap()
+            .contains("agentlens://glossary")
+    );
+}
+
+#[test]
+fn the_optimize_prompt_tells_an_agent_how_to_analyze_a_skill_setup() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    let list = client.request("prompts/list", json!({}));
+    let prompts = list["result"]["prompts"].as_array().expect("prompts");
+    let prompt = prompts
+        .iter()
+        .find(|p| p["name"] == "optimize-skills")
+        .expect("optimize-skills");
+    assert!(!prompt["description"].as_str().unwrap().is_empty());
+    assert!(
+        prompt["arguments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["name"] == "since")
+    );
+
+    let got = client.request(
+        "prompts/get",
+        json!({"name": "optimize-skills", "arguments": {"since": "4w"}}),
+    );
+    let text = got["result"]["messages"][0]["content"]["text"]
+        .as_str()
+        .unwrap();
+    assert_eq!(got["result"]["messages"][0]["role"], "user");
+    assert!(text.contains("last 4w"), "{text}");
+    for needle in [
+        "`advice`",
+        "agentlens://glossary",
+        "file_uses",
+        "Do not change anything",
+    ] {
+        assert!(text.contains(needle), "{needle} missing in {text}");
+    }
+    // Without an argument it looks at the last 30 days.
+    let default = client.request("prompts/get", json!({"name": "optimize-skills"}));
+    assert!(
+        default["result"]["messages"][0]["content"]["text"]
+            .as_str()
+            .unwrap()
+            .contains("last 30d")
+    );
+    let missing = client.request("prompts/get", json!({"name": "nothing"}));
+    assert!(missing.get("error").is_some(), "{missing}");
+}
+
+#[test]
+fn the_glossary_is_a_resource() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    let list = client.request("resources/list", json!({}));
+    let resources = list["result"]["resources"].as_array().expect("resources");
+    assert_eq!(resources.len(), 1);
+    assert_eq!(resources[0]["uri"], "agentlens://glossary");
+    assert_eq!(resources[0]["mimeType"], "text/markdown");
+
+    let read = client.request("resources/read", json!({"uri": "agentlens://glossary"}));
+    let text = read["result"]["contents"][0]["text"]
+        .as_str()
+        .expect("text");
+    // The terms of the analyses an agent meets in the results.
+    for term in [
+        "### Carry",
+        "### Baseline",
+        "### File use",
+        "### Measured and estimated",
+    ] {
+        assert!(text.contains(term), "{term} missing");
+    }
+    assert_eq!(read["result"]["contents"][0]["uri"], "agentlens://glossary");
+
+    let unknown = client.request("resources/read", json!({"uri": "agentlens://nothing"}));
+    assert!(unknown.get("error").is_some(), "{unknown}");
 }

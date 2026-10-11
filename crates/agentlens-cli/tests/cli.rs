@@ -211,9 +211,14 @@ fn context_json_groups_by_kind_and_owner() {
         .find(|r| r["kind"] == "tool-listing" && r["owner"] == "srv")
         .unwrap();
     // Two listed tools of 15 and 14 bytes -> 4 + 4 tokens, three requests follow each.
-    assert_eq!(srv["tokens"], 8);
+    assert_eq!(srv["tokens"]["count"], 8);
+    assert_eq!(
+        srv["tokens"]["measured"], false,
+        "taken from the size in bytes"
+    );
     assert_eq!(srv["requests"], 6, "summed over both items");
-    assert_eq!(srv["overhead_tokens"], 24);
+    assert_eq!(srv["overhead_tokens"]["count"], 24);
+    assert_eq!(srv["overhead_tokens"]["measured"], false);
     assert_eq!(v["first_request"]["claude-code"]["max_tokens"], 1010);
 }
 
@@ -231,11 +236,11 @@ fn context_instructions_view_and_csv() {
     let mut lines = text.lines();
     assert_eq!(
         lines.next().unwrap(),
-        "source,project,kind,owner,items,bytes,tokens,requests,overhead_tokens"
+        "source,project,kind,owner,items,bytes,tokens,requests,overhead_tokens,tokens_measured"
     );
     assert_eq!(
         lines.next().unwrap(),
-        "claude-code,/work/demo,instruction-file,/work/demo/CLAUDE.md,1,400,100,3,300"
+        "claude-code,/work/demo,instruction-file,/work/demo/CLAUDE.md,1,400,100,3,300,false"
     );
     assert!(lines.next().is_none());
 }
@@ -277,11 +282,12 @@ fn unused_lists_idle_agents_and_mcp_servers_with_their_cost() {
     let agent = find("agent", "reviewer");
     assert_eq!(agent["uses"], 0);
     // "reviewerReviews code" = 20 characters = 5 tokens, three requests.
-    assert_eq!(agent["overhead_tokens"], 15);
+    assert_eq!(agent["overhead_tokens"]["count"], 15);
+    assert_eq!(agent["overhead_tokens"]["measured"], false);
     let server = find("mcp-server", "srv");
     assert_eq!(server["uses"], 0);
     // Listings 2 x 4 tokens, definition 38 and instructions 75 tokens, three requests each.
-    assert_eq!(server["overhead_tokens"], 363);
+    assert_eq!(server["overhead_tokens"]["count"], 363);
     assert!(!v.to_string().contains("never-read"));
 }
 
@@ -1207,4 +1213,145 @@ fn mcp_setup_registers_claude_code_with_its_own_command() {
         format!("mcp add --scope user agentlens -- {}", bin.display())
     );
     assert_eq!(lines[1], "mcp remove --scope user agentlens");
+}
+
+// ---- skills used through their files ----
+
+fn home_with_skill_files() -> TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let projects = dir.path().join(".claude/projects/-work-demo");
+    fs::create_dir_all(&projects).unwrap();
+    fs::copy(
+        fixtures().join("skill_files.jsonl"),
+        projects.join("skill_files.jsonl"),
+    )
+    .unwrap();
+    for name in ["demo", "idle"] {
+        let d = dir.path().join(format!(".claude/skills/{name}"));
+        fs::create_dir_all(&d).unwrap();
+        fs::write(
+            d.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: Does {name} things\n---\nbody"),
+        )
+        .unwrap();
+    }
+    dir
+}
+
+#[test]
+fn a_skill_used_only_through_its_files_is_not_unused() {
+    let home = home_with_skill_files();
+    // The skills view shows the file uses: two tool calls on the files of `demo`, none on `idle`.
+    let v = json(agentlens(&home).args(["skills", "--format", "json"]));
+    let skill = |name: &str| {
+        v["skills"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["name"] == name)
+            .unwrap_or_else(|| panic!("{name} missing"))
+            .clone()
+    };
+    assert_eq!(skill("demo")["file_uses"], 2);
+    assert_eq!(skill("demo")["invocations"], 0);
+    assert_eq!(skill("idle")["file_uses"], 0);
+    assert!(
+        v["skills"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|s| s["name"] != "skills.ts")
+    );
+    agentlens(&home)
+        .arg("skills")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("file uses"));
+
+    // `unused` lists the idle skill and not the one whose files are in use.
+    let u = json(agentlens(&home).args(["unused", "--format", "json"]));
+    let names: Vec<&str> = u["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|i| i["kind"] == "skill")
+        .map(|i| i["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["idle"]);
+    // The CSV keeps its columns and adds the count at the end.
+    let out = agentlens(&home)
+        .args(["skills", "--format", "csv"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let header = String::from_utf8(out).unwrap();
+    assert!(
+        header
+            .lines()
+            .next()
+            .unwrap()
+            .ends_with(",overhead_measured,file_uses")
+    );
+}
+
+// ---- advise ----
+
+#[test]
+fn advise_lists_what_to_change_in_json_csv_and_a_table() {
+    let home = home();
+    let v = json(agentlens(&home).args(["advise", "--format", "json"]));
+    assert_eq!(v["installed_skills"], 3);
+    assert_eq!(
+        v["baseline_total"]["measured"], false,
+        "descriptions are estimated"
+    );
+    let findings = v["findings"].as_array().unwrap();
+    let unused = findings
+        .iter()
+        .find(|f| f["kind"] == "unused-skills")
+        .expect("an installed skill was never used");
+    let names: Vec<&str> = unused["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"unused"), "{names:?}");
+    assert!(!names.contains(&"demo"), "demo was loaded");
+    assert!(unused["explanation"].as_str().unwrap().len() > 20);
+    assert!(unused["items"][0]["tokens"]["measured"].is_boolean());
+
+    let out = agentlens(&home)
+        .args(["advise", "--format", "csv"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert_eq!(
+        text.lines().next().unwrap(),
+        "finding,skill,tokens,tokens_measured,requests,detail"
+    );
+    assert!(text.contains("unused-skills,unused,"));
+
+    agentlens(&home)
+        .arg("advise")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Unused skills"))
+        .stdout(predicate::str::contains("What to do:"))
+        .stdout(predicate::str::contains("~ estimated"));
+}
+
+#[test]
+fn advise_has_nothing_to_say_without_sessions() {
+    let home = tempfile::tempdir().unwrap();
+    agentlens(&home)
+        .arg("advise")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Nothing to suggest"));
 }

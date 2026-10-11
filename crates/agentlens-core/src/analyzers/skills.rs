@@ -57,8 +57,8 @@ impl UsageSum {
 pub struct CarryCost {
     /// Later requests that carried the skill content.
     pub requests: u64,
-    /// Skill content tokens × requests.
-    pub tokens: u64,
+    /// Skill content tokens × requests. Always an estimate: it is derived, not reported by a client.
+    pub tokens: Tokens,
     /// The part of `tokens` served from the cache.
     pub cache_read_tokens: u64,
     pub uncached_tokens: u64,
@@ -79,6 +79,12 @@ pub struct SkillStats {
     /// Clients that load the skill according to the inventory.
     pub clients: Vec<Source>,
     pub invocations: u32,
+    /// Tool calls that read or searched the files of the skill, or ran a script from its folder, without
+    /// loading it. A skill used only like this is not unused. Counted for installed skills only, and not
+    /// in a session that edits the skill (that is working on it).
+    #[serde(default)]
+    pub file_uses: u32,
+    /// Sessions in which the skill was loaded.
     pub sessions: u32,
     pub projects: Vec<PathBuf>,
     pub first_used: Option<Timestamp>,
@@ -104,7 +110,7 @@ pub struct SkillStats {
 impl SkillStats {
     /// Tokens the skill adds on top of the work itself: baseline + load + carry.
     pub fn overhead_tokens(&self) -> u64 {
-        self.baseline.tokens.count + self.load.count + self.carry.tokens
+        self.baseline.tokens.count + self.load.count + self.carry.tokens.count
     }
 }
 
@@ -187,6 +193,27 @@ pub fn analyze(
             acc.record(se, i, e.at, skill, inventory, estimator);
         }
 
+        // Tool calls that read or run files in the folder of an installed skill: use without loading.
+        // A session that also edits the skill is working on it, and what it reads or runs there is
+        // part of that work.
+        let edited: BTreeSet<&str> = se
+            .events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                EventKind::SkillFileEdit(name) => Some(name.as_str()),
+                _ => None,
+            })
+            .collect();
+        for e in &se.events {
+            if let EventKind::SkillFileUse(name) = &e.kind
+                && !edited.contains(name.as_str())
+                && let Some(acc) = accs.get_mut(name)
+                && acc.stats.in_inventory
+            {
+                acc.stats.file_uses += 1;
+            }
+        }
+
         for e in &se.events {
             if let EventKind::Usage(u) = &e.kind
                 && let Some(name) = &u.skill
@@ -226,6 +253,7 @@ impl Acc {
                 in_inventory,
                 clients,
                 invocations: 0,
+                file_uses: 0,
                 sessions: 0,
                 projects: Vec::new(),
                 first_used: None,
@@ -328,7 +356,7 @@ impl Acc {
                 (load.count as u128 * u.cache_read as u128 / total as u128) as u64
             };
             s.carry.requests += 1;
-            s.carry.tokens += load.count;
+            s.carry.tokens.count += load.count;
             s.carry.cache_read_tokens += cached;
             s.carry.uncached_tokens += load.count - cached;
         }
@@ -519,11 +547,96 @@ mod tests {
     }
 
     #[test]
+    fn files_used_without_loading_count_for_installed_skills_only() {
+        let inv = inventory(vec![
+            entry(
+                "tool",
+                10,
+                100,
+                LocationKind::UserClaude,
+                "/home/u/.claude/skills",
+            ),
+            entry(
+                "idle",
+                10,
+                100,
+                LocationKind::UserClaude,
+                "/home/u/.claude/skills",
+            ),
+        ]);
+        let se = session(
+            "s",
+            Source::ClaudeCode,
+            "/work/demo",
+            vec![
+                EventKind::SkillFileUse("tool".into()),
+                EventKind::SkillFileUse("tool".into()),
+                // A folder called `skills` in a project, not an installed skill.
+                EventKind::SkillFileUse("features".into()),
+                usage(1, 1, 0, 0, false),
+            ],
+        );
+        let r = analyze(&inv, &[se], &CharsPerToken);
+        assert_eq!(find(&r, "tool").file_uses, 2);
+        assert_eq!(find(&r, "tool").invocations, 0, "it was never loaded");
+        assert_eq!(find(&r, "idle").file_uses, 0);
+        assert!(r.skills.iter().all(|s| s.name != "features"));
+    }
+
+    #[test]
+    fn a_session_that_edits_a_skill_does_not_use_it_through_its_files() {
+        let inv = inventory(vec![
+            entry(
+                "tool",
+                10,
+                100,
+                LocationKind::UserClaude,
+                "/home/u/.claude/skills",
+            ),
+            entry(
+                "other",
+                10,
+                100,
+                LocationKind::UserClaude,
+                "/home/u/.claude/skills",
+            ),
+        ]);
+        let using = session(
+            "using",
+            Source::ClaudeCode,
+            "/work/demo",
+            vec![
+                EventKind::SkillFileUse("tool".into()),
+                usage(1, 1, 0, 0, false),
+            ],
+        );
+        // This session reads `tool` and `other`, but it also edits `tool`.
+        let working = session(
+            "working",
+            Source::ClaudeCode,
+            "/work/demo",
+            vec![
+                EventKind::SkillFileUse("tool".into()),
+                EventKind::SkillFileUse("other".into()),
+                EventKind::SkillFileEdit("tool".into()),
+                usage(1, 1, 0, 0, false),
+            ],
+        );
+        let r = analyze(&inv, &[using, working], &CharsPerToken);
+        assert_eq!(
+            find(&r, "tool").file_uses,
+            1,
+            "only the session that does not edit it"
+        );
+        assert_eq!(find(&r, "other").file_uses, 1);
+    }
+
+    #[test]
     fn carry_counts_later_main_requests_until_the_end_of_the_window() {
         let r = analyze(&inventory(vec![]), &[measured_session()], &CharsPerToken);
         let c = &find(&r, "demo").carry;
         assert_eq!(c.requests, 2);
-        assert_eq!(c.tokens, 2800);
+        assert_eq!(c.tokens, Tokens::estimated(2800));
         assert_eq!(c.cache_read_tokens, 2796);
         assert_eq!(c.uncached_tokens, 4);
     }

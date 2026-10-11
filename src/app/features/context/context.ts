@@ -3,7 +3,7 @@ import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { number, pathLabel, shortPath, sourceLabel, tokens } from "../../core/format";
-import type { ContextKind, ContextReport, ContextRow } from "../../core/types";
+import type { ContextKind, ContextReport, ContextRow, Tokens } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
 
@@ -19,6 +19,11 @@ const VIEWS: { id: View; label: string }[] = [
 
 type Grouping = "owner" | "project";
 
+/** Adds two counts; the sum is measured only if both are. */
+function add(a: Tokens, b: Tokens): Tokens {
+  return { count: a.count + b.count, measured: a.measured && b.measured };
+}
+
 /** Sums the rows of all projects: one row per source, kind and owner. */
 export function byOwner(rows: ContextRow[]): ContextRow[] {
   const sums = new Map<string, ContextRow>();
@@ -30,9 +35,9 @@ export function byOwner(rows: ContextRow[]): ContextRow[] {
     } else {
       sum.items += r.items;
       sum.bytes += r.bytes;
-      sum.tokens += r.tokens;
+      sum.tokens = add(sum.tokens, r.tokens);
       sum.requests += r.requests;
-      sum.overhead_tokens += r.overhead_tokens;
+      sum.overhead_tokens = add(sum.overhead_tokens, r.overhead_tokens);
     }
   }
   return [...sums.values()];
@@ -207,9 +212,9 @@ export class Context {
       key: "tokens",
       label: "Tokens",
       term: "token",
-      value: (r) => r.tokens,
-      text: (r) => tokens(r.tokens, true),
-      estimated: () => true,
+      value: (r) => r.tokens.count,
+      text: (r) => tokens(r.tokens.count, !r.tokens.measured),
+      estimated: (r) => !r.tokens.measured,
       numeric: true,
     },
     {
@@ -224,9 +229,9 @@ export class Context {
       key: "overhead",
       label: "Overhead",
       term: "overhead",
-      value: (r) => r.overhead_tokens,
-      text: (r) => tokens(r.overhead_tokens, true),
-      estimated: () => true,
+      value: (r) => r.overhead_tokens.count,
+      text: (r) => tokens(r.overhead_tokens.count, !r.overhead_tokens.measured),
+      estimated: (r) => !r.overhead_tokens.measured,
       numeric: true,
     },
   ];

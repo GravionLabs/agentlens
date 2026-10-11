@@ -23,7 +23,10 @@ export const METRICS: Metric[] = [
   { label: "Skill invocations", value: (s) => number(s.skill_invocations) },
   {
     label: "Skill overhead",
-    value: (s) => tokens(s.skill_overhead_tokens, true),
+    value: (s) =>
+      s.skill_overhead_tokens
+        ? tokens(s.skill_overhead_tokens.count, !s.skill_overhead_tokens.measured)
+        : "n/a",
     estimated: true,
   },
   { label: "Mean session (min)", value: (s) => minutes(s.mean_session_ms) },

@@ -52,6 +52,7 @@ export default defineConfig({
     siteTitle: "AgentLens",
     nav: [
       { text: "Guide", link: "/guide/" },
+      { text: "Download", link: "/guide/download" },
       // Not a page of this site (the workflow adds it next to it): a full page load.
       { text: "Try the app", link: "/app/", target: "_self" },
       { text: "GitHub", link: REPO_URL },

@@ -8,13 +8,14 @@ use std::process::{Command, Stdio};
 
 use serde_json::{Value, json};
 
-const MARKERS: [&str; 6] = [
+const MARKERS: [&str; 7] = [
     "CANARY-PROMPT-61c4",
     "CANARY-ANSWER-61c4",
     "CANARY-TOOL-ARG-61c4",
     "CANARY-TOOL-RESULT-61c4",
     "CANARY-INSTRUCTIONS-61c4",
     "CANARY-SKILL-BODY-61c4",
+    "CANARY-SCRIPT-61c4",
 ];
 
 fn session() -> String {
@@ -40,6 +41,14 @@ fn session() -> String {
         "content":[{"type":"text","text":MARKERS[1]}],
         "usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":100,"cache_creation_input_tokens":200}});
     out += &line(a2);
+    // A script run from the folder of an installed skill: its name may show, the rest of the call not.
+    let mut a3 = base("2026-10-01T10:00:03.500Z", "assistant");
+    a3["requestId"] = json!("r1");
+    a3["message"] = json!({"id":"m1","role":"assistant","model":"claude-test-1",
+        "content":[{"type":"tool_use","id":"t2","name":"Bash",
+            "input":{"command":format!("bash ~/.claude/skills/canary-skill/scripts/{}.sh", MARKERS[6])}}],
+        "usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":100,"cache_creation_input_tokens":200}});
+    out += &line(a3);
     let mut res = base("2026-10-01T10:00:04Z", "user");
     res["message"] = json!({"role":"user","content":[
         {"type":"tool_result","tool_use_id":"t1","content":MARKERS[3],"is_error":true}]});
@@ -139,9 +148,9 @@ fn no_tool_returns_what_was_written_in_a_session() {
 }
 
 #[test]
-fn tools_say_which_numbers_are_estimates() {
-    // Some reports are plain numbers (the JSON of the CLI is the same), so a tool says in its description
-    // which of them are estimates, and where a count has a `measured` flag the flag is kept.
+fn every_token_count_that_can_be_an_estimate_carries_the_flag() {
+    // The reports mark an estimate with a `measured` flag next to the count, so an agent does not
+    // have to know by convention which numbers are guesses.
     let dir = tempfile::tempdir().unwrap();
     let projects = dir.path().join(".claude/projects/-work-canary");
     fs::create_dir_all(&projects).unwrap();
@@ -163,53 +172,66 @@ fn tools_say_which_numbers_are_estimates() {
         .spawn()
         .unwrap();
     let mut stdin = child.stdin.take().unwrap();
-    for m in [
+    let tools = ["skills", "context", "unused", "compare"];
+    let mut messages = vec![
         json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
             "protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}),
         json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
-        json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}),
-        json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"skills","arguments":{}}}),
-    ] {
+    ];
+    for (i, tool) in tools.iter().enumerate() {
+        messages.push(json!({"jsonrpc":"2.0","id":10 + i,"method":"tools/call",
+            "params":{"name":tool,"arguments":{}}}));
+    }
+    for m in &messages {
         writeln!(stdin, "{m}").unwrap();
     }
     stdin.flush().unwrap();
     let mut reader = BufReader::new(child.stdout.take().unwrap());
-    let (mut list, mut skills) = (Value::Null, Value::Null);
+    let mut results = std::collections::BTreeMap::new();
     let mut line = String::new();
-    while list.is_null() || skills.is_null() {
+    while results.len() < tools.len() {
         line.clear();
         assert!(reader.read_line(&mut line).unwrap() > 0);
         let v: Value = serde_json::from_str(&line).unwrap();
-        match v["id"].as_u64() {
-            Some(2) => list = v,
-            Some(3) => skills = v,
-            _ => {}
+        if let Some(id) = v["id"].as_u64().filter(|id| *id >= 10) {
+            results.insert(
+                tools[(id - 10) as usize],
+                v["result"]["structuredContent"]["data"].clone(),
+            );
         }
     }
     let _ = child.kill();
     let _ = child.wait();
 
-    let description = |name: &str| -> String {
-        list["result"]["tools"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|t| t["name"] == name)
-            .unwrap()["description"]
-            .as_str()
-            .unwrap()
-            .to_owned()
-    };
-    for tool in ["skills", "context", "unused", "compare"] {
+    let flag = |t: &Value| t["measured"].is_boolean() && t["count"].is_u64();
+    // Skills: the load, the baseline and the carry.
+    let skills = results["skills"]["report"]["skills"].as_array().unwrap();
+    assert!(!skills.is_empty());
+    for s in skills {
         assert!(
-            description(tool).contains("estimate"),
-            "{tool} must say what is estimated"
+            flag(&s["load"]) && flag(&s["baseline"]["tokens"]) && flag(&s["carry"]["tokens"]),
+            "{s}"
         );
+        assert_eq!(s["carry"]["tokens"]["measured"], false, "carry is derived");
     }
-    assert!(description("cost").contains("measured_usd"));
-    let text = skills["result"]["structuredContent"].to_string();
+    // Context: every row's size and overhead.
+    let rows = results["context"]["rows"].as_array().unwrap();
+    assert!(!rows.is_empty());
+    for r in rows {
+        assert!(flag(&r["tokens"]) && flag(&r["overhead_tokens"]), "{r}");
+    }
+    // Unused: the idle cost, where it is known.
+    let items = results["unused"]["items"].as_array().unwrap();
     assert!(
-        text.contains("\"measured\""),
-        "the flags of the report stay: {text}"
+        items.iter().any(|i| flag(&i["overhead_tokens"])),
+        "{items:?}"
     );
+    // Compare: the skill overhead, where there is one.
+    let sources = results["compare"]["sources"].as_array().unwrap();
+    for s in sources
+        .iter()
+        .filter(|s| !s["skill_overhead_tokens"].is_null())
+    {
+        assert!(flag(&s["skill_overhead_tokens"]), "{s}");
+    }
 }

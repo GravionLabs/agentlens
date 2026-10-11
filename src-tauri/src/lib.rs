@@ -37,6 +37,14 @@ async fn overview(
 }
 
 #[tauri::command]
+async fn advice(
+    ctx: Shared<'_>,
+    filters: Filters,
+) -> Result<Answer<agentlens_core::analyzers::advice::AdviceReport>, String> {
+    blocking(&ctx, move |c| api::advice(c, &filters)).await
+}
+
+#[tauri::command]
 async fn skills(ctx: Shared<'_>, filters: Filters) -> Result<Answer<api::SkillsData>, String> {
     blocking(&ctx, move |c| api::skills(c, &filters)).await
 }
@@ -228,6 +236,7 @@ pub fn run() {
             refresh,
             overview,
             skills,
+            advice,
             context,
             unused,
             flow,

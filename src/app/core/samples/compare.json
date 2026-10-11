@@ -12,7 +12,10 @@
         "tool_errors": 0,
         "tool_error_rate": null,
         "skill_invocations": 0,
-        "skill_overhead_tokens": 18,
+        "skill_overhead_tokens": {
+          "count": 18,
+          "measured": false
+        },
         "total_duration_ms": 30000,
         "mean_session_ms": 30000
       },
@@ -27,7 +30,10 @@
         "tool_errors": 1,
         "tool_error_rate": 0.5,
         "skill_invocations": 2,
-        "skill_overhead_tokens": 9,
+        "skill_overhead_tokens": {
+          "count": 9,
+          "measured": false
+        },
         "total_duration_ms": 9000,
         "mean_session_ms": 9000
       }

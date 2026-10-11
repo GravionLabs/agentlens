@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-/// A token count and whether it was measured by a client or estimated.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// A token count and whether it was measured by a client or estimated. The default is nothing, not measured.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tokens {
     pub count: u64,
     pub measured: bool,

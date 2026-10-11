@@ -7,6 +7,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use crate::analyzers::advice::AdviceReport;
 use crate::analyzers::compare::SourceStats;
 use crate::analyzers::context::ContextRow;
 use crate::analyzers::cost::{CostRow, WhatIfReport};
@@ -83,6 +84,10 @@ pub fn skills(skills: &[&SkillStats]) -> Result<String, CsvError> {
         "follow_on_output",
         "attributed_requests",
         "attributed_tokens",
+        "baseline_measured",
+        "carry_measured",
+        "overhead_measured",
+        "file_uses",
     ];
     let rows = skills
         .iter()
@@ -94,7 +99,7 @@ pub fn skills(skills: &[&SkillStats]) -> Result<String, CsvError> {
                 s.sessions.to_string(),
                 s.load.count.to_string(),
                 s.load.measured.to_string(),
-                s.carry.tokens.to_string(),
+                s.carry.tokens.count.to_string(),
                 s.baseline.tokens.count.to_string(),
                 s.overhead_tokens().to_string(),
                 s.follow_on.requests.to_string(),
@@ -102,6 +107,11 @@ pub fn skills(skills: &[&SkillStats]) -> Result<String, CsvError> {
                 s.follow_on.output.to_string(),
                 s.attributed.requests.to_string(),
                 attributed_tokens(s).to_string(),
+                s.baseline.tokens.measured.to_string(),
+                s.carry.tokens.measured.to_string(),
+                (s.baseline.tokens.measured && s.load.measured && s.carry.tokens.measured)
+                    .to_string(),
+                s.file_uses.to_string(),
             ]
         })
         .collect();
@@ -120,6 +130,7 @@ pub fn context(rows: &[&ContextRow]) -> Result<String, CsvError> {
         "tokens",
         "requests",
         "overhead_tokens",
+        "tokens_measured",
     ];
     let body = rows
         .iter()
@@ -131,9 +142,10 @@ pub fn context(rows: &[&ContextRow]) -> Result<String, CsvError> {
                 r.owner.clone(),
                 r.items.to_string(),
                 r.bytes.to_string(),
-                r.tokens.to_string(),
+                r.tokens.count.to_string(),
                 r.requests.to_string(),
-                r.overhead_tokens.to_string(),
+                r.overhead_tokens.count.to_string(),
+                r.tokens.measured.to_string(),
             ]
         })
         .collect();
@@ -150,6 +162,7 @@ pub fn unused(items: &[&UnusedItem]) -> Result<String, CsvError> {
         "uses",
         "requests",
         "overhead_tokens",
+        "overhead_measured",
     ];
     let rows = items
         .iter()
@@ -165,7 +178,12 @@ pub fn unused(items: &[&UnusedItem]) -> Result<String, CsvError> {
                     .join(" "),
                 i.uses.to_string(),
                 i.requests.to_string(),
-                i.overhead_tokens.map(|t| t.to_string()).unwrap_or_default(),
+                i.overhead_tokens
+                    .map(|t| t.count.to_string())
+                    .unwrap_or_default(),
+                i.overhead_tokens
+                    .map(|t| t.measured.to_string())
+                    .unwrap_or_default(),
             ]
         })
         .collect();
@@ -188,6 +206,7 @@ pub fn compare(sources: &[SourceStats]) -> Result<String, CsvError> {
         "skill_overhead_tokens",
         "total_duration_ms",
         "mean_session_ms",
+        "skill_overhead_measured",
     ];
     let opt = |v: Option<String>| v.unwrap_or_default();
     let rows = sources
@@ -204,9 +223,10 @@ pub fn compare(sources: &[SourceStats]) -> Result<String, CsvError> {
                 s.tool_errors.to_string(),
                 opt(s.tool_error_rate.map(|v| format!("{v:.6}"))),
                 s.skill_invocations.to_string(),
-                opt(s.skill_overhead_tokens.map(|v| v.to_string())),
+                opt(s.skill_overhead_tokens.map(|v| v.count.to_string())),
                 opt(s.total_duration_ms.map(|v| v.to_string())),
                 opt(s.mean_session_ms.map(|v| v.to_string())),
+                opt(s.skill_overhead_tokens.map(|v| v.measured.to_string())),
             ]
         })
         .collect();
@@ -389,5 +409,35 @@ pub fn errors(tools: &[ToolErrors]) -> Result<String, CsvError> {
             ]
         })
         .collect();
+    write(&header, rows)
+}
+
+/// `advise`: one row per skill of each finding.
+pub fn advice(report: &AdviceReport) -> Result<String, CsvError> {
+    let header = [
+        "finding",
+        "skill",
+        "tokens",
+        "tokens_measured",
+        "requests",
+        "detail",
+    ];
+    let mut rows = Vec::new();
+    for f in &report.findings {
+        let kind = serde_json::to_value(f.kind)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default();
+        for i in &f.items {
+            rows.push(vec![
+                kind.clone(),
+                i.name.clone(),
+                i.tokens.count.to_string(),
+                i.tokens.measured.to_string(),
+                i.requests.to_string(),
+                i.detail.clone(),
+            ]);
+        }
+    }
     write(&header, rows)
 }

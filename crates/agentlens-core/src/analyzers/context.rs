@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::instructions::InstructionFile;
 use crate::model::{ContextKind, EventKind, SessionEvents, Source};
-use crate::tokens::TokenEstimator;
+use crate::tokens::{TokenEstimator, Tokens};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContextRow {
@@ -26,12 +26,25 @@ pub struct ContextRow {
     /// Distinct items, counted once per session.
     pub items: u32,
     pub bytes: u64,
-    /// Estimated tokens of the items, counted once per session.
-    pub tokens: u64,
+    /// Tokens of the items, counted once per session. Measured only if the client reported the size of
+    /// every item; otherwise estimated from the bytes.
+    pub tokens: Tokens,
     /// Sum over the items of the main-agent requests that followed them.
     pub requests: u64,
-    /// Estimated tokens x requests.
-    pub overhead_tokens: u64,
+    /// Tokens x requests; measured exactly when `tokens` is.
+    pub overhead_tokens: Tokens,
+}
+
+impl ContextRow {
+    /// Adds an item of `tokens` that `requests` main-agent requests carried. The row stays measured
+    /// only while every item is.
+    fn add(&mut self, tokens: Tokens, requests: u64) {
+        self.tokens.count += tokens.count;
+        self.tokens.measured &= tokens.measured;
+        self.requests += requests;
+        self.overhead_tokens.count += tokens.count * requests;
+        self.overhead_tokens.measured = self.tokens.measured;
+    }
 }
 
 /// Measured size of the first request of each session.
@@ -124,7 +137,10 @@ pub fn analyze(
         let seen_instruction_files = seen.keys().any(|(k, _)| *k == ContextKind::InstructionFile);
         for ((kind, name), (i, bytes, reported)) in seen {
             let owner = owner(kind, name);
-            let tokens = reported.unwrap_or_else(|| estimator.count_bytes(bytes).count);
+            let tokens = match reported {
+                Some(count) => Tokens::measured(count),
+                None => estimator.count_bytes(bytes),
+            };
             let requests = later[i + 1];
             let row = rows
                 .entry((source, se.session.project_dir.clone(), kind, owner.clone()))
@@ -135,15 +151,13 @@ pub fn analyze(
                     owner,
                     items: 0,
                     bytes: 0,
-                    tokens: 0,
+                    tokens: Tokens::measured(0),
                     requests: 0,
-                    overhead_tokens: 0,
+                    overhead_tokens: Tokens::measured(0),
                 });
             row.items += 1;
             row.bytes += bytes;
-            row.tokens += tokens;
-            row.requests += requests;
-            row.overhead_tokens += tokens * requests;
+            row.add(tokens, requests);
         }
         let reported = seen_instruction_files;
         if !reported {
@@ -169,15 +183,13 @@ pub fn analyze(
                         owner: f.path.display().to_string(),
                         items: 0,
                         bytes: 0,
-                        tokens: 0,
+                        tokens: Tokens::measured(0),
                         requests: 0,
-                        overhead_tokens: 0,
+                        overhead_tokens: Tokens::measured(0),
                     });
                 row.items += 1;
                 row.bytes += f.bytes;
-                row.tokens += f.tokens.count;
-                row.requests += requests;
-                row.overhead_tokens += f.tokens.count * requests;
+                row.add(f.tokens, requests);
             }
         }
         if !any {
@@ -188,7 +200,8 @@ pub fn analyze(
     report.rows = rows.into_values().collect();
     report.rows.sort_by(|a, b| {
         b.overhead_tokens
-            .cmp(&a.overhead_tokens)
+            .count
+            .cmp(&a.overhead_tokens.count)
             .then_with(|| a.owner.cmp(&b.owner))
     });
     report
@@ -198,7 +211,7 @@ pub fn analyze(
 mod tests {
     use super::*;
     use crate::model::{ContextItem, Session, Usage};
-    use crate::tokens::CharsPerToken;
+    use crate::tokens::{CharsPerToken, Tokens};
 
     fn item(kind: ContextKind, name: Option<&str>, bytes: u64) -> EventKind {
         EventKind::ContextItem(ContextItem {
@@ -255,13 +268,19 @@ mod tests {
         };
         let claude = row(InstructionFile, "/work/demo/CLAUDE.md");
         assert_eq!(
-            (claude.tokens, claude.requests, claude.overhead_tokens),
+            (
+                claude.tokens.count,
+                claude.requests,
+                claude.overhead_tokens.count
+            ),
             (100, 3, 300)
         );
         let srv = row(ToolListing, "srv");
-        assert_eq!((srv.items, srv.tokens), (2, 10 + 5));
-        assert_eq!(srv.overhead_tokens, 15 * 3);
-        assert_eq!(row(ToolListing, "built-in").tokens, 2);
+        assert_eq!((srv.items, srv.tokens.count), (2, 10 + 5));
+        assert_eq!(srv.overhead_tokens.count, 15 * 3);
+        assert_eq!(row(ToolListing, "built-in").tokens.count, 2);
+        // Sizes taken from the bytes are estimates, and so is what is multiplied from them.
+        assert!(!claude.tokens.measured && !claude.overhead_tokens.measured);
         assert_eq!(
             r.rows[0].owner, "/work/demo/CLAUDE.md",
             "sorted by overhead"
@@ -281,9 +300,9 @@ mod tests {
         );
         let r = analyze(&[se], &[], &CharsPerToken);
         let row = &r.rows[0];
-        assert_eq!((row.items, row.bytes, row.tokens), (1, 80, 20));
+        assert_eq!((row.items, row.bytes, row.tokens.count), (1, 80, 20));
         assert_eq!(row.requests, 2);
-        assert_eq!(row.overhead_tokens, 40);
+        assert_eq!(row.overhead_tokens.count, 40);
     }
 
     #[test]
@@ -303,7 +322,11 @@ mod tests {
         );
         let r = analyze(&[se], &[], &CharsPerToken);
         assert_eq!(r.rows[0].owner, "all tools");
-        assert_eq!((r.rows[0].tokens, r.rows[0].overhead_tokens), (500, 1000));
+        assert_eq!(
+            (r.rows[0].tokens, r.rows[0].overhead_tokens),
+            (Tokens::measured(500), Tokens::measured(1000)),
+            "a size the client reported is measured"
+        );
     }
 
     #[test]
@@ -392,8 +415,8 @@ mod tests {
         let r = analyze(&[se], &files, &CharsPerToken);
         let owners: Vec<_> = r.rows.iter().map(|x| x.owner.as_str()).collect();
         assert_eq!(owners, ["/work/demo/AGENTS.md", "/home/u/AGENTS.md"]);
-        assert_eq!(r.rows[0].overhead_tokens, 100 * 3);
-        assert_eq!(r.rows[1].overhead_tokens, 10 * 3);
+        assert_eq!(r.rows[0].overhead_tokens.count, 100 * 3);
+        assert_eq!(r.rows[1].overhead_tokens.count, 10 * 3);
         assert!(
             r.unavailable.is_empty(),
             "inventory data counts as available"
@@ -421,6 +444,34 @@ mod tests {
         )];
         let r = analyze(&[se], &files, &CharsPerToken);
         assert_eq!(r.rows.len(), 1);
-        assert_eq!(r.rows[0].tokens, 10);
+        assert_eq!(r.rows[0].tokens.count, 10);
+    }
+
+    #[test]
+    fn a_row_is_measured_only_if_every_item_in_it_is() {
+        let reported = |tokens| {
+            EventKind::ContextItem(ContextItem {
+                kind: ContextKind::ToolDefinition,
+                name: None,
+                bytes: 0,
+                tokens,
+            })
+        };
+        let measured = session(
+            Source::VsCodeCopilot,
+            vec![reported(Some(100)), request(1, false)],
+        );
+        let estimated = session(
+            Source::VsCodeCopilot,
+            vec![reported(None), request(1, false)],
+        );
+        let r = analyze(&[measured, estimated], &[], &CharsPerToken);
+        assert_eq!(r.rows.len(), 1);
+        assert_eq!(r.rows[0].items, 2);
+        assert!(
+            !r.rows[0].tokens.measured,
+            "one estimated item makes the row an estimate"
+        );
+        assert!(!r.rows[0].overhead_tokens.measured);
     }
 }

@@ -4,7 +4,7 @@ use agentlens_core::env::Env;
 use agentlens_core::export;
 use agentlens_core::model::{ContextKind, Source};
 use agentlens_core::pipeline::context_run;
-use agentlens_core::tokens::{TokenEstimator, Tokens};
+use agentlens_core::tokens::TokenEstimator;
 use anyhow::Result;
 
 use crate::args::{ContextView, Format};
@@ -69,9 +69,9 @@ pub fn run(
                         kind_id(r.kind),
                         r.owner.clone(),
                         r.items.to_string(),
-                        output::tokens(Tokens::estimated(r.tokens)),
+                        output::tokens(r.tokens),
                         output::number(r.requests),
-                        output::tokens(Tokens::estimated(r.overhead_tokens)),
+                        output::tokens(r.overhead_tokens),
                     ]
                 })
                 .collect();

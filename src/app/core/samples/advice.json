@@ -1,0 +1,62 @@
+{
+  "data": {
+    "sessions": 2,
+    "installed_skills": 1,
+    "baseline_total": {
+      "count": 24,
+      "measured": false
+    },
+    "findings": [
+      {
+        "kind": "unused-skills",
+        "explanation": "Installed skills that were neither loaded nor used through their files in the period. Their name and description are in the context of every request anyway.",
+        "action": "Remove the skill from the global folder or install it only in the projects that use it. If the client supports it, mark a skill that should only run on request as not automatically invoked in its front matter.",
+        "count": 1,
+        "total": {
+          "count": 24,
+          "measured": false
+        },
+        "share_of_baseline": 1.0,
+        "items": [
+          {
+            "name": "demo",
+            "tokens": {
+              "count": 24,
+              "measured": false
+            },
+            "requests": 4,
+            "detail": "24 tokens in 4 requests"
+          }
+        ],
+        "notes": [
+          "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API.",
+          "A skill that is only needed now and then, or by a tool outside the sessions that were read, can still be worth keeping."
+        ]
+      },
+      {
+        "kind": "used-but-not-installed",
+        "explanation": "Skills that were loaded in the period but are not installed now: renamed, removed, or built into the client or a plugin. References to them can be cleaned up.",
+        "action": "Check instruction files and prompts that still refer to the skill.",
+        "count": 1,
+        "total": null,
+        "share_of_baseline": null,
+        "items": [
+          {
+            "name": "demo-skill",
+            "tokens": {
+              "count": 3,
+              "measured": false
+            },
+            "requests": 1,
+            "detail": "loaded once"
+          }
+        ],
+        "notes": [
+          "Skills built into the client or supplied by a plugin are not in the folders AgentLens inventories and show up here too."
+        ]
+      }
+    ]
+  },
+  "warnings": 2,
+  "errors": []
+}

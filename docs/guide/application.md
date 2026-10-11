@@ -1,6 +1,6 @@
 # The desktop application
 
-The application shows the same analyses as the CLI with shared filters, and the same numbers with the same marking (`~` estimated, `n/a` not recorded). It reads the same client files and never writes to them. [Installers](getting-started.md#install) are attached to every release.
+The application shows the same analyses as the CLI with shared filters, and the same numbers with the same marking (`~` estimated, `n/a` not recorded). It reads the same client files and never writes to them. [Installers](download.md) are attached to every release.
 
 ## Views
 
@@ -10,6 +10,7 @@ The sidebar lists the views:
 | ---------- | ----------------------------------------------------------------------------- |
 | Sources    | which agents were found, where, and how many sessions and events were read    |
 | Skills     | uses and cost per skill, with a cost split chart                              |
+| Advice     | what to change to save tokens, with the numbers behind each suggestion        |
 | Context    | what the clients add to every request, by owner or by project                 |
 | Unused     | installed skills, agents and MCP servers nobody used, and their idle cost     |
 | Flow       | context growth, tool errors and retry loops, hooks and permission waits       |

@@ -17,7 +17,31 @@ Which skills are used and what they cost in tokens. A skill costs in three ways:
 | **baseline** | name and description of the skill, sent with every request of the clients that list it, used or not              |
 | **overhead** | baseline + load + carry                                                                                          |
 
+**Uses** counts how often the skill was loaded: by the model (its skill tool), by you (typing `/name`) or by another skill (the `triggers` in JSON). A skill is also in use when the model reads its files (the Read, Glob and Grep tools) or runs a script from its folder (`bash <skill folder>/scripts/…`) without loading it, so these tool calls are counted as **file uses** next to the loads. Only the skill name is kept for them, never the command or the path. Looking after a skill does not count: listing, printing, copying, searching or committing its files in a shell, and editing them. A session that edits a skill does not count its file uses either, because what it reads and runs there is part of that work. A folder that is only called `skills` in another project is ignored, because file uses are counted for installed skills only. A skill with file uses is not listed as unused.
+
+This is a signal, not proof: a model that reads a skill's file may not follow it, and a script may be run for another reason.
+
+Two columns are often zero, and that is normal: `user` in the triggers is zero when you let the model pick the skills and never type `/name`, and `attributed` is only filled from an OpenTelemetry export.
+
 Clients that attribute usage to a skill itself (Claude Code through an [OpenTelemetry export](../telemetry.md)) add an `attributed` column with the measured tokens of those requests. The **follow-on** columns count what happened after the skill until the next user turn, skill or compaction.
+
+## Advice
+
+```sh
+agentlens advise --since 30d
+```
+
+What to change to save tokens, made from the skill numbers above. No model is involved: the same sessions always give the same findings, and each one has a fixed explanation, a general action and the numbers it rests on, with the tilde for an estimate.
+
+| Finding                    | What it lists                                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Unused skills**          | installed skills that were neither loaded nor used through their files, what their listing cost, and its share of all listings |
+| **Costly descriptions**    | the descriptions that take the most tokens per request, and what shortening them to about 40 tokens would have saved        |
+| **Used but not installed** | skills that were loaded but are not installed now (renamed, removed, built into the client or supplied by a plugin)         |
+| **Large skill bodies**     | loaded bodies that stay in the context and are sent again with every later request                                          |
+| **Work on a large context** | the skills after which the work ran on the largest context per request                                                     |
+
+A finding says what it cannot know: a skill that is needed only now and then may be worth keeping although it shows up as unused, and the work after a skill is activity, not cost the skill caused. The CLI prints the findings as a table (`--format json` and `--format csv` have all of them), the application has an **Advice** view, and the [MCP server](mcp-server.md) has an `advice` tool, so an agent gets the findings and only has to explain and act on them.
 
 ## Context
 
@@ -33,7 +57,7 @@ What the clients put into the context besides the conversation. Columns: `kind` 
 agentlens unused --days 30          # --all also lists items that were used
 ```
 
-Installed skills, agents (`.claude/agents`, `.github/agents`, `.opencode/agents`) and configured MCP servers that were not used in the period, with what they cost while idle. The idle cost is the estimated baseline tokens times the requests that carried the item; for MCP servers it comes from the context items the client reports, so servers of other clients show `unknown`. MCP configuration files are read for server names only.
+Installed skills (loaded or used through their files), agents (`.claude/agents`, `.github/agents`, `.opencode/agents`) and configured MCP servers that were not used in the period, with what they cost while idle. The idle cost is the estimated baseline tokens times the requests that carried the item; for MCP servers it comes from the context items the client reports, so servers of other clients show `unknown`. MCP configuration files are read for server names only.
 
 ## Flow
 

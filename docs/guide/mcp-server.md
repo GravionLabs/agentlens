@@ -8,6 +8,7 @@
 | ---------------------- | ------------------------------------------------------------------------------------------------- |
 | `sources`              | which agents left sessions on this machine, and how many                                          |
 | `skills`               | uses, load, carry, baseline and overhead tokens per skill                                         |
+| `advice`               | what to change to save tokens: unused skills, costly descriptions, large contexts, with the numbers behind each finding |
 | `context`              | static context: tool listings, MCP instructions, instruction files, agent and skill listings     |
 | `unused`               | installed skills, agents and MCP servers nobody used, and what they cost while idle               |
 | `flow`                 | context growth and compactions, tool errors and retry loops, hooks and permission waits           |
@@ -17,6 +18,13 @@
 | `sessions`, `timeline` | the sessions in a period, and the context size of every request of one                            |
 
 Every tool takes the filter of the CLI (`since`, `sources`, `project`) and returns `{ data, warnings, errors }` as the application shows it. All tools are marked read-only. Estimated values stay marked: where a count has a `measured` flag it is kept, and the tool descriptions say which other values are estimates ([Measured and estimated](measured-and-estimated.md)). The results contain counts, names and paths, never prompts, responses, tool arguments or file contents ([Privacy](privacy.md)).
+
+## A prompt and a glossary
+
+Besides the tools the server offers two things that make an analysis easier for an agent:
+
+- **The prompt `optimize-skills`** tells the agent how to analyze a skill setup: call `advice` first, read the glossary where a field is unclear, look closer with the other tools, trust measured numbers and say when a conclusion rests on an estimate, call a skill unused only if it was neither loaded nor used through its files, and change nothing without asking. It takes an optional `since` (default `30d`). Clients that list prompts show it as a command, in Claude Code as `/mcp__agentlens__optimize-skills`.
+- **The resource `agentlens://glossary`** is the [glossary](glossary.md) in Markdown, made from the same source as the application's Glossary view, so a field name in a result (`load`, `carry`, `baseline`, `follow_on`, `file_uses`) can be looked up where the data is instead of guessed. The tool descriptions point to it.
 
 ## Registering it in a client
 

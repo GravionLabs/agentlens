@@ -56,6 +56,8 @@ pub enum Command {
     Scan,
     /// Show which skills are used and what they cost in tokens
     Skills,
+    /// Show what to change to save tokens: unused skills, costly descriptions, large contexts
+    Advise,
     /// Show what the clients put into the context besides the conversation
     Context {
         /// Which kind of static context to show
