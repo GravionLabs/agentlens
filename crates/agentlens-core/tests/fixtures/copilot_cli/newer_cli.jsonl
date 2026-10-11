@@ -1,0 +1,14 @@
+{"type":"session.start","data":{"sessionId":"cp-3","version":1,"context":{"cwd":"/work/new"}},"id":"n1","timestamp":"2026-10-05T08:00:00.000Z","parentId":null}
+{"type":"user.message","data":{"content":"synthetic prompt"},"id":"n2","timestamp":"2026-10-05T08:00:01.000Z","parentId":null}
+{"type":"session.auto_mode_resolved","data":{"chosenModel":"model-c","routingMethod":"auto"},"id":"n3","timestamp":"2026-10-05T08:00:01.500Z","parentId":null}
+{"type":"model.turn_started","data":{"turn":0},"id":"n4","timestamp":"2026-10-05T08:00:02.000Z","parentId":null}
+{"type":"model.model_call_started","data":{"callId":"c1","modelCall":{"model":"model-c"}},"id":"n5","timestamp":"2026-10-05T08:00:02.100Z","parentId":null}
+{"type":"model.model_call_success","data":{"callId":"c1","modelCall":{"model":"model-c"},"modelCallDurationMs":900},"id":"n6","timestamp":"2026-10-05T08:00:03.000Z","parentId":null}
+{"type":"model.response","data":{"callId":"c1","turn":0},"id":"n7","timestamp":"2026-10-05T08:00:03.100Z","parentId":null}
+{"type":"session.usage_record","data":{"usage":{"model":"model-c","inputTokens":1000,"outputTokens":50,"cacheReadTokens":600,"cacheWriteTokens":100}},"id":"n8","timestamp":"2026-10-05T08:00:03.200Z","parentId":null}
+{"type":"session.usage_checkpoint","data":{"accountingSnapshot":{"currentModel":"model-c"}},"id":"n9","timestamp":"2026-10-05T08:00:03.300Z","parentId":null}
+{"type":"model.turn_ended","data":{"kind":"x","model":"model-c"},"id":"n10","timestamp":"2026-10-05T08:00:03.400Z","parentId":null}
+{"type":"model.captured_assignment_context","data":{},"id":"n11","timestamp":"2026-10-05T08:00:03.500Z","parentId":null}
+{"type":"model.message","data":{},"id":"n12","timestamp":"2026-10-05T08:00:03.600Z","parentId":null}
+{"type":"model.messages_snapshot","data":{},"id":"n13","timestamp":"2026-10-05T08:00:03.700Z","parentId":null}
+{"type":"something.made.up","data":{},"id":"n14","timestamp":"2026-10-05T08:00:04.000Z","parentId":null}

@@ -313,3 +313,36 @@ fn premium_requests_are_carried_separately_from_tokens() {
         ]
     );
 }
+
+#[test]
+fn the_event_types_of_newer_versions_are_known_and_do_not_warn() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "copilot_cli/newer_cli.jsonl",
+        &format!("{STATE}/cp-3/events.jsonl"),
+    );
+    let se = read_all(&home).remove(0);
+    let messages: Vec<&str> = se.warnings.iter().map(|w| w.message.as_str()).collect();
+    // The usage records, the checkpoints and the `model.*` events are known and ignored: on real
+    // sessions the numbers of the records equal the rows of the session store, which is where they come
+    // from. A type that nobody knows still warns, and is the only one named.
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert!(messages[0].contains("something.made.up"), "{messages:?}");
+    for known in [
+        "usage_record",
+        "usage_checkpoint",
+        "model.response",
+        "auto_mode_resolved",
+    ] {
+        assert!(
+            !messages[0].contains(known),
+            "{known} must not be reported as unknown"
+        );
+    }
+    assert!(
+        se.events
+            .iter()
+            .all(|e| !matches!(e.kind, EventKind::Usage(_))),
+        "without a store row or a shutdown event a session has no requests (the records are not read)"
+    );
+}
