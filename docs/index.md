@@ -9,6 +9,9 @@ hero:
       text: Read the guide
       link: /guide/
     - theme: alt
+      text: Download
+      link: /guide/download
+    - theme: alt
       text: Try the app
       link: /app/
     - theme: alt
