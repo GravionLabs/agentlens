@@ -13,5 +13,6 @@ The pages are listed in reading order; the list is also the sidebar of the site.
 7. [The MCP server](mcp-server.md): let an agent ask AgentLens itself.
 8. [Exact token counts](exact-tokens.md): the one opt-in feature that sends text away.
 9. [Privacy](privacy.md): what is read, what is written, what leaves the machine.
-10. [Importing OpenTelemetry data](../telemetry.md): exports of Claude Code, Copilot CLI and VS Code Copilot.
-11. [Updating the application](../updater.md): how the update check and the installation work.
+10. [Glossary](glossary.md): the terms in one place, the same entries as the application.
+11. [Importing OpenTelemetry data](../telemetry.md): exports of Claude Code, Copilot CLI and VS Code Copilot.
+12. [Updating the application](../updater.md): how the update check and the installation work.
