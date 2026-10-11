@@ -1,6 +1,6 @@
 # 0004: MCP server
 
-- Status: Proposed (the binary, the release and the setup help were decided by the owner on 2026-10-11; the tool set and the SDK are proposed)
+- Status: Accepted (decided by the owner on 2026-10-11)
 - Context: Epic "MCP server" (#202), PBIs #204 to #209 and #211
 
 ## Context
