@@ -5,11 +5,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.4.3] — 2026-10-11
+## [0.5.0] — 2026-10-11
 
 ### Bug Fixes
 - Count a session under two project directories once (#186)
 - Refresh the overview sample after the OpenCode note changed
+- Number the release 0.5.0 with a commit message bump
 
 
 ### Documentation
