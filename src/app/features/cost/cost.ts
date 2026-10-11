@@ -33,6 +33,8 @@ export function money(r: CostRow): string {
   template: `
     <section class="view">
       <app-page-header
+        exportView="cost"
+        [exportOptions]="{ by: by(), whatIf: whatIf() || null }"
         title="Cost"
         summary="What the usage costs, grouped by model, project, branch or issue."
       >

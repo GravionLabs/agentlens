@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component, input, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
+import type { ExportFormat } from "../core/export.service";
+import { ExportMenu } from "./export-menu";
 
 /** Title and a one-line summary; the longer explanation is folded away behind “Explain”. */
 @Component({
   selector: "app-page-header",
-  imports: [RouterLink],
+  imports: [RouterLink, ExportMenu],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header>
@@ -19,6 +21,9 @@ import { RouterLink } from "@angular/router";
       >
         {{ open() ? "Hide" : "Explain" }}
       </button>
+      @if (exportView(); as view) {
+        <app-export-menu [view]="view" [formats]="exportFormats()" [options]="exportOptions()" />
+      }
     </header>
     @if (open()) {
       <div class="details" [id]="'details-' + title()">
@@ -76,5 +81,9 @@ import { RouterLink } from "@angular/router";
 export class PageHeader {
   readonly title = input.required<string>();
   readonly summary = input.required<string>();
+  /** The view to offer an export for (the name of its backend analysis); none shows no menu. */
+  readonly exportView = input<string>();
+  readonly exportFormats = input<ExportFormat[]>(["json"]);
+  readonly exportOptions = input<Record<string, unknown>>();
   protected readonly open = signal(false);
 }

@@ -59,7 +59,11 @@ export function inView(kind: ContextKind, view: View): boolean {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <app-page-header title="Context" summary="Static content the clients add to every request.">
+      <app-page-header
+        exportView="context"
+        title="Context"
+        summary="Static content the clients add to every request."
+      >
         <p>
           Static content the clients add to every request (<app-term id="context"
             >static context</app-term

@@ -27,7 +27,12 @@ function attributedTokens(s: SkillStats): number {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <app-page-header title="Skills" summary="Which skills are used and what they cost in tokens.">
+      <app-page-header
+        exportView="skills"
+        [exportFormats]="['json', 'html']"
+        title="Skills"
+        summary="Which skills are used and what they cost in tokens."
+      >
         <p>
           <span class="est">~</span> marks <app-term id="measured">estimates</app-term>; unmarked
           values were measured by the client.
