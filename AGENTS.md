@@ -28,6 +28,10 @@ client files ─► Adapter ─► normalized events ─► Analyzer ─► repo
 - The CLI workflow (`ci.yml`) excludes the app crate and needs no system libraries; `app.yml` checks the frontend and the crate.
 - Estimates carry a tilde and missing data is `n/a`, as in the CLI. Prettier covers the frontend only.
 
+## Documentation site
+
+`docs/` is the single source of the documentation; `site/` (VitePress, `pnpm docs:dev`, `pnpm docs:build`) renders it and copies nothing. A guide page is a Markdown file in `docs/guide` and a line in the numbered list of `docs/guide/README.md` (that list is the sidebar, and a test fails when a page is missing). `docs/guide/glossary.md` is generated from `src/app/core/glossary.ts`: run `pnpm docs:glossary` after changing a term. Dead links fail the site build. `.github/workflows/pages.yml` builds the site and the application demo (`pnpm build:demo`); a push to `main` deploys it to GitHub Pages only while the repository variable `DEPLOY_PAGES` is `true`. Decisions: [ADR 0005](docs/adr/0005-documentation-site.md).
+
 ## Verification
 
 ```sh
