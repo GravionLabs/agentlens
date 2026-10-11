@@ -10,6 +10,7 @@ The sidebar lists the views:
 | ---------- | ----------------------------------------------------------------------------- |
 | Sources    | which agents were found, where, and how many sessions and events were read    |
 | Skills     | uses and cost per skill, with a cost split chart                              |
+| Advice     | what to change to save tokens, with the numbers behind each suggestion        |
 | Context    | what the clients add to every request, by owner or by project                 |
 | Unused     | installed skills, agents and MCP servers nobody used, and their idle cost     |
 | Flow       | context growth, tool errors and retry loops, hooks and permission waits       |

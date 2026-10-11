@@ -8,6 +8,7 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { path: "overview", label: "Sources" },
   { path: "skills", label: "Skills" },
+  { path: "advice", label: "Advice" },
   { path: "context", label: "Context" },
   { path: "unused", label: "Unused" },
   { path: "flow", label: "Flow" },
@@ -27,6 +28,10 @@ export const routes: Routes = [
   {
     path: "skills",
     loadComponent: () => import("./features/skills/skills").then((m) => m.Skills),
+  },
+  {
+    path: "advice",
+    loadComponent: () => import("./features/advice/advice").then((m) => m.Advice),
   },
   {
     path: "context",

@@ -130,6 +130,15 @@ impl AgentLensServer {
     }
 
     #[tool(
+        description = "What to change to save tokens, as findings with the numbers they rest on: installed skills nobody used (neither loaded nor through their files) and what their listing costs, the costliest descriptions, skills loaded but no longer installed, large skill bodies that stay in the context, and the skills after which the work ran on the largest context. Each finding has an explanation, a general action, `items` with a `tokens` count that carries a `measured` flag, and notes on what it cannot know. No model is involved.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn advice(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
+        let f = q.filters();
+        self.run(move |c| api::advice(c, &f)).await
+    }
+
+    #[tool(
         description = "Static context the clients add to every request: tool listings and definitions, MCP instructions, instruction files, agent and skill listings, with tokens and the overhead over the requests that followed. `tokens` and `overhead_tokens` of the rows are objects with a `measured` flag; `first_request` values were measured by the client.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]

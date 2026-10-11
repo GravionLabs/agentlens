@@ -7,6 +7,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use crate::analyzers::advice::AdviceReport;
 use crate::analyzers::compare::SourceStats;
 use crate::analyzers::context::ContextRow;
 use crate::analyzers::cost::{CostRow, WhatIfReport};
@@ -408,5 +409,35 @@ pub fn errors(tools: &[ToolErrors]) -> Result<String, CsvError> {
             ]
         })
         .collect();
+    write(&header, rows)
+}
+
+/// `advise`: one row per skill of each finding.
+pub fn advice(report: &AdviceReport) -> Result<String, CsvError> {
+    let header = [
+        "finding",
+        "skill",
+        "tokens",
+        "tokens_measured",
+        "requests",
+        "detail",
+    ];
+    let mut rows = Vec::new();
+    for f in &report.findings {
+        let kind = serde_json::to_value(f.kind)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default();
+        for i in &f.items {
+            rows.push(vec![
+                kind.clone(),
+                i.name.clone(),
+                i.tokens.count.to_string(),
+                i.tokens.measured.to_string(),
+                i.requests.to_string(),
+                i.detail.clone(),
+            ]);
+        }
+    }
     write(&header, rows)
 }

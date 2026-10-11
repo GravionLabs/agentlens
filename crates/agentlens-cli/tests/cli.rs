@@ -1295,3 +1295,63 @@ fn a_skill_used_only_through_its_files_is_not_unused() {
             .ends_with(",overhead_measured,file_uses")
     );
 }
+
+// ---- advise ----
+
+#[test]
+fn advise_lists_what_to_change_in_json_csv_and_a_table() {
+    let home = home();
+    let v = json(agentlens(&home).args(["advise", "--format", "json"]));
+    assert_eq!(v["installed_skills"], 3);
+    assert_eq!(
+        v["baseline_total"]["measured"], false,
+        "descriptions are estimated"
+    );
+    let findings = v["findings"].as_array().unwrap();
+    let unused = findings
+        .iter()
+        .find(|f| f["kind"] == "unused-skills")
+        .expect("an installed skill was never used");
+    let names: Vec<&str> = unused["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"unused"), "{names:?}");
+    assert!(!names.contains(&"demo"), "demo was loaded");
+    assert!(unused["explanation"].as_str().unwrap().len() > 20);
+    assert!(unused["items"][0]["tokens"]["measured"].is_boolean());
+
+    let out = agentlens(&home)
+        .args(["advise", "--format", "csv"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert_eq!(
+        text.lines().next().unwrap(),
+        "finding,skill,tokens,tokens_measured,requests,detail"
+    );
+    assert!(text.contains("unused-skills,unused,"));
+
+    agentlens(&home)
+        .arg("advise")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Unused skills"))
+        .stdout(predicate::str::contains("What to do:"))
+        .stdout(predicate::str::contains("~ estimated"));
+}
+
+#[test]
+fn advise_has_nothing_to_say_without_sessions() {
+    let home = tempfile::tempdir().unwrap();
+    agentlens(&home)
+        .arg("advise")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Nothing to suggest"));
+}

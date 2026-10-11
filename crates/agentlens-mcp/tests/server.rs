@@ -130,9 +130,10 @@ impl Drop for Client {
     }
 }
 
-const TOOLS: [&str; 10] = [
+const TOOLS: [&str; 11] = [
     "sources",
     "skills",
+    "advice",
     "context",
     "unused",
     "flow",

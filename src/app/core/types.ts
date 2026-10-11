@@ -79,6 +79,38 @@ export interface SkillReport {
   ignored_commands: { name: string; count: number }[];
 }
 
+export type FindingKind =
+  | "unused-skills"
+  | "costly-descriptions"
+  | "used-but-not-installed"
+  | "large-bodies"
+  | "large-context";
+
+export interface AdviceItem {
+  name: string;
+  tokens: Tokens;
+  requests: number;
+  detail: string;
+}
+
+export interface Finding {
+  kind: FindingKind;
+  explanation: string;
+  action: string;
+  count: number;
+  total: Tokens | null;
+  share_of_baseline: number | null;
+  items: AdviceItem[];
+  notes: string[];
+}
+
+export interface AdviceReport {
+  sessions: number;
+  installed_skills: number;
+  baseline_total: Tokens;
+  findings: Finding[];
+}
+
 export interface SkillsData {
   report: SkillReport;
   installed_skills: number;
