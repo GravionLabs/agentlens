@@ -17,7 +17,8 @@
     "docs:dev": "vitepress dev site",
     "docs:build": "vitepress build site",
     "docs:preview": "vitepress preview site",
-    "docs:glossary": "UPDATE_GLOSSARY=1 vitest run site/tests/glossary.spec.ts"
+    "docs:glossary": "UPDATE_GLOSSARY=1 vitest run site/tests/glossary.spec.ts",
+    "build:demo": "ng build --base-href \"${DEMO_BASE:-/agentlens/app/}\""
   },
   "dependencies": {
     "@angular/common": "^22.2.1",
