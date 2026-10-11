@@ -3,6 +3,8 @@
 
 use crate::report::Report;
 
+pub mod csv;
+
 const TEMPLATE: &str = include_str!("../assets/report.html");
 const PLACEHOLDER: &str = "__REPORT_DATA__";
 

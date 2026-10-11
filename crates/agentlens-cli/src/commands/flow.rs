@@ -1,8 +1,9 @@
 use agentlens_core::adapter::{Registry, SessionFilter};
 use agentlens_core::analyzers::flow::{
-    HookStats, HooksReport, RetryLoop, SessionGrowth, ToolErrors,
+    HooksReport, RetryLoop, SessionGrowth, ToolErrors,
 };
 use agentlens_core::env::Env;
+use agentlens_core::export;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::{FlowRun, flow_run};
 use anyhow::{Result, bail};
@@ -227,95 +228,6 @@ fn hooks_table(r: &HooksReport, top: usize) {
     }
 }
 
-fn hooks_csv(hooks: &[HookStats]) -> Result<String> {
-    let header = [
-        "source",
-        "hook",
-        "runs",
-        "failures",
-        "no_outcome",
-        "total_ms",
-    ];
-    let rows = hooks
-        .iter()
-        .map(|h| {
-            vec![
-                h.source.id().to_owned(),
-                h.hook.clone(),
-                h.runs.to_string(),
-                h.failures.to_string(),
-                h.unknown.to_string(),
-                h.total_ms.to_string(),
-            ]
-        })
-        .collect();
-    output::csv(&header, rows)
-}
-
-fn growth_csv(growth: &[SessionGrowth]) -> Result<String> {
-    let header = [
-        "source",
-        "session",
-        "project",
-        "model",
-        "requests",
-        "first_tokens",
-        "last_tokens",
-        "peak_tokens",
-        "compactions",
-        "compaction_tokens",
-        "near_limit",
-    ];
-    let rows = growth
-        .iter()
-        .map(|g| {
-            vec![
-                g.source.id().to_owned(),
-                g.session.clone(),
-                project(&g.project),
-                g.model.clone().unwrap_or_default(),
-                g.requests.to_string(),
-                g.first_tokens.to_string(),
-                g.last_tokens.to_string(),
-                g.peak_tokens.to_string(),
-                g.compactions.len().to_string(),
-                g.compactions
-                    .iter()
-                    .map(u64::to_string)
-                    .collect::<Vec<_>>()
-                    .join(" "),
-                g.near_limit.to_string(),
-            ]
-        })
-        .collect();
-    output::csv(&header, rows)
-}
-
-fn errors_csv(tools: &[ToolErrors]) -> Result<String> {
-    let header = [
-        "source",
-        "tool",
-        "calls",
-        "errors",
-        "unknown",
-        "retry_loops",
-    ];
-    let rows = tools
-        .iter()
-        .map(|t| {
-            vec![
-                t.source.id().to_owned(),
-                t.tool.clone(),
-                t.calls.to_string(),
-                t.errors.to_string(),
-                t.unknown.to_string(),
-                t.loops.to_string(),
-            ]
-        })
-        .collect();
-    output::csv(&header, rows)
-}
-
 pub fn run(
     registry: &Registry,
     env: &Env,
@@ -346,9 +258,9 @@ pub fn run(
             println!("{}", serde_json::to_string_pretty(&v)?);
         }
         Format::Csv => match section {
-            FlowSection::Growth => print!("{}", growth_csv(&run.growth.sessions)?),
-            FlowSection::Errors => print!("{}", errors_csv(&run.tool_errors.tools)?),
-            _ => print!("{}", hooks_csv(&run.hooks.hooks)?),
+            FlowSection::Growth => print!("{}", export::csv::growth(&run.growth.sessions)?),
+            FlowSection::Errors => print!("{}", export::csv::errors(&run.tool_errors.tools)?),
+            _ => print!("{}", export::csv::hooks(&run.hooks.hooks)?),
         },
         Format::Table => {
             if want(FlowSection::Growth) {
