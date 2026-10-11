@@ -21,4 +21,8 @@ Token usage of a request (input, output, cache read and write), the context size
 
 ## In files and in the MCP server
 
-In the application and on the command line the tilde carries the marking. In `--format json`, a count that can be an estimate is an object with `count` and `measured`; a few plain numbers are estimates by convention (the `tokens` and `overhead_tokens` of context rows, the carry of a skill). The [MCP server](mcp-server.md) names them in the descriptions of its tools.
+In the application and on the command line the tilde carries the marking. In `--format json` and in the results of the [MCP server](mcp-server.md), every count that can be an estimate is an object with `count` and `measured`: the load, baseline and carry of a skill, the `tokens` and `overhead_tokens` of a context row, the idle cost of an unused item and the skill overhead of `compare`. Counts taken from the usage a client reports (requests, input and output tokens, cache tokens, the context size in `flow` and `timeline`) are measured by definition and stay plain numbers; so does the money split into `measured_usd` and `estimated_usd`.
+
+A sum is measured only if every part of it is: a context row that holds one item whose size was estimated is an estimate.
+
+In CSV the counts are plain integers, and the flags are columns at the end of the table (`baseline_measured`, `carry_measured`, `overhead_measured`, `tokens_measured`, `overhead_measured`, `skill_overhead_measured`), so a file that is read by position keeps its columns.

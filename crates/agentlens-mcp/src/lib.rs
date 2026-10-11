@@ -121,7 +121,7 @@ impl AgentLensServer {
     }
 
     #[tool(
-        description = "Skills: uses, sessions, load, carry and baseline tokens, and the overhead per skill. `load` and `baseline.tokens` are objects with a `measured` flag; carry and overhead are estimates (characters / 4).",
+        description = "Skills: uses, sessions, load, carry and baseline tokens, and the overhead per skill. `load`, `baseline.tokens` and `carry.tokens` are objects with a `measured` flag (carry is always an estimate).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn skills(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
@@ -130,7 +130,7 @@ impl AgentLensServer {
     }
 
     #[tool(
-        description = "Static context the clients add to every request: tool listings and definitions, MCP instructions, instruction files, agent and skill listings, with tokens and the overhead over the requests that followed. `tokens` and `overhead_tokens` of the rows are estimates (characters / 4); `first_request` values were measured by the client.",
+        description = "Static context the clients add to every request: tool listings and definitions, MCP instructions, instruction files, agent and skill listings, with tokens and the overhead over the requests that followed. `tokens` and `overhead_tokens` of the rows are objects with a `measured` flag; `first_request` values were measured by the client.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn context(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
@@ -139,7 +139,7 @@ impl AgentLensServer {
     }
 
     #[tool(
-        description = "Installed skills, agents and MCP servers with their use count and the tokens they cost while idle (`overhead_tokens`, an estimate). Items with uses = 0 were not used in the period (default 30 days).",
+        description = "Installed skills, agents and MCP servers with their use count and the tokens they cost while idle (`overhead_tokens`, with a `measured` flag). Items with uses = 0 were not used in the period (default 30 days).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn unused(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
@@ -179,7 +179,7 @@ impl AgentLensServer {
     }
 
     #[tool(
-        description = "The coding agents side by side over the same sessions: requests, tokens, cache hit rate, tool errors, skills and time. A value a client does not record is null; `skill_overhead_tokens` is an estimate.",
+        description = "The coding agents side by side over the same sessions: requests, tokens, cache hit rate, tool errors, skills and time. A value a client does not record is null; `skill_overhead_tokens` has a `measured` flag.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn compare(&self, Parameters(q): Parameters<Query>) -> CallToolResult {

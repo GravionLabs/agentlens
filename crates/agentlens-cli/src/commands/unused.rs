@@ -4,7 +4,7 @@ use agentlens_core::env::Env;
 use agentlens_core::export;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::unused_run;
-use agentlens_core::tokens::{TokenEstimator, Tokens};
+use agentlens_core::tokens::TokenEstimator;
 use anyhow::Result;
 
 use crate::args::Format;
@@ -69,7 +69,7 @@ pub fn run(
                         i.uses.to_string(),
                         output::number(i.requests),
                         i.overhead_tokens
-                            .map(|t| output::tokens(Tokens::estimated(t)))
+                            .map(output::tokens)
                             .unwrap_or_else(|| "unknown".into()),
                     ]
                 })

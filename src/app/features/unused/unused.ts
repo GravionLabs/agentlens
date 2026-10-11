@@ -96,9 +96,12 @@ export class Unused {
       key: "cost",
       label: "Idle cost",
       term: "idle-cost",
-      value: (i) => i.overhead_tokens,
-      text: (i) => (i.overhead_tokens === null ? "unknown" : tokens(i.overhead_tokens, true)),
-      estimated: (i) => i.overhead_tokens !== null,
+      value: (i) => i.overhead_tokens?.count ?? null,
+      text: (i) =>
+        i.overhead_tokens === null
+          ? "unknown"
+          : tokens(i.overhead_tokens.count, !i.overhead_tokens.measured),
+      estimated: (i) => i.overhead_tokens !== null && !i.overhead_tokens.measured,
       numeric: true,
       title: "Baseline tokens × the requests that carried the item",
     },

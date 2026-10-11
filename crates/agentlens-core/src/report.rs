@@ -9,8 +9,9 @@ use crate::analyzers::skills::SkillReport;
 use crate::model::Source;
 use crate::pipeline::SkillRun;
 
-/// Bump when the JSON layout changes incompatibly.
-pub const SCHEMA_VERSION: u32 = 1;
+/// Bump when the JSON layout of the report changes incompatibly. 2: `carry.tokens` is a `Tokens`
+/// (`count` and `measured`) instead of a bare number.
+pub const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReportMeta {

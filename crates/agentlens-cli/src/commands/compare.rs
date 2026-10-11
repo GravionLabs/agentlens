@@ -41,7 +41,7 @@ fn metrics(s: &SourceStats) -> Vec<(&'static str, String)> {
         (
             "skill overhead (est.)",
             s.skill_overhead_tokens
-                .map(|t| format!("~{}", output::number(t)))
+                .map(output::tokens)
                 .unwrap_or_else(|| NA.into()),
         ),
         ("mean session (min)", minutes(s.mean_session_ms)),

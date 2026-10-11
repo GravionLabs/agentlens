@@ -9,9 +9,15 @@
         "owner": "skills",
         "items": 1,
         "bytes": 800,
-        "tokens": 200,
+        "tokens": {
+          "count": 200,
+          "measured": false
+        },
         "requests": 3,
-        "overhead_tokens": 600
+        "overhead_tokens": {
+          "count": 600,
+          "measured": false
+        }
       },
       {
         "source": "claude-code",
@@ -20,9 +26,15 @@
         "owner": "/work/demo/CLAUDE.md",
         "items": 1,
         "bytes": 400,
-        "tokens": 100,
+        "tokens": {
+          "count": 100,
+          "measured": false
+        },
         "requests": 3,
-        "overhead_tokens": 300
+        "overhead_tokens": {
+          "count": 300,
+          "measured": false
+        }
       },
       {
         "source": "claude-code",
@@ -31,9 +43,15 @@
         "owner": "srv",
         "items": 1,
         "bytes": 300,
-        "tokens": 75,
+        "tokens": {
+          "count": 75,
+          "measured": false
+        },
         "requests": 3,
-        "overhead_tokens": 225
+        "overhead_tokens": {
+          "count": 225,
+          "measured": false
+        }
       },
       {
         "source": "claude-code",
@@ -42,9 +60,15 @@
         "owner": "srv",
         "items": 1,
         "bytes": 150,
-        "tokens": 38,
+        "tokens": {
+          "count": 38,
+          "measured": false
+        },
         "requests": 3,
-        "overhead_tokens": 114
+        "overhead_tokens": {
+          "count": 114,
+          "measured": false
+        }
       },
       {
         "source": "claude-code",
@@ -53,9 +77,15 @@
         "owner": "agents",
         "items": 1,
         "bytes": 100,
-        "tokens": 25,
+        "tokens": {
+          "count": 25,
+          "measured": false
+        },
         "requests": 3,
-        "overhead_tokens": 75
+        "overhead_tokens": {
+          "count": 75,
+          "measured": false
+        }
       },
       {
         "source": "claude-code",
@@ -64,9 +94,15 @@
         "owner": "srv",
         "items": 2,
         "bytes": 29,
-        "tokens": 8,
+        "tokens": {
+          "count": 8,
+          "measured": false
+        },
         "requests": 6,
-        "overhead_tokens": 24
+        "overhead_tokens": {
+          "count": 24,
+          "measured": false
+        }
       },
       {
         "source": "claude-code",
@@ -75,9 +111,15 @@
         "owner": "built-in",
         "items": 1,
         "bytes": 8,
-        "tokens": 2,
+        "tokens": {
+          "count": 2,
+          "measured": false
+        },
         "requests": 3,
-        "overhead_tokens": 6
+        "overhead_tokens": {
+          "count": 6,
+          "measured": false
+        }
       }
     ],
     "unavailable": {

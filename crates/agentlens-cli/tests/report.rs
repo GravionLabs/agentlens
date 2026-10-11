@@ -61,7 +61,7 @@ fn html_report_embeds_the_data_and_needs_no_network() {
     assert!(!page.contains("__REPORT_DATA__"));
     assert!(!page.contains("src=\"http"));
     let data = embedded(&page);
-    assert_eq!(data["meta"]["schema_version"], 1);
+    assert_eq!(data["meta"]["schema_version"], 2);
     assert!(data["skills"]["sessions"].as_u64().unwrap() >= 1);
     let skills = data["skills"]["skills"].as_array().unwrap();
     assert!(skills.iter().any(|s| s["name"] == "demo"));

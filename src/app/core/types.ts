@@ -62,7 +62,7 @@ export interface SkillStats {
   uses_by_day: Record<string, number>;
   load: Tokens;
   unknown_loads: number;
-  carry: { requests: number; tokens: number; cache_read_tokens: number; uncached_tokens: number };
+  carry: { requests: number; tokens: Tokens; cache_read_tokens: number; uncached_tokens: number };
   follow_on: UsageSum;
   attributed: UsageSum;
   baseline: { requests: number; tokens: Tokens };
@@ -99,9 +99,9 @@ export interface ContextRow {
   owner: string;
   items: number;
   bytes: number;
-  tokens: number;
+  tokens: Tokens;
   requests: number;
-  overhead_tokens: number;
+  overhead_tokens: Tokens;
 }
 
 export interface ContextReport {
@@ -122,7 +122,7 @@ export interface UnusedItem {
   clients: SourceId[];
   uses: number;
   requests: number;
-  overhead_tokens: number | null;
+  overhead_tokens: Tokens | null;
 }
 
 export interface UnusedReport {
@@ -252,7 +252,7 @@ export interface SourceStats {
   tool_errors: number;
   tool_error_rate: number | null;
   skill_invocations: number;
-  skill_overhead_tokens: number | null;
+  skill_overhead_tokens: Tokens | null;
   total_duration_ms: number | null;
   mean_session_ms: number | null;
 }

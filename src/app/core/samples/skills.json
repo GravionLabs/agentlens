@@ -37,7 +37,10 @@
           "unknown_loads": 0,
           "carry": {
             "requests": 0,
-            "tokens": 0,
+            "tokens": {
+              "count": 0,
+              "measured": false
+            },
             "cache_read_tokens": 0,
             "uncached_tokens": 0
           },
@@ -92,7 +95,10 @@
           "unknown_loads": 0,
           "carry": {
             "requests": 0,
-            "tokens": 0,
+            "tokens": {
+              "count": 0,
+              "measured": false
+            },
             "cache_read_tokens": 0,
             "uncached_tokens": 0
           },

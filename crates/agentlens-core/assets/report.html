@@ -126,7 +126,7 @@ footer { color: var(--muted); font-size: 0.8rem; margin-top: 24px; }
   }
   function day(ts) { return ts ? ts.slice(0, 10) : ""; }
 
-  function overhead(s) { return s.baseline.tokens.count + s.load.count + s.carry.tokens; }
+  function overhead(s) { return s.baseline.tokens.count + s.load.count + s.carry.tokens.count; }
   function followOn(s) { var f = s.follow_on; return f.input + f.output + f.cache_read + f.cache_write; }
 
   // ---- header and cards ----
@@ -158,7 +158,7 @@ footer { color: var(--muted); font-size: 0.8rem; margin-top: 24px; }
     { key: "uses", label: "uses", get: function (s) { return s.invocations; } },
     { key: "sessions", label: "sessions", get: function (s) { return s.sessions; } },
     { key: "load", label: "load", get: function (s) { return s.load.count; }, measured: function (s) { return s.load.measured; } },
-    { key: "carry", label: "carry", get: function (s) { return s.carry.tokens; }, measured: function () { return false; } },
+    { key: "carry", label: "carry", get: function (s) { return s.carry.tokens.count; }, measured: function (s) { return s.carry.tokens.measured; } },
     { key: "baseline", label: "baseline", get: function (s) { return s.baseline.tokens.count; }, measured: function (s) { return s.baseline.tokens.measured; } },
     { key: "overhead", label: "overhead", get: overhead, measured: function () { return false; } },
     { key: "follow", label: "follow-on", get: followOn },
@@ -251,7 +251,7 @@ footer { color: var(--muted); font-size: 0.8rem; margin-top: 24px; }
       var parts = [
         ["baseline", s.baseline.tokens.count, s.baseline.tokens.measured, "baseline"],
         ["load", s.load.count, s.load.measured, "load"],
-        ["carry", s.carry.tokens, false, "carry"]
+        ["carry", s.carry.tokens.count, s.carry.tokens.measured, "carry"]
       ];
       parts.forEach(function (p) {
         var w = p[1] / max * plot;

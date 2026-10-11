@@ -45,7 +45,7 @@ pub fn run(
                         s.invocations.to_string(),
                         s.sessions.to_string(),
                         output::tokens(s.load),
-                        output::tokens(Tokens::estimated(s.carry.tokens)),
+                        output::tokens(s.carry.tokens),
                         output::tokens(s.baseline.tokens),
                         output::tokens(Tokens::estimated(s.overhead_tokens())),
                     ];

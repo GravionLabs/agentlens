@@ -35,9 +35,9 @@ describe("context grouping", () => {
     owner: "srv",
     items: 1,
     bytes: 10,
-    tokens,
+    tokens: { count: tokens, measured: false },
     requests,
-    overhead_tokens: tokens * requests,
+    overhead_tokens: { count: tokens * requests, measured: false },
   });
 
   it("sums the projects of one owner into a single row", () => {
@@ -51,10 +51,18 @@ describe("context grouping", () => {
     expect(srv).toMatchObject({
       items: 2,
       bytes: 20,
-      tokens: 15,
+      tokens: { count: 15, measured: false },
       requests: 6,
-      overhead_tokens: 40,
+      overhead_tokens: { count: 40, measured: false },
     });
     expect(srv.project).toBeNull();
+  });
+
+  it("keeps a sum an estimate unless every part was measured", () => {
+    const measured = { ...row("/a", 10, 2), tokens: { count: 10, measured: true } };
+    const both = byOwner([measured, { ...measured, project: "/b" }]);
+    expect(both[0].tokens).toEqual({ count: 20, measured: true });
+    const mixed = byOwner([measured, row("/b", 5, 4)]);
+    expect(mixed[0].tokens).toEqual({ count: 15, measured: false });
   });
 });

@@ -14,6 +14,7 @@ use crate::analyzers::context::{ContextReport, mcp_server};
 use crate::analyzers::skills::SkillReport;
 use crate::catalog::Catalog;
 use crate::model::{ContextKind, EventKind, SessionEvents, Source};
+use crate::tokens::Tokens;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -33,8 +34,8 @@ pub struct UnusedItem {
     pub uses: u32,
     /// Requests that carried the item.
     pub requests: u64,
-    /// Estimated baseline tokens over the period; `None` if unknown.
-    pub overhead_tokens: Option<u64>,
+    /// Baseline tokens over the period (estimated unless the client reported the sizes); `None` if unknown.
+    pub overhead_tokens: Option<Tokens>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,7 +96,7 @@ pub fn analyze(
             clients: s.clients.clone(),
             uses: s.invocations,
             requests: s.baseline.requests,
-            overhead_tokens: Some(s.baseline.tokens.count),
+            overhead_tokens: Some(s.baseline.tokens),
         });
     }
 
@@ -120,7 +121,10 @@ pub fn analyze(
             clients: a.clients.clone(),
             uses,
             requests,
-            overhead_tokens: Some(a.listing_tokens.count * requests),
+            overhead_tokens: Some(Tokens {
+                count: a.listing_tokens.count * requests,
+                measured: a.listing_tokens.measured,
+            }),
         });
     }
 
@@ -159,14 +163,17 @@ pub fn analyze(
             clients: m.clients.clone(),
             uses,
             requests: rows.iter().map(|r| r.requests).sum(),
-            overhead_tokens: (!rows.is_empty())
-                .then(|| rows.iter().map(|r| r.overhead_tokens).sum()),
+            overhead_tokens: (!rows.is_empty()).then(|| Tokens {
+                count: rows.iter().map(|r| r.overhead_tokens.count).sum(),
+                measured: rows.iter().all(|r| r.overhead_tokens.measured),
+            }),
         });
     }
 
     items.sort_by(|a, b| {
-        b.overhead_tokens
-            .cmp(&a.overhead_tokens)
+        let count = |i: &UnusedItem| i.overhead_tokens.map(|t| t.count);
+        count(b)
+            .cmp(&count(a))
             .then_with(|| a.kind.cmp(&b.kind))
             .then_with(|| a.name.cmp(&b.name))
     });
@@ -241,9 +248,9 @@ mod tests {
             owner: owner.into(),
             items: 1,
             bytes: 0,
-            tokens: 0,
+            tokens: Tokens::estimated(0),
             requests,
-            overhead_tokens: overhead,
+            overhead_tokens: Tokens::estimated(overhead),
         }
     }
 
@@ -327,10 +334,19 @@ mod tests {
         };
 
         assert_eq!(find(UnusedKind::Skill, "idle").uses, 0);
-        assert_eq!(find(UnusedKind::Skill, "idle").overhead_tokens, Some(300));
+        assert_eq!(
+            find(UnusedKind::Skill, "idle")
+                .overhead_tokens
+                .map(|t| t.count),
+            Some(300)
+        );
         let reviewer = find(UnusedKind::Agent, "reviewer");
         assert_eq!(
-            (reviewer.uses, reviewer.requests, reviewer.overhead_tokens),
+            (
+                reviewer.uses,
+                reviewer.requests,
+                reviewer.overhead_tokens.map(|t| t.count)
+            ),
             (1, 3, Some(30))
         );
         let scoped = find(UnusedKind::Agent, "other-project");
@@ -340,9 +356,19 @@ mod tests {
             "other project's sessions do not count"
         );
         let docs = find(UnusedKind::McpServer, "claude.ai Claude Docs");
-        assert_eq!((docs.uses, docs.overhead_tokens), (2, Some(1200)));
+        assert_eq!(
+            (docs.uses, docs.overhead_tokens.map(|t| t.count)),
+            (2, Some(1200))
+        );
+        assert!(
+            !docs.overhead_tokens.unwrap().measured,
+            "sizes taken from bytes are estimates"
+        );
         let idle = find(UnusedKind::McpServer, "idle-srv");
-        assert_eq!((idle.uses, idle.overhead_tokens), (0, Some(50)));
+        assert_eq!(
+            (idle.uses, idle.overhead_tokens.map(|t| t.count)),
+            (0, Some(50))
+        );
         assert_eq!(
             find(UnusedKind::McpServer, "oc").overhead_tokens,
             None,
