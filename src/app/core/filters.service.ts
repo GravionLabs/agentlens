@@ -36,12 +36,19 @@ export class FiltersService {
   readonly sources = signal<SourceId[]>(this.stored?.sources ?? []);
   readonly project = signal(this.stored?.project ?? "");
 
+  /** Raised by the refresh button so every analysis runs again. */
+  readonly generation = signal(0);
+
   /** What the commands receive. */
   readonly payload = computed<Filters>(() => ({
     since: this.since() || null,
     sources: this.sources(),
     project: this.project().trim() || null,
   }));
+
+  bump(): void {
+    this.generation.update((g) => g + 1);
+  }
 
   setSince(value: string): void {
     this.since.set(value);

@@ -248,3 +248,191 @@ fn exported_sessions_without_a_local_copy_stay_and_source_otel_selects_the_impor
     assert_eq!(only_otel.len(), 1);
     assert_eq!(only_otel[0].session.id, "only-in-export");
 }
+
+// ---- Copilot CLI file exporter (spans) ----
+
+fn copilot_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/otel/copilot_cli.jsonl")
+}
+
+fn copilot_sessions() -> Vec<SessionEvents> {
+    let home = TempHome::new();
+    OtelAdapter::new(vec![copilot_path()])
+        .sessions(&home.env(), &SessionFilter::default())
+        .map(|r| r.unwrap())
+        .collect()
+}
+
+fn copilot() -> SessionEvents {
+    let mut all = copilot_sessions();
+    let i = all
+        .iter()
+        .position(|s| s.session.id == "conv-synthetic-1")
+        .expect("the conversation");
+    all.swap_remove(i)
+}
+
+#[test]
+fn copilot_spans_become_a_copilot_cli_session() {
+    let all = copilot_sessions();
+    let se = all
+        .iter()
+        .find(|s| s.session.id == "conv-synthetic-1")
+        .unwrap();
+    assert_eq!(se.session.source, Source::CopilotCli);
+    assert_eq!(se.session.model.as_deref(), Some("model-x-2026"));
+    assert_eq!(
+        all.iter()
+            .filter(|s| s.session.source == Source::CopilotCli)
+            .count(),
+        1,
+        "notifications and metrics do not create sessions"
+    );
+}
+
+#[test]
+fn chat_spans_are_measured_usage_without_double_counting_the_cache() {
+    let se = copilot();
+    let u = usages(&se);
+    assert_eq!(u.len(), 3);
+    assert!(u.iter().all(|u| u.measured && u.cost_usd.is_none()));
+    // input_tokens (1000) includes cache read (600) and write (300).
+    let first = u[0];
+    assert_eq!(
+        (
+            first.input,
+            first.output,
+            first.cache_read,
+            first.cache_write,
+            first.reasoning
+        ),
+        (100, 100, 600, 300, 40)
+    );
+    assert_eq!(first.total_input(), 1000);
+    assert_eq!(first.premium_requests, Some(1.0));
+    // Ended at T+6.5 s: the time the local session store stamps the request with.
+    let at = se
+        .events
+        .iter()
+        .find(|e| matches!(e.kind, EventKind::Usage(_)))
+        .and_then(|e| e.at)
+        .unwrap();
+    assert_eq!(at.as_millisecond(), 1780000006500);
+}
+
+#[test]
+fn an_agent_nested_in_the_main_agent_is_a_subagent() {
+    let se = copilot();
+    let u = usages(&se);
+    assert_eq!(u.iter().filter(|u| u.subagent).count(), 1);
+    assert_eq!(u.iter().find(|u| u.subagent).unwrap().input, 100);
+}
+
+#[test]
+fn tool_spans_do_not_claim_success_when_the_span_is_silent() {
+    let se = copilot();
+    let tools: Vec<_> = se
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::ToolCall(t) => Some(t),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tools.len(), 2);
+    let glob = tools.iter().find(|t| t.name == "glob").unwrap();
+    assert_eq!(glob.status, ToolStatus::Unknown);
+    assert_eq!(glob.duration_ms, Some(10));
+    assert_eq!(
+        tools.iter().find(|t| t.name == "view").unwrap().status,
+        ToolStatus::Error
+    );
+    assert!(tools.iter().all(|t| t.input_summary.is_none()));
+}
+
+#[test]
+fn the_user_message_event_is_a_user_turn() {
+    let se = copilot();
+    assert_eq!(
+        se.events
+            .iter()
+            .filter(|e| matches!(e.kind, EventKind::UserTurn))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn metrics_are_counted_as_skipped() {
+    let se = copilot();
+    assert!(
+        se.warnings
+            .iter()
+            .any(|w| w.message.contains("metrics (1)")),
+        "{:?}",
+        se.warnings
+    );
+}
+
+#[test]
+fn a_copilot_export_replaces_the_usage_of_the_local_session_it_covers() {
+    use agentlens_core::adapter::merge_export;
+    use agentlens_core::model::Session;
+
+    let export = copilot();
+    let mut local = SessionEvents::new(Session::new("conv-synthetic-1", Source::CopilotCli));
+    // A local request inside the exported range and one long before it.
+    // The first one is stamped 3 ms before the span ended, like the real session store does.
+    for ms in [1780000006497_i64, 1700000000000] {
+        local.push(
+            jiff::Timestamp::from_millisecond(ms).ok(),
+            EventKind::Usage(Usage {
+                input: 7,
+                measured: true,
+                ..Usage::default()
+            }),
+        );
+    }
+    let merged = merge_export(local, export);
+    let inputs: Vec<u64> = usages(&merged).iter().map(|u| u.input).collect();
+    assert_eq!(inputs.len(), 4, "3 exported + 1 local outside the range");
+    assert_eq!(inputs.iter().filter(|i| **i == 7).count(), 1);
+}
+
+// ---- VS Code Copilot (same agent host and schema as Copilot CLI) ----
+
+#[test]
+fn a_vscode_copilot_export_reads_like_the_cli_and_skips_host_spans() {
+    let home = TempHome::new();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/otel/vscode_copilot.jsonl");
+    let adapter = OtelAdapter::new(vec![path]);
+    let all: Vec<SessionEvents> = adapter
+        .sessions(&home.env(), &SessionFilter::default())
+        .map(|r| r.unwrap())
+        .collect();
+    assert_eq!(all.len(), 1);
+    let se = &all[0];
+    assert_eq!(se.session.id, "conv-synthetic-vscode");
+    assert_eq!(se.session.source, Source::CopilotCli);
+    let u = usages(se);
+    assert_eq!(u.len(), 2);
+    assert!(u.iter().all(|u| u.measured));
+    assert_eq!(u[0].input, 100, "2000 minus 1900 cache write");
+    assert_eq!(u[1].cache_read, 1900);
+    assert_eq!(u[1].input, 100, "2200 minus 1900 read minus 200 write");
+    assert_eq!(
+        se.events
+            .iter()
+            .filter(|e| matches!(e.kind, EventKind::ToolCall(_)))
+            .count(),
+        1
+    );
+    assert_eq!(
+        se.events
+            .iter()
+            .filter(|e| matches!(e.kind, EventKind::UserTurn))
+            .count(),
+        1
+    );
+}

@@ -360,8 +360,10 @@ impl Acc {
 
 /// Listing tokens × the requests of every session in which the skill is listed.
 /// Per session the first visible copy (sorted by file) decides the listing size.
+/// The result is measured only if every listing size that went into it was.
 fn baseline(entries: &[&SkillEntry], sessions: &[SessionEvents]) -> BaselineCost {
     let (mut requests, mut tokens) = (0u64, 0u64);
+    let (mut counted, mut all_measured) = (false, true);
     for se in sessions {
         let visible = entries.iter().find(|entry| {
             entry.locations.iter().any(|loc| {
@@ -382,11 +384,16 @@ fn baseline(entries: &[&SkillEntry], sessions: &[SessionEvents]) -> BaselineCost
                 .count() as u64;
             requests += n;
             tokens += entry.baseline_tokens.count * n;
+            counted = true;
+            all_measured &= entry.baseline_tokens.measured;
         }
     }
     BaselineCost {
         requests,
-        tokens: Tokens::estimated(tokens),
+        tokens: Tokens {
+            count: tokens,
+            measured: counted && all_measured,
+        },
     }
 }
 
@@ -701,6 +708,35 @@ mod tests {
             "unused skills are reported with their baseline cost"
         );
         assert_eq!(r.requests_by_source[&Source::CopilotCli], 10);
+    }
+
+    #[test]
+    fn baseline_is_measured_only_if_the_listing_size_was() {
+        let reqs = (0..3).map(|_| usage(1, 1, 1, 1, false)).collect::<Vec<_>>();
+        let sessions = [session("c", Source::ClaudeCode, "/work/demo", reqs)];
+
+        let mut exact = entry("e", 7, 0, LocationKind::UserClaude, "/h/.claude/skills");
+        exact.baseline_tokens = Tokens::measured(7);
+        let r = analyze(&inventory(vec![exact]), &sessions, &CharsPerToken);
+        assert_eq!(find(&r, "e").baseline.tokens, Tokens::measured(21));
+
+        let guessed = entry("g", 7, 0, LocationKind::UserClaude, "/h/.claude/skills");
+        let r = analyze(&inventory(vec![guessed]), &sessions, &CharsPerToken);
+        assert_eq!(find(&r, "g").baseline.tokens, Tokens::estimated(21));
+
+        let unlisted = entry(
+            "u",
+            7,
+            0,
+            LocationKind::ProjectGithub,
+            "/other/.github/skills",
+        );
+        let r = analyze(&inventory(vec![unlisted]), &sessions, &CharsPerToken);
+        assert_eq!(
+            find(&r, "u").baseline.tokens,
+            Tokens::estimated(0),
+            "nothing counted stays an estimate"
+        );
     }
 }
 

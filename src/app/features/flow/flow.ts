@@ -1,6 +1,7 @@
+import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, percent, seconds, shortId, sourceLabel } from "../../core/format";
+import { number, percent, seconds, shortId, shortPath, sourceLabel } from "../../core/format";
 import type {
   FlowData,
   HookStats,
@@ -26,12 +27,16 @@ export function errorRate(t: ToolErrors): number | null {
 
 @Component({
   selector: "app-flow",
-  imports: [Status, DataTable],
+  imports: [PageHeader, Status, DataTable],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <h2>Flow</h2>
-      <p class="muted">How sessions unfold. Values come from what the clients report.</p>
+      <app-page-header
+        title="Flow"
+        summary="How sessions unfold: context growth, tool errors and permission waits."
+      >
+        <p>Values come from what the clients report.</p>
+      </app-page-header>
       <app-status
         [loading]="res.isLoading()"
         [error]="res.error()"
@@ -160,8 +165,20 @@ export class Flow {
 
   protected readonly growthColumns: Column<SessionGrowth>[] = [
     { key: "source", label: "Source", value: (g) => g.source, text: (g) => sourceLabel(g.source) },
-    { key: "session", label: "Session", value: (g) => g.session, text: (g) => shortId(g.session) },
-    { key: "project", label: "Project", value: (g) => g.project, text: (g) => g.project ?? "-" },
+    {
+      key: "session",
+      label: "Session",
+      value: (g) => g.session,
+      text: (g) => shortId(g.session),
+      hover: (g) => g.session,
+    },
+    {
+      key: "project",
+      label: "Project",
+      value: (g) => g.project,
+      text: (g) => shortPath(g.project),
+      hover: (g) => g.project,
+    },
     { key: "model", label: "Model", value: (g) => g.model, text: (g) => g.model ?? "-" },
     { key: "requests", label: "Requests", value: (g) => g.requests, numeric: true },
     {
@@ -181,20 +198,27 @@ export class Flow {
     {
       key: "peak",
       label: "Peak",
+      term: "peak",
       value: (g) => g.peak_tokens,
       text: (g) => number(g.peak_tokens),
       numeric: true,
     },
     {
       key: "compactions",
-      label: "Size before compaction",
+      label: "Compactions",
+      term: "compaction",
       value: (g) => g.compactions.length,
-      text: (g) => g.compactions.map(number).join(" ") || "-",
+      text: (g) => (g.compactions.length > 0 ? String(g.compactions.length) : "-"),
+      hover: (g) =>
+        g.compactions.length > 0
+          ? `Size before each compaction: ${g.compactions.map(number).join(", ")}`
+          : null,
       numeric: true,
     },
     {
       key: "near",
       label: "Near limit",
+      term: "near-limit",
       value: (g) => (g.near_limit ? 1 : 0),
       text: (g) => (g.near_limit ? "yes" : ""),
       title: "At least 90% of the model's window",
@@ -272,6 +296,7 @@ export class Flow {
     {
       key: "wait",
       label: "Wait (s)",
+      term: "permission-wait",
       value: (p) => p.total_wait_ms,
       text: (p) => seconds(p.total_wait_ms),
       numeric: true,

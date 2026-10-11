@@ -1,6 +1,8 @@
+import { PageHeader } from "../../ui/page-header";
+import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, percent, sourceLabel } from "../../core/format";
+import { number, pathLabel, percent, shortId, sourceLabel } from "../../core/format";
 import type { CacheRow, EfficiencyReport, SubagentShare } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
@@ -14,15 +16,19 @@ export function share(part: number, whole: number): number | null {
 
 @Component({
   selector: "app-efficiency",
-  imports: [Status, DataTable],
+  imports: [PageHeader, Term, Status, DataTable],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <h2>Efficiency</h2>
-      <p class="muted">
-        Cache hit rate = cache read / all input tokens (measured). “n/a”: the client reports no
-        cache tokens.
-      </p>
+      <app-page-header
+        title="Efficiency"
+        summary="How well the prompt cache works and how much subagents contribute."
+      >
+        <p>
+          <app-term id="hit-rate">Cache hit rate</app-term> = cache read / all input tokens
+          (measured). “n/a”: the client reports no cache tokens.
+        </p>
+      </app-page-header>
       <label class="by">
         <span>Group the cache table by</span>
         <select (change)="by.set(asSelect($event).value)">
@@ -83,11 +89,19 @@ export class Efficiency {
   protected readonly subagents = computed(() => this.res.value()?.data.subagents ?? []);
 
   protected readonly cacheColumns: Column<CacheRow>[] = [
-    { key: "key", label: "Group", value: (r) => r.key },
+    {
+      key: "key",
+      label: "Group",
+      value: (r) => r.key,
+      text: (r) =>
+        r.key.length > 30 && !r.key.startsWith("/") ? shortId(r.key) : pathLabel(r.key),
+      hover: (r) => r.key,
+    },
     { key: "source", label: "Source", value: (r) => r.source, text: (r) => sourceLabel(r.source) },
     {
       key: "requests",
       label: "Requests",
+      term: "request",
       value: (r) => r.requests,
       text: (r) => number(r.requests),
       numeric: true,
@@ -102,6 +116,7 @@ export class Efficiency {
     {
       key: "read",
       label: "Cache read",
+      term: "cache-read",
       value: (r) => r.cache_read,
       text: (r) => number(r.cache_read),
       numeric: true,
@@ -109,6 +124,7 @@ export class Efficiency {
     {
       key: "write",
       label: "Cache write",
+      term: "cache-write",
       value: (r) => r.cache_write,
       text: (r) => number(r.cache_write),
       numeric: true,
@@ -116,6 +132,7 @@ export class Efficiency {
     {
       key: "rate",
       label: "Hit rate",
+      term: "hit-rate",
       value: (r) => r.hit_rate,
       text: (r) => percent(r.hit_rate),
       numeric: true,
@@ -127,6 +144,7 @@ export class Efficiency {
     {
       key: "requests",
       label: "Requests",
+      term: "request",
       value: (s) => s.requests,
       text: (s) => number(s.requests),
       numeric: true,
@@ -155,6 +173,7 @@ export class Efficiency {
     {
       key: "unpriced",
       label: "Unpriced requests",
+      term: "unpriced",
       value: (s) => s.unpriced_requests,
       numeric: true,
     },

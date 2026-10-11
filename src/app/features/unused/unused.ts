@@ -1,22 +1,28 @@
+import { PageHeader } from "../../ui/page-header";
+import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, sourceLabel, tokens } from "../../core/format";
+import { number, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { UnusedItem, UnusedReport } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
 
 @Component({
   selector: "app-unused",
-  imports: [Status, DataTable],
+  imports: [PageHeader, Term, Status, DataTable],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <h2>Unused</h2>
-      <p class="muted">
-        Installed skills, agents and MCP servers that were not used in the period (30 days unless a
-        period is chosen), with the cost they cause while idle. <span class="est">~</span> marks
-        estimates; <em>unknown</em> means the client reports no data for MCP servers.
-      </p>
+      <app-page-header
+        title="Unused"
+        summary="Installed skills, agents and MCP servers nobody used, and what they cost while idle."
+      >
+        <p>
+          Items that were not used in the period (30 days unless a period is chosen), with the
+          <app-term id="idle-cost">idle cost</app-term> they cause. <span class="est">~</span> marks
+          estimates; <em>unknown</em> means the client reports no data for MCP servers.
+        </p>
+      </app-page-header>
       <app-status
         [loading]="res.isLoading()"
         [error]="res.error()"
@@ -61,7 +67,13 @@ export class Unused {
   protected readonly columns: Column<UnusedItem>[] = [
     { key: "kind", label: "Kind", value: (i) => i.kind },
     { key: "name", label: "Name", value: (i) => i.name },
-    { key: "project", label: "Project", value: (i) => i.project, text: (i) => i.project ?? "-" },
+    {
+      key: "project",
+      label: "Project",
+      value: (i) => i.project,
+      text: (i) => shortPath(i.project),
+      hover: (i) => i.project,
+    },
     {
       key: "clients",
       label: "Clients",
@@ -72,6 +84,7 @@ export class Unused {
     {
       key: "requests",
       label: "Requests",
+      term: "request",
       value: (i) => i.requests,
       text: (i) => number(i.requests),
       numeric: true,
@@ -79,6 +92,7 @@ export class Unused {
     {
       key: "cost",
       label: "Idle cost",
+      term: "idle-cost",
       value: (i) => i.overhead_tokens,
       text: (i) => (i.overhead_tokens === null ? "unknown" : tokens(i.overhead_tokens, true)),
       estimated: (i) => i.overhead_tokens !== null,

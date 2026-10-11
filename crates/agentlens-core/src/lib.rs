@@ -6,6 +6,7 @@ pub mod adapters;
 pub mod analyzers;
 pub mod catalog;
 pub mod env;
+pub mod exact;
 pub mod instructions;
 pub mod inventory;
 pub mod model;

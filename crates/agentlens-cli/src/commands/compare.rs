@@ -3,7 +3,7 @@ use agentlens_core::analyzers::compare::SourceStats;
 use agentlens_core::env::Env;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::compare_run;
-use agentlens_core::tokens::CharsPerToken;
+use agentlens_core::tokens::TokenEstimator;
 use anyhow::Result;
 
 use crate::output;
@@ -53,9 +53,10 @@ pub fn run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    estimator: &dyn TokenEstimator,
     format: Format,
 ) -> Result<()> {
-    let run = compare_run(registry, env, filter, only, &CharsPerToken);
+    let run = compare_run(registry, env, filter, only, estimator);
     let sources = &run.report.sources;
 
     match format {

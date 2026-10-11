@@ -39,10 +39,14 @@ pub fn run(env: &Env, file: &Path, format: Format) -> Result<()> {
         }
         ids.insert(se.session.id.clone());
     }
-    // Sessions that the local Claude Code data holds as well are not counted twice.
+    // Sessions that the local Claude Code or Copilot CLI data holds as well are not counted twice.
     let local = registry_with_otel(Vec::new());
     let also_local = local
-        .sessions(env, &SessionFilter::default(), &[Source::ClaudeCode])
+        .sessions(
+            env,
+            &SessionFilter::default(),
+            &[Source::ClaudeCode, Source::CopilotCli],
+        )
         .filter_map(Result::ok)
         .filter(|s| ids.contains(&s.session.id))
         .count();
@@ -110,7 +114,7 @@ pub fn run(env: &Env, file: &Path, format: Format) -> Result<()> {
             );
             if also_local > 0 {
                 println!(
-                    "{also_local} of these sessions are also in the local Claude Code data; analyses count them once; the export's requests replace the local usage in the range the export covers."
+                    "{also_local} of these sessions are also in the local Claude Code or Copilot CLI data; analyses count them once; the export's requests replace the local usage in the range the export covers."
                 );
             }
             for w in &warnings {

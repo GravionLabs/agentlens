@@ -1,6 +1,8 @@
+import { PageHeader } from "../../ui/page-header";
+import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, usd } from "../../core/format";
+import { number, pathLabel, usd } from "../../core/format";
 import type { CostData, CostRow, WhatIfRow } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
@@ -26,16 +28,20 @@ export function money(r: CostRow): string {
 
 @Component({
   selector: "app-cost",
-  imports: [Status, DataTable],
+  imports: [PageHeader, Term, Status, DataTable],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <h2>Cost</h2>
-      <p class="muted">
-        Cost the client reported is shown as is; <span class="est">~</span> was computed from the
-        price table. Cache writes are priced as 5-minute writes. Premium requests are a plan
-        allowance, not money.
-      </p>
+      <app-page-header
+        title="Cost"
+        summary="What the usage costs, grouped by model, project, branch or issue."
+      >
+        <p>
+          Cost the client reported is shown as is; <span class="est">~</span> was computed from the
+          price table. Cache writes are priced as 5-minute writes.
+          <app-term id="premium">Premium requests</app-term> are a plan allowance, not money.
+        </p>
+      </app-page-header>
       <form class="controls" (submit)="apply($event)">
         <label>
           <span>Group by</span>
@@ -179,10 +185,13 @@ export class Cost {
       key: "key",
       label: GROUPS.find((g) => g.id === this.by())?.label ?? "Group",
       value: (r) => r.key,
+      text: (r) => pathLabel(r.key),
+      hover: (r) => r.key,
     },
     {
       key: "requests",
       label: "Requests",
+      term: "request",
       value: (r) => r.requests,
       text: (r) => number(r.requests),
       numeric: true,
@@ -210,14 +219,16 @@ export class Cost {
       estimated: (r) => r.estimated_usd > 0 && r.measured_usd === 0,
       numeric: true,
     },
-    {
-      key: "premium",
-      label: "Premium requests",
-      value: (r) => r.premium_requests,
-      text: (r) => (r.premium_requests > 0 ? String(r.premium_requests) : ""),
-      numeric: true,
-    },
+    ...(this.rows().some((r) => r.premium_requests > 0) ? [this.premiumColumn] : []),
   ]);
+
+  private readonly premiumColumn: Column<CostRow> = {
+    key: "premium",
+    label: "Premium requests",
+    value: (r) => r.premium_requests,
+    text: (r) => (r.premium_requests > 0 ? String(r.premium_requests) : ""),
+    numeric: true,
+  };
 
   protected readonly whatIfColumns: Column<WhatIfRow>[] = [
     { key: "model", label: "Model", value: (r) => r.model },

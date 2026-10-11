@@ -42,8 +42,11 @@ fn agentlens(home: &TempDir) -> Command {
     for var in [
         "CLAUDE_CONFIG_DIR",
         "COPILOT_HOME",
+        "XDG_CACHE_HOME",
         "XDG_CONFIG_HOME",
         "XDG_DATA_HOME",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_BASE_URL",
     ] {
         cmd.env_remove(var);
     }
@@ -924,4 +927,118 @@ fn otel_cost_comes_from_the_export_as_measured_cost() {
     );
     assert!((v["total"]["measured_usd"].as_f64().unwrap() - 0.30).abs() < 1e-9);
     assert_eq!(v["total"]["unpriced_requests"], 0);
+}
+
+/// Answers every request with `{"input_tokens": 11}`; returns its URL and a request counter.
+fn count_tokens_mock() -> (String, std::sync::Arc<std::sync::atomic::AtomicU64>) {
+    use std::io::{Read, Write};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let hits = std::sync::Arc::new(AtomicU64::new(0));
+    let counter = hits.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut s) = stream else { break };
+            let mut seen = Vec::new();
+            let mut buf = [0u8; 8192];
+            loop {
+                let n = s.read(&mut buf).unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                seen.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&seen).to_string();
+                if let Some(h) = text.find("\r\n\r\n") {
+                    let len = text[..h]
+                        .lines()
+                        .find_map(|l| {
+                            l.to_ascii_lowercase()
+                                .strip_prefix("content-length:")
+                                .and_then(|v| v.trim().parse::<usize>().ok())
+                        })
+                        .unwrap_or(0);
+                    if seen.len() >= h + 4 + len {
+                        break;
+                    }
+                }
+            }
+            counter.fetch_add(1, Ordering::SeqCst);
+            let body = r#"{"input_tokens": 11}"#;
+            let _ = write!(
+                s,
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            );
+        }
+    });
+    (url, hits)
+}
+
+#[test]
+fn exact_without_a_key_stops_with_a_clear_message() {
+    let home = home();
+    agentlens(&home)
+        .args(["--exact", "skills", "--format", "json"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("ANTHROPIC_API_KEY"));
+}
+
+#[test]
+fn exact_model_needs_exact() {
+    let home = home();
+    agentlens(&home)
+        .args(["--exact-model", "m", "skills"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--exact"));
+}
+
+#[test]
+fn exact_counts_skills_with_the_api_and_caches_them() {
+    let home = home();
+    let (url, hits) = count_tokens_mock();
+    let run = || {
+        json(
+            agentlens(&home)
+                .env("ANTHROPIC_API_KEY", "test-key")
+                .env("ANTHROPIC_BASE_URL", &url)
+                .args(["--exact", "--format", "json", "skills"]),
+        )
+    };
+    let first = run();
+    let skills = first["skills"].as_array().unwrap();
+    let demo = skills.iter().find(|s| s["name"] == "demo").unwrap();
+    assert_eq!(demo["baseline"]["tokens"]["measured"], true);
+    // The mock counts 11 tokens for the listing; the baseline is that times the requests.
+    let requests = demo["baseline"]["requests"].as_u64().unwrap();
+    assert!(requests > 0);
+    assert_eq!(
+        demo["baseline"]["tokens"]["count"].as_u64().unwrap(),
+        11 * requests
+    );
+    let calls = hits.load(std::sync::atomic::Ordering::SeqCst);
+    assert!(calls > 0);
+
+    run();
+    assert_eq!(
+        hits.load(std::sync::atomic::Ordering::SeqCst),
+        calls,
+        "the second run is answered from the cache"
+    );
+}
+
+#[test]
+fn without_exact_the_counts_are_estimates() {
+    let home = home();
+    let v = json(agentlens(&home).args(["--format", "json", "skills"]));
+    let demo = v["skills"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == "demo")
+        .unwrap();
+    assert_eq!(demo["baseline"]["tokens"]["measured"], false);
 }

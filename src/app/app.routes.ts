@@ -15,6 +15,7 @@ export const NAV: NavItem[] = [
   { path: "efficiency", label: "Efficiency" },
   { path: "compare", label: "Compare" },
   { path: "timeline", label: "Timeline" },
+  { path: "glossary", label: "Glossary" },
 ];
 
 export const routes: Routes = [
@@ -54,6 +55,10 @@ export const routes: Routes = [
   {
     path: "timeline",
     loadComponent: () => import("./features/timeline/timeline").then((m) => m.Timeline),
+  },
+  {
+    path: "glossary",
+    loadComponent: () => import("./features/glossary/glossary").then((m) => m.Glossary),
   },
   { path: "**", redirectTo: "overview" },
 ];

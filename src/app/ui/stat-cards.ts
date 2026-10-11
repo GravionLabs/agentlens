@@ -21,18 +21,18 @@ export interface Stat {
   styles: `
     .cards {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 12px;
-      margin: 12px 0;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px;
+      margin: 8px 0;
     }
     .card {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 10px 14px;
+      padding: 6px 12px;
     }
     .v {
-      font-size: 1.4rem;
+      font-size: 1.25rem;
       font-weight: 650;
       font-variant-numeric: tabular-nums;
     }

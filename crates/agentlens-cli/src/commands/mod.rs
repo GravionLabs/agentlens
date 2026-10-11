@@ -1,6 +1,7 @@
 mod compare;
 mod context;
 mod cost;
+mod counter;
 mod efficiency;
 mod flow;
 mod import_otel;
@@ -20,13 +21,15 @@ pub fn run(cli: Cli) -> Result<()> {
         Env::from_system().context("cannot determine the home directory (HOME or USERPROFILE)")?;
     let registry = registry_with_otel(cli.otel.clone());
     let filter = cli.filter()?;
-    match cli.command {
+    let counter = counter::Counter::new(&env, cli.exact, cli.exact_model.as_deref())?;
+    let est = counter.estimator();
+    let result = match cli.command {
         Command::ImportOtel { file } => import_otel::run(&env, &file, cli.format),
         Command::Scan => scan::run(&registry, &env, &filter, &cli.source, cli.format),
-        Command::Skills => skills::run(&registry, &env, &filter, &cli.source, cli.format),
-        Command::Compare => compare::run(&registry, &env, &filter, &cli.source, cli.format),
+        Command::Skills => skills::run(&registry, &env, &filter, &cli.source, est, cli.format),
+        Command::Compare => compare::run(&registry, &env, &filter, &cli.source, est, cli.format),
         Command::Context { kind } => {
-            context::run(&registry, &env, &filter, &cli.source, kind, cli.format)
+            context::run(&registry, &env, &filter, &cli.source, est, kind, cli.format)
         }
         Command::Cost {
             by,
@@ -70,8 +73,10 @@ pub fn run(cli: Cli) -> Result<()> {
             if cli.since.is_none() {
                 filter.since = Some(crate::args::days_ago(days, jiff::Timestamp::now())?);
             }
-            unused::run(&registry, &env, &filter, &cli.source, all, cli.format)
+            unused::run(&registry, &env, &filter, &cli.source, est, all, cli.format)
         }
-        Command::Report { html } => report::run(&registry, &env, &filter, &cli.source, &html),
-    }
+        Command::Report { html } => report::run(&registry, &env, &filter, &cli.source, est, &html),
+    };
+    counter.finish();
+    result
 }

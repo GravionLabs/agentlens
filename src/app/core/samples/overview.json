@@ -16,7 +16,7 @@
       "source": "opencode",
       "found": false,
       "roots": [],
-      "note": "/home/user/.local/share/opencode/opencode.db does not exist",
+      "note": "/home/user/.local/share/opencode/opencode.db and /home/user/.local/share/opencode/storage do not exist",
       "sessions": 0,
       "events": 0,
       "warnings": 0,

@@ -44,12 +44,8 @@ import { SOURCES, type SourceId } from "../core/types";
   styles: `
     .bar {
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px 24px;
-      align-items: flex-end;
-      padding: 12px 16px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--line);
+      flex-direction: column;
+      gap: 10px;
     }
     label,
     fieldset {
@@ -60,20 +56,15 @@ import { SOURCES, type SourceId } from "../core/types";
       color: var(--muted);
     }
     fieldset {
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 4px 12px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
       border: 0;
       margin: 0;
       padding: 0;
-      align-items: center;
-      /* As tall as the inputs next to it, so the checkboxes line up with them. */
-      min-height: 32px;
     }
     legend {
-      float: left;
-      padding: 0 8px 0 0;
-      line-height: 32px;
+      padding: 0;
     }
     .check {
       flex-direction: row;
@@ -88,7 +79,7 @@ import { SOURCES, type SourceId } from "../core/types";
       border: 1px solid var(--line);
       border-radius: 6px;
       padding: 5px 8px;
-      min-width: 200px;
+      width: 100%;
     }
   `,
 })

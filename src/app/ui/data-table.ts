@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from "@angular/core";
+import { RouterLink } from "@angular/router";
+import { glossaryEntry } from "../core/glossary";
 
 export interface Column<T> {
   key: string;
@@ -11,11 +13,16 @@ export interface Column<T> {
   /** `true` marks the displayed value as an estimate (shown with a tilde by `text`). */
   estimated?: (row: T) => boolean;
   title?: string;
+  /** A glossary id: the header gets its explanation as a tooltip and a link to the glossary. */
+  term?: string;
+  /** A tooltip for the cell, e.g. the full path behind a shortened one. */
+  hover?: (row: T) => string | null;
 }
 
 /** A sortable table with an optional text filter on the first column. */
 @Component({
   selector: "app-data-table",
+  imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (filterable()) {
@@ -36,9 +43,18 @@ export interface Column<T> {
                 scope="col"
                 [class.num]="c.numeric"
                 [attr.aria-sort]="ariaSort(c.key)"
-                [title]="c.title ?? ''"
+                [title]="header(c)"
               >
                 <button type="button" (click)="sortBy(c.key)">{{ c.label }}</button>
+                @if (c.term) {
+                  <a
+                    class="help"
+                    routerLink="/glossary"
+                    [queryParams]="{ term: c.term }"
+                    [attr.aria-label]="'Explain ' + c.label"
+                    >?</a
+                  >
+                }
               </th>
             }
           </tr>
@@ -47,7 +63,11 @@ export interface Column<T> {
           @for (row of rows(); track $index) {
             <tr [class.dim]="dim()(row)">
               @for (c of columns(); track c.key) {
-                <td [class.num]="c.numeric" [class.est]="c.estimated?.(row)">
+                <td
+                  [class.num]="c.numeric"
+                  [class.est]="c.estimated?.(row)"
+                  [attr.title]="c.hover?.(row) ?? null"
+                >
                   {{ cell(c, row) }}
                 </td>
               }
@@ -69,7 +89,9 @@ export interface Column<T> {
   `,
   styles: `
     .wrap {
-      overflow-x: auto;
+      /* Scrolls on its own, so the header stays visible and the page does not grow with the rows. */
+      overflow: auto;
+      max-height: var(--table-max, max(240px, calc(100dvh - 220px)));
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 10px;
@@ -81,10 +103,35 @@ export interface Column<T> {
     }
     th,
     td {
-      padding: 6px 12px;
+      padding: 4px 12px;
       border-bottom: 1px solid var(--line);
       text-align: left;
       white-space: nowrap;
+    }
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--panel);
+      box-shadow: 0 1px 0 var(--line);
+    }
+    .help {
+      margin-left: 4px;
+      font-size: 0.7rem;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      width: 14px;
+      height: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      vertical-align: middle;
+    }
+    .help:hover {
+      color: var(--accent);
+      border-color: var(--accent);
     }
     th button {
       all: unset;
@@ -202,6 +249,10 @@ export class DataTable<T> {
     const s = this.effectiveSort();
     if (!s || s.key !== key) return null;
     return s.descending ? "descending" : "ascending";
+  }
+
+  protected header(c: Column<T>): string {
+    return c.title ?? (c.term ? (glossaryEntry(c.term)?.short ?? "") : "");
   }
 
   protected cell(c: Column<T>, row: T): string {

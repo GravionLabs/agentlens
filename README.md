@@ -26,6 +26,8 @@ Verify the download against `SHA256SUMS` from the same release (`sha256sum -c --
 
 The desktop application comes as installers in the same release: a `.deb`, `.rpm` or AppImage for Linux x86_64, a `.dmg` for macOS on Apple silicon and an `.msi` or setup `.exe` for Windows x86_64. They are not signed yet, so the systems warn on first start: on macOS open the app with a right click and choose Open (or allow it in System Settings, Privacy and Security), on Windows choose More info and Run anyway in SmartScreen, and make an AppImage executable (`chmod +x`) before running it.
 
+The application checks for a newer release only when you click **Check for updates**, and installs it after you confirm; see [docs/updater.md](docs/updater.md).
+
 To build from source, install the Rust toolchain and run `cargo install --path crates/agentlens-cli`.
 
 ## Usage
@@ -43,7 +45,7 @@ cargo run -p agentlens-cli -- flow --top 10               # context growth and c
 cargo run -p agentlens-cli -- unused --days 30           # installed skills, agents and MCP servers without use, with their idle cost
 ```
 
-Global flags: `--since <12h|30d|4w|2026-10-01>`, `--source <id>` (repeatable), `--project <dir>`, `--format table|json|csv`.
+Global flags: `--since <12h|30d|4w|2026-10-01>`, `--source <id>` (repeatable), `--project <dir>`, `--format table|json|csv`, `--exact` (see below).
 
 Token values with a leading `~` are estimated (see [ADR 0001](docs/adr/0001-token-estimation.md)); values without it were reported by the client. In the skills table:
 
@@ -53,6 +55,23 @@ Token values with a leading `~` are estimated (see [ADR 0001](docs/adr/0001-toke
 | carry | the loaded content sent again with every later request until the context is compacted |
 | baseline | name and description of the skill, sent with every request of the clients that list it, used or not |
 | overhead | baseline + load + carry |
+
+### Exact token counts (opt-in)
+
+By default the size of skill texts is estimated as characters / 4 and nothing leaves your machine. With `--exact` the name and description of every installed skill (the baseline listing) and the body of each skill are counted by the Anthropic `count_tokens` API instead:
+
+```sh
+export ANTHROPIC_API_KEY=...
+agentlens --exact skills
+agentlens --exact --exact-model claude-opus-5-5 unused
+```
+
+- `--exact` works for `skills`, `context`, `unused`, `compare` and `report`. Without `ANTHROPIC_API_KEY` the command stops before reading anything. `--exact-model` picks the tokenizer (default `claude-sonnet-5-5`); Claude models do not all tokenize alike.
+- **What is sent:** the text of each installed skill (name plus description, and the body), one request per distinct text, to `https://api.anthropic.com/v1/messages/count_tokens` (or to `ANTHROPIC_BASE_URL` if set). Session contents are never sent. Skill files can contain private instructions; do not use `--exact` if they must not leave the machine. The counting endpoint is free of charge but rate limited.
+- **Cache:** counts are stored by model and content hash in `$XDG_CACHE_HOME/agentlens/count_tokens/<model>.json` (`~/.cache/...`), so repeated runs send nothing for unchanged skills. Delete the file to start over.
+- **Marking:** counted values are shown without `~`. Values that are still computed stay estimates: carry, and the sizes of instruction files and tool definitions, which are known only by their file size.
+- **Failure:** if the key is rejected, the network is down or the rate limit is hit, the run continues with the estimate, prints one warning on stderr and sends no further requests.
+- The count includes the few tokens the API adds around a message, so it is slightly higher than the bare text.
 
 `agentlens context` shows static context the client adds to every request, with columns `kind` (tool listing, tool definition, MCP instructions, agent listing, skill listing, instruction file), `owner` (MCP server, `built-in`, or file path), `items` (distinct items, once per session), `tokens` (estimated size of those items), `requests` (main-agent requests that followed them) and `overhead` (tokens x requests, estimated). The measured size of the first request of a session bounds everything static. Only Claude Code reports these items today; other sources are listed as not available.
 
@@ -68,7 +87,7 @@ Token values with a leading `~` are estimated (see [ADR 0001](docs/adr/0001-toke
 
 OpenTelemetry exports of Claude Code can be added with `--otel FILE` or inspected with `agentlens import-otel FILE`; see [docs/telemetry.md](docs/telemetry.md) for how to produce them. The measured per-skill attribution from the export shows up as the `attributed` column of `agentlens skills`.
 
-Supported sources today: Claude Code, OpenCode (SQLite database), GitHub Copilot CLI and GitHub Copilot Chat in VS Code and VS Code Insiders (`chatSessions` files, including the `.jsonl` operation log). Copilot CLI sessions without per-request rows in `session-store.db` fall back to the session totals from `session.shutdown`, which cannot be split per request. VS Code reports prompt and completion tokens per request without a cache split, plus the share of system instructions and tool definitions in the prompt, which `agentlens context` uses as reported token counts. Cost for Copilot sources is computed with the vendor's API list prices when the model is in the price table; Copilot itself bills premium requests, so treat it as a comparison figure, not an invoice.
+Supported sources today: Claude Code, OpenCode (SQLite database, and the JSON files of versions before 1.2.0 under `~/.local/share/opencode/storage`; a session in both is counted once), GitHub Copilot CLI and GitHub Copilot Chat in VS Code and VS Code Insiders (`chatSessions` files, including the `.jsonl` operation log). Copilot CLI sessions without per-request rows in `session-store.db` fall back to the session totals from `session.shutdown`, which cannot be split per request. VS Code reports prompt and completion tokens per request without a cache split, plus the share of system instructions and tool definitions in the prompt, which `agentlens context` uses as reported token counts. Cost for Copilot sources is computed with the vendor's API list prices when the model is in the price table; Copilot itself bills premium requests, so treat it as a comparison figure, not an invoice.
 
 ## Application
 
