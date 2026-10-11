@@ -2,19 +2,7 @@
 
 ## Install
 
-Every push to `main` publishes a release. Download the archive for your platform from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` and `agentlens-mcp` (the [MCP server](mcp-server.md)) on your `PATH`:
-
-| Platform               | Archive                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------ |
-| Linux x86_64 / aarch64 | `agentlens-x86_64-unknown-linux-gnu.tar.gz` / `agentlens-aarch64-unknown-linux-gnu.tar.gz` |
-| macOS Apple silicon    | `agentlens-aarch64-apple-darwin.tar.gz`                                                    |
-| Windows x86_64         | `agentlens-x86_64-pc-windows-msvc.zip`                                                     |
-
-Verify the download against `SHA256SUMS` from the same release (`sha256sum -c --ignore-missing SHA256SUMS`).
-
-The [desktop application](application.md) comes as installers in the same release: a `.deb`, `.rpm` or AppImage for Linux x86_64, a `.dmg` for macOS on Apple silicon and an `.msi` or setup `.exe` for Windows x86_64. They are not signed yet, so the systems warn on first start: on macOS open the app with a right click and choose Open (or allow it in System Settings, Privacy and Security), on Windows choose More info and Run anyway in SmartScreen, and make an AppImage executable (`chmod +x`) before running it.
-
-To build from source, install the Rust toolchain and run `cargo install --path crates/agentlens-cli` (and `--path crates/agentlens-mcp` for the MCP server).
+[Download](download.md) the command line (and the MCP server) or the desktop application for your platform, unpack the archive and put `agentlens` on your `PATH`.
 
 ## First commands
 

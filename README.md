@@ -14,6 +14,7 @@ The guide is a website at <https://gravionlabs.github.io/agentlens/> (with the a
 
 | Page                                                          | About                                                                      |
 | ------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [Download](docs/guide/download.md) | the application, the command line and the MCP server |
 | [Getting started](docs/guide/getting-started.md)              | install, first commands, filters                                           |
 | [Sources](docs/guide/sources.md)                              | which agents are read, where their files are, what each one reports        |
 | [Measured and estimated](docs/guide/measured-and-estimated.md) | how to read a number                                                       |
@@ -26,7 +27,7 @@ The guide is a website at <https://gravionlabs.github.io/agentlens/> (with the a
 
 ## Installation
 
-Download the archive for your platform (and the installer of the application) from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` and `agentlens-mcp` on your `PATH`. [Getting started](docs/guide/getting-started.md#install) has the archive names, how to verify them and what to do about the unsigned installers. To build from source: `cargo install --path crates/agentlens-cli` (and `--path crates/agentlens-mcp`).
+Download the archive for your platform (and the installer of the application) from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` and `agentlens-mcp` on your `PATH`. The [Download](docs/guide/download.md) page has direct links, how to verify them and what to do about the unsigned installers. To build from source: `cargo install --path crates/agentlens-cli` (and `--path crates/agentlens-mcp`).
 
 ## Usage
 
