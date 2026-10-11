@@ -26,6 +26,17 @@ describe("UpdateService", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it("reads the running version and tolerates a failure", async () => {
+    const service = create(async () => "0.5.0");
+    await service.loadVersion();
+    expect(service.version()).toBe("0.5.0");
+    const broken = create(async () => {
+      throw new Error("no backend");
+    });
+    await broken.loadVersion();
+    expect(broken.version()).toBeNull();
+  });
+
   it("reports an available update", async () => {
     const service = create(async () => newer);
     await service.check();

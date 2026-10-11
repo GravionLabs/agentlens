@@ -110,6 +110,12 @@ async fn timeline(
     blocking(&ctx, move |c| api::timeline(c, &filters, &source, &id)).await
 }
 
+/// The version of the running application (injected into `tauri.conf.json` by the release build).
+#[tauri::command]
+fn app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
 /// The update found by the last check, waiting to be installed.
 #[derive(Default)]
 struct PendingUpdate(Mutex<Option<Update>>);
@@ -169,6 +175,7 @@ pub fn run() {
         .manage(Arc::new(shared))
         .manage(PendingUpdate::default())
         .invoke_handler(tauri::generate_handler![
+            app_version,
             refresh,
             overview,
             skills,
