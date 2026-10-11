@@ -37,6 +37,8 @@ pub fn run(
         Format::Table => {
             // The measured column only appears where a client attributes usage to skills.
             let with_attribution = skills.iter().any(|s| s.attributed.requests > 0);
+            // The file column only appears where a skill was used without being loaded.
+            let with_files = skills.iter().any(|s| s.file_uses > 0);
             let rows = skills
                 .iter()
                 .map(|s| {
@@ -49,6 +51,9 @@ pub fn run(
                         output::tokens(s.baseline.tokens),
                         output::tokens(Tokens::estimated(s.overhead_tokens())),
                     ];
+                    if with_files {
+                        row.insert(2, s.file_uses.to_string());
+                    }
                     if with_attribution {
                         row.push(if s.attributed.requests > 0 {
                             output::tokens(Tokens::measured(attributed_tokens(s)))
@@ -62,11 +67,19 @@ pub fn run(
             let mut header = vec![
                 "skill", "uses", "sessions", "load", "carry", "baseline", "overhead",
             ];
+            if with_files {
+                header.insert(2, "file uses");
+            }
             if with_attribution {
                 header.push("attributed");
             }
             println!("{}", output::table(&header, rows, 1));
             println!("~ estimated; no ~ means measured. overhead = baseline + load + carry.");
+            if with_files {
+                println!(
+                    "file uses = tool calls that read or ran files in the skill's folder without loading it; such a skill is in use."
+                );
+            }
             if with_attribution {
                 println!(
                     "attributed = all tokens of the requests the client (OpenTelemetry `skill.name`) attributes to the skill; measured."

@@ -53,6 +53,8 @@ export interface SkillStats {
   in_inventory: boolean;
   clients: SourceId[];
   invocations: number;
+  /** Tool calls that read or ran files in the skill's folder without loading it. */
+  file_uses: number;
   sessions: number;
   projects: string[];
   first_used: string | null;

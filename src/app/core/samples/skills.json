@@ -19,6 +19,7 @@
             "vscode-copilot"
           ],
           "invocations": 0,
+          "file_uses": 0,
           "sessions": 0,
           "projects": [],
           "first_used": null,
@@ -71,6 +72,7 @@
           "in_inventory": false,
           "clients": [],
           "invocations": 1,
+          "file_uses": 0,
           "sessions": 1,
           "projects": [
             "/work/demo"

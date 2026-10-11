@@ -79,6 +79,7 @@ mod tests {
             in_inventory: true,
             clients: vec![Source::ClaudeCode],
             invocations: 2,
+            file_uses: 0,
             sessions: 1,
             projects: vec!["/work/demo".into()],
             first_used: Some("2026-10-01T10:00:00Z".parse().unwrap()),

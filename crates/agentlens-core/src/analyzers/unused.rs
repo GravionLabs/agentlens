@@ -30,7 +30,8 @@ pub struct UnusedItem {
     pub name: String,
     pub project: Option<PathBuf>,
     pub clients: Vec<Source>,
-    /// Uses in the analyzed period.
+    /// Uses in the analyzed period. For a skill: the times it was loaded plus the tool calls that read
+    /// or ran files in its folder.
     pub uses: u32,
     /// Requests that carried the item.
     pub requests: u64,
@@ -94,7 +95,7 @@ pub fn analyze(
             name: s.name.clone(),
             project: None,
             clients: s.clients.clone(),
-            uses: s.invocations,
+            uses: s.invocations + s.file_uses,
             requests: s.baseline.requests,
             overhead_tokens: Some(s.baseline.tokens),
         });
@@ -221,6 +222,7 @@ mod tests {
             in_inventory: true,
             clients: vec![Source::ClaudeCode],
             invocations: uses,
+            file_uses: 0,
             sessions: 0,
             projects: vec![],
             first_used: None,

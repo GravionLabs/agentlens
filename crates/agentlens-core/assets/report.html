@@ -156,6 +156,7 @@ footer { color: var(--muted); font-size: 0.8rem; margin-top: 24px; }
   var columns = [
     { key: "name", label: "skill", get: function (s) { return s.name; }, cell: function (s) { return s.name; } },
     { key: "uses", label: "uses", get: function (s) { return s.invocations; } },
+    { key: "files", label: "file uses", get: function (s) { return s.file_uses || 0; } },
     { key: "sessions", label: "sessions", get: function (s) { return s.sessions; } },
     { key: "load", label: "load", get: function (s) { return s.load.count; }, measured: function (s) { return s.load.measured; } },
     { key: "carry", label: "carry", get: function (s) { return s.carry.tokens.count; }, measured: function (s) { return s.carry.tokens.measured; } },

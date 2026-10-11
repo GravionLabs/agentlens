@@ -20,6 +20,7 @@ expression: report
         "vscode-copilot"
       ],
       "invocations": 1,
+      "file_uses": 0,
       "sessions": 1,
       "projects": [
         "/work/demo"
@@ -83,6 +84,7 @@ expression: report
         "vscode-copilot"
       ],
       "invocations": 1,
+      "file_uses": 0,
       "sessions": 1,
       "projects": [
         "/work/demo"
@@ -146,6 +148,7 @@ expression: report
         "vscode-copilot"
       ],
       "invocations": 0,
+      "file_uses": 0,
       "sessions": 0,
       "projects": [],
       "first_used": null,
