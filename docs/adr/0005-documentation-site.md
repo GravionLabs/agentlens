@@ -1,6 +1,6 @@
 # 0005: The documentation site on GitHub Pages
 
-- Status: Proposed
+- Status: Accepted (decided by the owner on 2026-10-11)
 - Context: Epic "Interfaces" (#3), Feature #213, PBIs #214 to #219; follows the sibling project Ariadne (its ADR 0020 and `.github/workflows/pages.yml`)
 
 ## Context
