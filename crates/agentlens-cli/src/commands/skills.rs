@@ -1,6 +1,7 @@
 use agentlens_core::adapter::{Registry, SessionFilter};
 use agentlens_core::analyzers::skills::SkillStats;
 use agentlens_core::env::Env;
+use agentlens_core::export;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::skill_run;
 use agentlens_core::tokens::{TokenEstimator, Tokens};
@@ -32,47 +33,7 @@ pub fn run(
 
     match format {
         Format::Json => println!("{}", serde_json::to_string_pretty(&run.report)?),
-        Format::Csv => {
-            let header = [
-                "skill",
-                "in_inventory",
-                "uses",
-                "sessions",
-                "load_tokens",
-                "load_measured",
-                "carry_tokens",
-                "baseline_tokens",
-                "overhead_tokens",
-                "follow_on_requests",
-                "follow_on_input",
-                "follow_on_output",
-                "attributed_requests",
-                "attributed_tokens",
-            ];
-            let rows = skills
-                .iter()
-                .map(|s| {
-                    vec![
-                        s.name.clone(),
-                        s.in_inventory.to_string(),
-                        s.invocations.to_string(),
-                        s.sessions.to_string(),
-                        s.load.count.to_string(),
-                        s.load.measured.to_string(),
-                        s.carry.tokens.to_string(),
-                        s.baseline.tokens.count.to_string(),
-                        s.overhead_tokens().to_string(),
-                        s.follow_on.requests.to_string(),
-                        (s.follow_on.input + s.follow_on.cache_read + s.follow_on.cache_write)
-                            .to_string(),
-                        s.follow_on.output.to_string(),
-                        s.attributed.requests.to_string(),
-                        attributed_tokens(s).to_string(),
-                    ]
-                })
-                .collect();
-            print!("{}", output::csv(&header, rows)?);
-        }
+        Format::Csv => print!("{}", export::csv::skills(&skills)?),
         Format::Table => {
             // The measured column only appears where a client attributes usage to skills.
             let with_attribution = skills.iter().any(|s| s.attributed.requests > 0);

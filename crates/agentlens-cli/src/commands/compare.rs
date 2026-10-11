@@ -1,6 +1,7 @@
 use agentlens_core::adapter::{Registry, SessionFilter};
 use agentlens_core::analyzers::compare::SourceStats;
 use agentlens_core::env::Env;
+use agentlens_core::export;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::compare_run;
 use agentlens_core::tokens::TokenEstimator;
@@ -61,45 +62,7 @@ pub fn run(
 
     match format {
         Format::Json => println!("{}", serde_json::to_string_pretty(&run.report)?),
-        Format::Csv => {
-            let header = [
-                "source",
-                "sessions",
-                "requests",
-                "input_tokens",
-                "output_tokens",
-                "cache_hit_rate",
-                "tool_calls",
-                "tool_errors",
-                "tool_error_rate",
-                "skill_invocations",
-                "skill_overhead_tokens",
-                "total_duration_ms",
-                "mean_session_ms",
-            ];
-            let opt = |v: Option<String>| v.unwrap_or_default();
-            let rows = sources
-                .iter()
-                .map(|s| {
-                    vec![
-                        s.source.id().to_owned(),
-                        s.sessions.to_string(),
-                        opt(s.requests.map(|v| v.to_string())),
-                        opt(s.input_tokens.map(|v| v.to_string())),
-                        opt(s.output_tokens.map(|v| v.to_string())),
-                        opt(s.cache_hit_rate.map(|v| format!("{v:.6}"))),
-                        s.tool_calls.to_string(),
-                        s.tool_errors.to_string(),
-                        opt(s.tool_error_rate.map(|v| format!("{v:.6}"))),
-                        s.skill_invocations.to_string(),
-                        opt(s.skill_overhead_tokens.map(|v| v.to_string())),
-                        opt(s.total_duration_ms.map(|v| v.to_string())),
-                        opt(s.mean_session_ms.map(|v| v.to_string())),
-                    ]
-                })
-                .collect();
-            print!("{}", output::csv(&header, rows)?);
-        }
+        Format::Csv => print!("{}", export::csv::compare(sources)?),
         Format::Table => {
             let per_source: Vec<Vec<(&str, String)>> = sources.iter().map(metrics).collect();
             let names: Vec<&str> = per_source

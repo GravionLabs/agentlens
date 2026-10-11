@@ -1,18 +1,19 @@
 import { ChangeDetectionStrategy, Component } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { NAV } from "./app.routes";
-import { SAMPLE_MODE } from "./core/ipc";
 import { FiltersService } from "./core/filters.service";
 import { Ipc } from "./core/ipc";
 import { LoadingService } from "./core/loading.service";
 import { FilterBar } from "./ui/filter-bar";
-import { UpdateStatus } from "./ui/update-status";
+import { ZoomService } from "./core/zoom.service";
+import { StatusBar } from "./ui/status-bar";
 import { inject } from "@angular/core";
 
 @Component({
   selector: "app-root",
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, FilterBar, UpdateStatus],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, FilterBar, StatusBar],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { "(document:keydown)": "zoom.handleKey($event)" },
   template: `
     @if (loading.busy()) {
       <div class="progress" role="progressbar" aria-label="Reading sessions"></div>
@@ -29,26 +30,25 @@ import { inject } from "@angular/core";
       </nav>
       <app-filter-bar />
       <div class="foot">
-        @if (sampleMode) {
-          <span class="sample">sample data</span>
-        }
         <button type="button" class="refresh" (click)="refresh()" [disabled]="loading.busy()">
           Refresh
         </button>
-        @if (!sampleMode) {
-          <app-update-status />
-        }
       </div>
     </aside>
     <main [class.busy]="loading.busy()" [attr.aria-busy]="loading.busy()">
       <router-outlet />
     </main>
+    <app-status-bar />
   `,
   styles: `
     :host {
       display: grid;
       grid-template-columns: 210px 1fr;
+      grid-template-rows: minmax(0, 1fr) auto;
       height: 100dvh;
+    }
+    app-status-bar {
+      grid-column: 1 / -1;
     }
     .side {
       display: flex;
@@ -142,13 +142,6 @@ import { inject } from "@angular/core";
       opacity: 0.5;
       cursor: default;
     }
-    .sample {
-      font-size: 0.8rem;
-      color: var(--warn);
-      border: 1px solid var(--warn);
-      border-radius: 999px;
-      padding: 1px 10px;
-    }
     main {
       padding: 12px 20px 24px;
       overflow-y: auto;
@@ -158,8 +151,8 @@ import { inject } from "@angular/core";
 })
 export class App {
   protected readonly nav = NAV;
-  protected readonly sampleMode = inject(SAMPLE_MODE);
   protected readonly loading = inject(LoadingService);
+  protected readonly zoom = inject(ZoomService);
   private readonly ipc = inject(Ipc);
   private readonly filters = inject(FiltersService);
 

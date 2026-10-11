@@ -110,6 +110,58 @@ async fn timeline(
     blocking(&ctx, move |c| api::timeline(c, &filters, &source, &id)).await
 }
 
+/// What was written by an export.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Exported {
+    path: String,
+    bytes: usize,
+    warnings: u64,
+    errors: Vec<String>,
+}
+
+/// Exports a view to the file the user chose in the save dialog. Nothing is written without a path,
+/// and only that one file.
+#[tauri::command]
+async fn export_view(
+    ctx: Shared<'_>,
+    view: String,
+    format: String,
+    filters: Filters,
+    options: Option<api::ExportOptions>,
+    path: String,
+) -> Result<Exported, String> {
+    if path.trim().is_empty() {
+        return Err("no file was chosen".into());
+    }
+    let options = options.unwrap_or_default();
+    let ctx = Arc::clone(&ctx);
+    tauri::async_runtime::spawn_blocking(move || {
+        let file = api::export(&ctx, &view, &format, &filters, &options)?;
+        std::fs::write(&path, &file.content).map_err(|e| format!("cannot write {path}: {e}"))?;
+        Ok(Exported {
+            path,
+            bytes: file.content.len(),
+            warnings: file.warnings,
+            errors: file.errors,
+        })
+    })
+    .await
+    .map_err(|e| format!("the export stopped unexpectedly: {e}"))?
+}
+
+/// The suggested file name for the save dialog.
+#[tauri::command]
+fn export_name(view: String, format: String) -> String {
+    api::export_file_name(&view, &format)
+}
+
+/// The version of the running application (injected into `tauri.conf.json` by the release build).
+#[tauri::command]
+fn app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
 /// The update found by the last check, waiting to be installed.
 #[derive(Default)]
 struct PendingUpdate(Mutex<Option<Update>>);
@@ -166,9 +218,13 @@ pub fn run() {
     let shared = Context::system().expect("cannot determine the home directory");
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(shared))
         .manage(PendingUpdate::default())
         .invoke_handler(tauri::generate_handler![
+            app_version,
+            export_view,
+            export_name,
             refresh,
             overview,
             skills,

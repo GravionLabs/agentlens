@@ -38,12 +38,7 @@ pub fn table(header: &[&str], rows: Vec<Vec<String>>, right_from: usize) -> Tabl
 }
 
 pub fn csv(header: &[&str], rows: Vec<Vec<String>>) -> Result<String> {
-    let mut w = csv::Writer::from_writer(Vec::new());
-    w.write_record(header)?;
-    for row in rows {
-        w.write_record(row)?;
-    }
-    Ok(String::from_utf8(w.into_inner()?)?)
+    Ok(agentlens_core::export::csv::write(header, rows)?)
 }
 
 #[cfg(test)]

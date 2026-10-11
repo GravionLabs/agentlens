@@ -1,6 +1,7 @@
 use agentlens_core::adapter::{Registry, SessionFilter};
 use agentlens_core::analyzers::context::ContextRow;
 use agentlens_core::env::Env;
+use agentlens_core::export;
 use agentlens_core::model::{ContextKind, Source};
 use agentlens_core::pipeline::context_run;
 use agentlens_core::tokens::{TokenEstimator, Tokens};
@@ -57,36 +58,7 @@ pub fn run(
             report.rows.retain(|r| in_view(r.kind, view));
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
-        Format::Csv => {
-            let header = [
-                "source",
-                "project",
-                "kind",
-                "owner",
-                "items",
-                "bytes",
-                "tokens",
-                "requests",
-                "overhead_tokens",
-            ];
-            let body = rows
-                .iter()
-                .map(|r| {
-                    vec![
-                        r.source.id().to_owned(),
-                        project(r),
-                        kind_id(r.kind),
-                        r.owner.clone(),
-                        r.items.to_string(),
-                        r.bytes.to_string(),
-                        r.tokens.to_string(),
-                        r.requests.to_string(),
-                        r.overhead_tokens.to_string(),
-                    ]
-                })
-                .collect();
-            print!("{}", output::csv(&header, body)?);
-        }
+        Format::Csv => print!("{}", export::csv::context(&rows)?),
         Format::Table => {
             let body = rows
                 .iter()

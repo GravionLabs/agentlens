@@ -36,7 +36,12 @@ export const METRICS: Metric[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <app-page-header title="Compare" summary="The clients side by side over the same sessions.">
+      <app-page-header
+        exportView="compare"
+        [exportFormats]="['json', 'csv']"
+        title="Compare"
+        summary="The clients side by side over the same sessions."
+      >
         <p>
           “n/a”: the client does not record it. <span class="est">~</span> marks estimates; session
           time runs from the first to the last event, so idle time is included.

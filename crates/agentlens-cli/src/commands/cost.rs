@@ -3,6 +3,7 @@ use std::path::Path;
 use agentlens_core::adapter::{Registry, SessionFilter};
 use agentlens_core::analyzers::cost::{CostRow, Grouping, WhatIfReport};
 use agentlens_core::env::Env;
+use agentlens_core::export;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::cost_run;
 use agentlens_core::prices;
@@ -111,61 +112,9 @@ pub fn run(
         }
         Format::Csv if run.what_if.is_some() => {
             let w = run.what_if.as_ref().expect("checked");
-            let header = [
-                "model",
-                "requests",
-                "actual_usd",
-                "what_if_usd",
-                "excluded_requests",
-            ];
-            let rows = w
-                .rows
-                .iter()
-                .map(|x| {
-                    vec![
-                        x.model.clone(),
-                        x.requests.to_string(),
-                        format!("{:.6}", x.actual_usd),
-                        format!("{:.6}", x.what_if_usd),
-                        x.excluded_requests.to_string(),
-                    ]
-                })
-                .collect();
-            print!("{}", output::csv(&header, rows)?);
+            print!("{}", export::csv::what_if(w)?);
         }
-        Format::Csv => {
-            let header = [
-                label,
-                "requests",
-                "input_tokens",
-                "output_tokens",
-                "cache_read_tokens",
-                "cache_write_tokens",
-                "measured_usd",
-                "estimated_usd",
-                "unpriced_requests",
-                "premium_requests",
-            ];
-            let rows = r
-                .rows
-                .iter()
-                .map(|x| {
-                    vec![
-                        x.key.clone(),
-                        x.requests.to_string(),
-                        x.input.to_string(),
-                        x.output.to_string(),
-                        x.cache_read.to_string(),
-                        x.cache_write.to_string(),
-                        format!("{:.6}", x.measured_usd),
-                        format!("{:.6}", x.estimated_usd),
-                        x.unpriced_requests.to_string(),
-                        x.premium_requests.to_string(),
-                    ]
-                })
-                .collect();
-            print!("{}", output::csv(&header, rows)?);
-        }
+        Format::Csv => print!("{}", export::csv::cost(&r.rows, label)?),
         Format::Table => {
             let total = r.total.total_usd();
             let mut rows: Vec<Vec<String>> = r

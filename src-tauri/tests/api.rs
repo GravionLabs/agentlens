@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use agentlens_app_lib::api::{self, Context, Filters};
+use agentlens_app_lib::api::{self, Context, ExportOptions, Filters};
 use agentlens_core::adapters::default_registry;
 use agentlens_core::env::Env;
 use serde_json::Value;
@@ -262,4 +262,133 @@ fn json_samples_for_the_frontend_are_up_to_date() {
             );
         }
     }
+}
+
+#[test]
+fn exports_are_the_json_the_cli_prints_and_the_report_file() {
+    let (_dir, ctx) = setup();
+    let none = ExportOptions::default();
+
+    // The skills JSON is the report of `agentlens skills --format json`.
+    let file = api::export(&ctx, "skills", "json", &claude(), &none).unwrap();
+    let shown = api::skills(&ctx, &claude()).unwrap();
+    let parsed: Value = serde_json::from_str(&file.content).unwrap();
+    assert_eq!(parsed, json(&shown.data.report));
+    assert!(file.suggested_name.starts_with("agentlens-skills-"));
+    assert!(file.suggested_name.ends_with(".json"));
+
+    // The HTML is the report file: the data is embedded and the placeholder is gone.
+    let html = api::export(&ctx, "skills", "html", &claude(), &none).unwrap();
+    assert!(html.content.starts_with("<!doctype html>") || html.content.contains("<html"));
+    assert!(!html.content.contains("__REPORT_DATA__"));
+    assert!(html.suggested_name.starts_with("agentlens-report-"));
+    assert_eq!(
+        api::export_file_name("skills", "html")[..17],
+        html.suggested_name[..17]
+    );
+
+    // Every other view exports what it shows.
+    for view in [
+        "overview",
+        "context",
+        "unused",
+        "flow",
+        "compare",
+        "cost",
+        "efficiency",
+    ] {
+        let file = api::export(&ctx, view, "json", &claude(), &none).unwrap();
+        serde_json::from_str::<Value>(&file.content).unwrap();
+    }
+    let by_project = ExportOptions {
+        by: Some("project".into()),
+        ..ExportOptions::default()
+    };
+    let cost = api::export(&ctx, "cost", "json", &claude(), &by_project).unwrap();
+    let shown = api::cost(&ctx, &claude(), "project", None).unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&cost.content).unwrap(),
+        json(&shown.data)
+    );
+}
+
+#[test]
+fn an_export_that_cannot_be_made_says_why() {
+    let (_dir, ctx) = setup();
+    let none = ExportOptions::default();
+    let err = api::export(&ctx, "context", "html", &claude(), &none).unwrap_err();
+    assert!(err.contains("only the skills view"), "{err}");
+    let err = api::export(&ctx, "context", "xml", &claude(), &none).unwrap_err();
+    assert!(err.contains("unknown format"), "{err}");
+    let err = api::export(&ctx, "nothing", "json", &claude(), &none).unwrap_err();
+    assert!(err.contains("cannot be exported"), "{err}");
+}
+
+#[test]
+fn csv_exports_have_the_columns_of_the_cli() {
+    let (_dir, ctx) = setup();
+    let none = ExportOptions::default();
+    let header = |view: &str, options: &ExportOptions| {
+        let file = api::export(&ctx, view, "csv", &claude(), options).unwrap();
+        assert!(file.suggested_name.ends_with(".csv"), "{view}");
+        file.content.lines().next().unwrap().to_owned()
+    };
+    assert!(header("skills", &none).starts_with("skill,in_inventory,uses,sessions,load_tokens"));
+    assert!(header("context", &none).starts_with("source,project,kind,owner,items"));
+    assert!(header("unused", &none).starts_with("kind,name,project,clients,uses"));
+    assert!(header("compare", &none).starts_with("source,sessions,requests,input_tokens"));
+    assert!(header("efficiency", &none).starts_with("key,source,requests,input_tokens"));
+    assert!(header("cost", &none).starts_with("model,requests,input_tokens"));
+
+    let by_project = ExportOptions {
+        by: Some("project".into()),
+        ..ExportOptions::default()
+    };
+    assert!(header("cost", &by_project).starts_with("project,requests"));
+
+    // The flow view exports the tab it shows.
+    for (section, first) in [
+        ("growth", "source,session,project,model"),
+        ("errors", "source,tool,calls,errors"),
+        ("hooks", "source,hook,runs,failures"),
+    ] {
+        let options = ExportOptions {
+            section: Some(section.into()),
+            ..ExportOptions::default()
+        };
+        assert!(header("flow", &options).starts_with(first), "{section}");
+    }
+}
+
+#[test]
+fn unused_csv_follows_the_all_toggle_and_overview_has_no_csv() {
+    let (_dir, ctx) = setup();
+    let rows = |all: bool| {
+        let options = ExportOptions {
+            all: Some(all),
+            ..ExportOptions::default()
+        };
+        let file = api::export(&ctx, "unused", "csv", &claude(), &options).unwrap();
+        file.content.lines().count()
+    };
+    let shown = api::unused(&ctx, &claude()).unwrap();
+    let unused_only = shown.data.items.iter().filter(|i| i.uses == 0).count();
+    assert_eq!(rows(false), 1 + unused_only);
+    assert_eq!(rows(true), 1 + shown.data.items.len());
+
+    let err = api::export(
+        &ctx,
+        "overview",
+        "csv",
+        &claude(),
+        &ExportOptions::default(),
+    )
+    .unwrap_err();
+    assert!(err.contains("cannot be exported as CSV"), "{err}");
+    let bad = ExportOptions {
+        section: Some("everything".into()),
+        ..ExportOptions::default()
+    };
+    let err = api::export(&ctx, "flow", "csv", &claude(), &bad).unwrap_err();
+    assert!(err.contains("unknown section"), "{err}");
 }

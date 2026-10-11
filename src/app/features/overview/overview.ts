@@ -11,7 +11,11 @@ import { Status } from "../../ui/status";
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
-      <app-page-header title="Sources" summary="Which coding agents left sessions on this machine.">
+      <app-page-header
+        exportView="overview"
+        title="Sources"
+        summary="Which coding agents left sessions on this machine."
+      >
         <p>
           Which coding agents left sessions on this machine, for the selected filters. Sources that
           are not found show where AgentLens looked.

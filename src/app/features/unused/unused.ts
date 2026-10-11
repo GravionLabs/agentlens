@@ -14,6 +14,9 @@ import { Status } from "../../ui/status";
   template: `
     <section class="view">
       <app-page-header
+        exportView="unused"
+        [exportFormats]="['json', 'csv']"
+        [exportOptions]="{ all: all() }"
         title="Unused"
         summary="Installed skills, agents and MCP servers nobody used, and what they cost while idle."
       >
