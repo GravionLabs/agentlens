@@ -9,6 +9,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 - A compatibility page that says what is stable (#274)
+- Update CHANGELOG.md for v0.9.0
 
 
 ### Features
