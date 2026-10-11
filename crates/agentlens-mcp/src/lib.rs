@@ -9,9 +9,17 @@ use std::sync::Arc;
 
 use agentlens_core::api::{self, Answer, Context, Filters};
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{CallToolResult, ContentBlock};
+use rmcp::model::{
+    CallToolResult, ContentBlock, ErrorData, GetPromptResult, Implementation, ListResourcesResult,
+    PaginatedRequestParams, PromptMessage, ReadResourceRequestParams, ReadResourceResponse,
+    ReadResourceResult, Resource, ResourceContents, Role, ServerCapabilities, ServerConfig,
+};
 use rmcp::schemars::{self, JsonSchema};
-use rmcp::{ServerHandler, tool, tool_handler, tool_router};
+use rmcp::service::RequestContext;
+use rmcp::{
+    RoleServer, ServerHandler, prompt, prompt_handler, prompt_router, tool, tool_handler,
+    tool_router,
+};
 use serde::{Deserialize, Serialize};
 
 /// The filter every analysis takes, like `--since`, `--source` and `--project` of the CLI.
@@ -70,6 +78,18 @@ pub struct TimelineQuery {
     pub id: String,
 }
 
+/// The glossary of the application and the guide, made from the same source (`glossary.ts`).
+const GLOSSARY: &str = include_str!("../../../docs/guide/glossary.md");
+/// Where the glossary is served.
+pub const GLOSSARY_URI: &str = "agentlens://glossary";
+
+/// What the `optimize-skills` prompt asks for.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct OptimizeSkills {
+    /// How far back to look: a duration (`30d`, `4w`) or a date. Default: 30d.
+    pub since: Option<String>,
+}
+
 /// The server: holds the sessions it has read for a few minutes, like the application.
 #[derive(Clone)]
 pub struct AgentLensServer {
@@ -121,7 +141,7 @@ impl AgentLensServer {
     }
 
     #[tool(
-        description = "Skills: uses, sessions, load, carry and baseline tokens, and the overhead per skill. `load`, `baseline.tokens` and `carry.tokens` are objects with a `measured` flag (carry is always an estimate).",
+        description = "Skills: uses, sessions, load, carry and baseline tokens, and the overhead per skill. `load`, `baseline.tokens` and `carry.tokens` are objects with a `measured` flag (carry is always an estimate); `file_uses` counts tool calls on the skill's files. The fields are explained in the resource agentlens://glossary.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn skills(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
@@ -130,7 +150,7 @@ impl AgentLensServer {
     }
 
     #[tool(
-        description = "What to change to save tokens, as findings with the numbers they rest on: installed skills nobody used (neither loaded nor through their files) and what their listing costs, the costliest descriptions, skills loaded but no longer installed, large skill bodies that stay in the context, and the skills after which the work ran on the largest context. Each finding has an explanation, a general action, `items` with a `tokens` count that carries a `measured` flag, and notes on what it cannot know. No model is involved.",
+        description = "What to change to save tokens, as findings with the numbers they rest on: installed skills nobody used (neither loaded nor through their files) and what their listing costs, the costliest descriptions, skills loaded but no longer installed, large skill bodies that stay in the context, and the skills after which the work ran on the largest context. Each finding has an explanation, a general action, `items` with a `tokens` count that carries a `measured` flag, and notes on what it cannot know. No model is involved. The field names are explained in the resource agentlens://glossary.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn advice(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
@@ -216,8 +236,82 @@ impl AgentLensServer {
     }
 }
 
-#[tool_handler(
-    name = "agentlens",
-    instructions = "Read-only analyses of the token use of coding agents (Claude Code, OpenCode, Copilot CLI, VS Code Copilot) from the session files on this machine. Every number says whether the client measured it or AgentLens estimated it."
-)]
-impl ServerHandler for AgentLensServer {}
+#[prompt_router]
+impl AgentLensServer {
+    #[prompt(
+        name = "optimize-skills",
+        description = "Analyze how the coding agents use skills and what that costs in tokens, and propose concrete changes. Uses the advice tool first, then the others where something needs a closer look."
+    )]
+    async fn optimize_skills(
+        &self,
+        Parameters(args): Parameters<OptimizeSkills>,
+    ) -> Result<GetPromptResult, ErrorData> {
+        let since = args.since.as_deref().unwrap_or("30d");
+        let text = format!(
+            "Analyze how my coding agents use skills and what that costs in tokens, with the agentlens tools, and propose concrete changes. Look at the last {since} (pass it as `since`).\n\n\
+1. Call `advice` first. Its findings are computed from the numbers, not guessed: explain them in plain language and rank the suggestions by what they would save.\n\
+2. If a field is unclear (load, carry, baseline, follow-on, file uses, overhead), read the resource {GLOSSARY_URI} instead of guessing.\n\
+3. Look closer at anything surprising with the other tools: `skills` for one skill, `unused` for agents and MCP servers, `context` for instruction files and tool definitions, `sessions` and `timeline` for a long session.\n\n\
+Rules for the conclusions:\n\
+- Trust a number without a tilde (`measured: true`); say so when a conclusion rests on an estimate (`~`, `measured: false`).\n\
+- A skill is only unused if both `invocations` and `file_uses` are 0, and one that is needed rarely can still be worth keeping.\n\
+- Follow-on is the activity after a skill, not cost the skill caused.\n\
+- Do not change anything yourself. List the changes, with the saving each would bring, and let me decide."
+        );
+        Ok(
+            GetPromptResult::new(vec![PromptMessage::new_text(Role::User, text)])
+                .with_description("Analyze skill use and token cost, and propose changes"),
+        )
+    }
+}
+
+#[tool_handler]
+#[prompt_handler]
+impl ServerHandler for AgentLensServer {
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_prompts()
+                .enable_resources()
+                .build(),
+        )
+        .with_server_info(Implementation::new("agentlens", env!("CARGO_PKG_VERSION")))
+        .with_instructions(
+            "Read-only analyses of the token use of coding agents (Claude Code, OpenCode, Copilot CLI, VS Code Copilot) from the session files on this machine. Every number says whether the client measured it or AgentLens estimated it. The resource agentlens://glossary explains the field names; the prompt optimize-skills runs a complete analysis of the skill setup."
+                .to_string(),
+        )
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourcesResult, ErrorData> {
+        Ok(ListResourcesResult::with_all_items(vec![
+            Resource::new(GLOSSARY_URI, "glossary")
+                .with_title("AgentLens glossary")
+                .with_description(
+                    "What the terms and fields mean: measured and estimated, load, carry, baseline, overhead, follow-on, file use, cache hit rate and more.",
+                )
+                .with_mime_type("text/markdown"),
+        ]))
+    }
+
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResponse, ErrorData> {
+        if request.uri != GLOSSARY_URI {
+            return Err(ErrorData::resource_not_found(
+                format!("there is no resource {}", request.uri),
+                None,
+            ));
+        }
+        Ok(ReadResourceResult::new(vec![
+            ResourceContents::text(GLOSSARY, GLOSSARY_URI).with_mime_type("text/markdown"),
+        ])
+        .into())
+    }
+}
