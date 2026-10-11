@@ -65,14 +65,16 @@ export interface BarRow {
     </svg>
   `,
   styles: `
+    /* One unit is one pixel: the chart does not grow with the window, so the text keeps its size. */
     svg {
       display: block;
       width: 100%;
+      max-width: 1000px;
       height: auto;
     }
     text {
       fill: var(--muted);
-      font-size: 11px;
+      font-size: 13px;
       font-family: inherit;
     }
     .lbl {

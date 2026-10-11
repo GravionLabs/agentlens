@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
 import { SAMPLE_MODE } from "../core/ipc";
 import { UpdateService } from "../core/update.service";
+import { ZoomService } from "../core/zoom.service";
 import { UpdateStatus } from "./update-status";
 
 /** The bar at the bottom: the running version, the sample badge and the update check. */
@@ -17,9 +18,27 @@ import { UpdateStatus } from "./update-status";
         <strong>v{{ v }}</strong>
       }
     </span>
-    @if (!sampleMode) {
-      <app-update-status />
-    }
+    <span class="right">
+      <span class="zoom" role="group" aria-label="Interface size">
+        <button
+          type="button"
+          title="Smaller (Ctrl -)"
+          aria-label="Smaller"
+          (click)="zoom.zoomOut()"
+        >
+          A−
+        </button>
+        <button type="button" title="Reset (Ctrl 0)" aria-label="Reset size" (click)="zoom.reset()">
+          {{ percent() }}%
+        </button>
+        <button type="button" title="Larger (Ctrl +)" aria-label="Larger" (click)="zoom.zoomIn()">
+          A+
+        </button>
+      </span>
+      @if (!sampleMode) {
+        <app-update-status />
+      }
+    </span>
   `,
   styles: `
     :host {
@@ -39,6 +58,28 @@ import { UpdateStatus } from "./update-status";
       align-items: center;
       gap: 8px;
     }
+    .right,
+    .zoom {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .zoom {
+      gap: 2px;
+    }
+    .zoom button {
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      color: var(--muted);
+      cursor: pointer;
+      min-width: 32px;
+      padding: 0 6px;
+    }
+    .zoom button:hover {
+      color: var(--text);
+      border-color: var(--line);
+    }
     strong {
       color: var(--text);
     }
@@ -53,6 +94,8 @@ import { UpdateStatus } from "./update-status";
 export class StatusBar {
   protected readonly updates = inject(UpdateService);
   protected readonly sampleMode = inject(SAMPLE_MODE);
+  protected readonly zoom = inject(ZoomService);
+  protected readonly percent = computed(() => Math.round(this.zoom.factor() * 100));
 
   constructor() {
     void this.updates.loadVersion();

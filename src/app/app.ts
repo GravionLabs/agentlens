@@ -5,6 +5,7 @@ import { FiltersService } from "./core/filters.service";
 import { Ipc } from "./core/ipc";
 import { LoadingService } from "./core/loading.service";
 import { FilterBar } from "./ui/filter-bar";
+import { ZoomService } from "./core/zoom.service";
 import { StatusBar } from "./ui/status-bar";
 import { inject } from "@angular/core";
 
@@ -12,6 +13,7 @@ import { inject } from "@angular/core";
   selector: "app-root",
   imports: [RouterOutlet, RouterLink, RouterLinkActive, FilterBar, StatusBar],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { "(document:keydown)": "zoom.handleKey($event)" },
   template: `
     @if (loading.busy()) {
       <div class="progress" role="progressbar" aria-label="Reading sessions"></div>
@@ -150,6 +152,7 @@ import { inject } from "@angular/core";
 export class App {
   protected readonly nav = NAV;
   protected readonly loading = inject(LoadingService);
+  protected readonly zoom = inject(ZoomService);
   private readonly ipc = inject(Ipc);
   private readonly filters = inject(FiltersService);
 
