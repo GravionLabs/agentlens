@@ -19,10 +19,12 @@ use agentlens_core::analyzers::skills::SkillReport;
 use agentlens_core::analyzers::timeline::{SessionSummary, Timeline};
 use agentlens_core::analyzers::unused::UnusedReport;
 use agentlens_core::env::Env;
+use agentlens_core::export;
 use agentlens_core::inventory::Duplicate;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline;
 use agentlens_core::prices::{self, PriceTable};
+use agentlens_core::report::Report;
 use agentlens_core::since::parse_since;
 use agentlens_core::tokens::CharsPerToken;
 use jiff::Timestamp;
@@ -303,4 +305,108 @@ pub fn timeline(
         pipeline::session_timeline(&ctx.registry, &ctx.env, &filter, source, id, &prices)
             .ok_or_else(|| format!("session `{id}` not found"))?;
     answer(timeline, 0, Vec::new())
+}
+
+/// The options of the views that have them, as the views pass them to their analysis.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ExportOptions {
+    /// Grouping of the cost (`model`, ...) and efficiency (`session`, ...) views.
+    pub by: Option<String>,
+    /// The what-if model of the cost view.
+    pub what_if: Option<String>,
+}
+
+/// A file made from an analysis, not yet written.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Export {
+    pub content: String,
+    /// A file name that says what is in it, for the save dialog.
+    pub suggested_name: String,
+    pub warnings: u64,
+    pub errors: Vec<String>,
+}
+
+fn json_of<T: Serialize>(value: &T) -> Result<String, String> {
+    serde_json::to_string_pretty(value).map_err(|e| format!("cannot write the JSON: {e}"))
+}
+
+fn exported<T: Serialize>(view: &str, format: &str, answer: Answer<T>) -> Result<Export, String> {
+    Ok(Export {
+        content: json_of(&answer.data)?,
+        suggested_name: file_name(view, format),
+        warnings: answer.warnings,
+        errors: answer.errors,
+    })
+}
+
+/// The suggested name of an export, for the save dialog.
+pub fn export_file_name(view: &str, format: &str) -> String {
+    let view = if view == "skills" && format == "html" {
+        "report"
+    } else {
+        view
+    };
+    file_name(view, format)
+}
+
+fn file_name(view: &str, format: &str) -> String {
+    let day = Timestamp::now().to_string();
+    format!("agentlens-{view}-{}.{format}", &day[..10])
+}
+
+/// Runs the analysis of `view` with the same filters and options as the view and returns it in
+/// `format`: `json` for every view (what `--format json` of the CLI prints, for flow and cost the
+/// whole data of the view) and `html` for the skills view (the file of `agentlens report`).
+pub fn export(
+    ctx: &Context,
+    view: &str,
+    format: &str,
+    f: &Filters,
+    options: &ExportOptions,
+) -> Result<Export, String> {
+    match (view, format) {
+        ("skills", "json") => {
+            let (filter, only) = f.resolve(Timestamp::now())?;
+            let run = pipeline::skill_run(&ctx.registry, &ctx.env, &filter, &only, &CharsPerToken);
+            Ok(Export {
+                content: json_of(&run.report)?,
+                suggested_name: file_name(view, format),
+                warnings: run.warnings,
+                errors: run.errors,
+            })
+        }
+        ("skills", "html") => {
+            let now = Timestamp::now();
+            let (filter, only) = f.resolve(now)?;
+            let run = pipeline::skill_run(&ctx.registry, &ctx.env, &filter, &only, &CharsPerToken);
+            let (warnings, errors) = (run.warnings, run.errors.clone());
+            let report = Report::from_skill_run(run, &filter, &only, now);
+            let content = export::render_html(&report)
+                .map_err(|e| format!("cannot write the report: {e}"))?;
+            Ok(Export {
+                content,
+                suggested_name: file_name("report", format),
+                warnings,
+                errors,
+            })
+        }
+        (_, "html") => Err("only the skills view can be exported as HTML".into()),
+        ("overview", "json") => exported(view, format, overview(ctx, f)?),
+        ("context", "json") => exported(view, format, context(ctx, f)?),
+        ("unused", "json") => exported(view, format, unused(ctx, f)?),
+        ("flow", "json") => exported(view, format, flow(ctx, f)?),
+        ("compare", "json") => exported(view, format, compare(ctx, f)?),
+        ("cost", "json") => {
+            let by = options.by.as_deref().unwrap_or("model");
+            exported(view, format, cost(ctx, f, by, options.what_if.as_deref())?)
+        }
+        ("efficiency", "json") => {
+            let by = options.by.as_deref().unwrap_or("session");
+            exported(view, format, efficiency(ctx, f, by)?)
+        }
+        (view, "json") => Err(format!("the view `{view}` cannot be exported")),
+        (_, other) => Err(format!("unknown format `{other}`")),
+    }
 }

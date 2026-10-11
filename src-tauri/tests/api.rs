@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use agentlens_app_lib::api::{self, Context, Filters};
+use agentlens_app_lib::api::{self, Context, ExportOptions, Filters};
 use agentlens_core::adapters::default_registry;
 use agentlens_core::env::Env;
 use serde_json::Value;
@@ -262,4 +262,64 @@ fn json_samples_for_the_frontend_are_up_to_date() {
             );
         }
     }
+}
+
+#[test]
+fn exports_are_the_json_the_cli_prints_and_the_report_file() {
+    let (_dir, ctx) = setup();
+    let none = ExportOptions::default();
+
+    // The skills JSON is the report of `agentlens skills --format json`.
+    let file = api::export(&ctx, "skills", "json", &claude(), &none).unwrap();
+    let shown = api::skills(&ctx, &claude()).unwrap();
+    let parsed: Value = serde_json::from_str(&file.content).unwrap();
+    assert_eq!(parsed, json(&shown.data.report));
+    assert!(file.suggested_name.starts_with("agentlens-skills-"));
+    assert!(file.suggested_name.ends_with(".json"));
+
+    // The HTML is the report file: the data is embedded and the placeholder is gone.
+    let html = api::export(&ctx, "skills", "html", &claude(), &none).unwrap();
+    assert!(html.content.starts_with("<!doctype html>") || html.content.contains("<html"));
+    assert!(!html.content.contains("__REPORT_DATA__"));
+    assert!(html.suggested_name.starts_with("agentlens-report-"));
+    assert_eq!(
+        api::export_file_name("skills", "html")[..17],
+        html.suggested_name[..17]
+    );
+
+    // Every other view exports what it shows.
+    for view in [
+        "overview",
+        "context",
+        "unused",
+        "flow",
+        "compare",
+        "cost",
+        "efficiency",
+    ] {
+        let file = api::export(&ctx, view, "json", &claude(), &none).unwrap();
+        serde_json::from_str::<Value>(&file.content).unwrap();
+    }
+    let by_project = ExportOptions {
+        by: Some("project".into()),
+        ..ExportOptions::default()
+    };
+    let cost = api::export(&ctx, "cost", "json", &claude(), &by_project).unwrap();
+    let shown = api::cost(&ctx, &claude(), "project", None).unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&cost.content).unwrap(),
+        json(&shown.data)
+    );
+}
+
+#[test]
+fn an_export_that_cannot_be_made_says_why() {
+    let (_dir, ctx) = setup();
+    let none = ExportOptions::default();
+    let err = api::export(&ctx, "context", "html", &claude(), &none).unwrap_err();
+    assert!(err.contains("only the skills view"), "{err}");
+    let err = api::export(&ctx, "context", "xml", &claude(), &none).unwrap_err();
+    assert!(err.contains("unknown format"), "{err}");
+    let err = api::export(&ctx, "nothing", "json", &claude(), &none).unwrap_err();
+    assert!(err.contains("cannot be exported"), "{err}");
 }
