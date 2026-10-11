@@ -29,7 +29,7 @@ function attributedTokens(s: SkillStats): number {
     <section class="view">
       <app-page-header
         exportView="skills"
-        [exportFormats]="['json', 'html']"
+        [exportFormats]="['json', 'html', 'csv']"
         title="Skills"
         summary="Which skills are used and what they cost in tokens."
       >

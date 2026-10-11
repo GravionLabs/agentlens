@@ -1,7 +1,5 @@
 use agentlens_core::adapter::{Registry, SessionFilter};
-use agentlens_core::analyzers::flow::{
-    HooksReport, RetryLoop, SessionGrowth, ToolErrors,
-};
+use agentlens_core::analyzers::flow::{HooksReport, RetryLoop, SessionGrowth, ToolErrors};
 use agentlens_core::env::Env;
 use agentlens_core::export;
 use agentlens_core::model::Source;

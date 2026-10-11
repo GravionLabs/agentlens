@@ -61,6 +61,7 @@ export function inView(kind: ContextKind, view: View): boolean {
     <section class="view">
       <app-page-header
         exportView="context"
+        [exportFormats]="['json', 'csv']"
         title="Context"
         summary="Static content the clients add to every request."
       >

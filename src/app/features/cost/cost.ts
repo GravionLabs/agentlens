@@ -34,6 +34,7 @@ export function money(r: CostRow): string {
     <section class="view">
       <app-page-header
         exportView="cost"
+        [exportFormats]="['json', 'csv']"
         [exportOptions]="{ by: by(), whatIf: whatIf() || null }"
         title="Cost"
         summary="What the usage costs, grouped by model, project, branch or issue."

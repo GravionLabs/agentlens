@@ -38,6 +38,7 @@ export const METRICS: Metric[] = [
     <section class="view">
       <app-page-header
         exportView="compare"
+        [exportFormats]="['json', 'csv']"
         title="Compare"
         summary="The clients side by side over the same sessions."
       >
