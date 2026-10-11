@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::adapter::{Detection, Registry, SessionFilter};
+use crate::analyzers::advice::{self, AdviceReport};
 use crate::analyzers::compare::{self, CompareReport};
 use crate::analyzers::context::{self, ContextReport};
 use crate::analyzers::cost::{self, CostReport, Grouping, WhatIfReport};
@@ -74,6 +75,28 @@ pub struct SkillRun {
     pub inventory: Inventory,
     pub warnings: u64,
     pub errors: Vec<String>,
+}
+
+pub struct AdviceRun {
+    pub report: AdviceReport,
+    pub warnings: u64,
+    pub errors: Vec<String>,
+}
+
+/// The findings about the skills of the selected sessions: what to change to save tokens.
+pub fn advice_run(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    only: &[Source],
+    estimator: &dyn TokenEstimator,
+) -> AdviceRun {
+    let run = skill_run(registry, env, filter, only, estimator);
+    AdviceRun {
+        report: advice::analyze(&run.report),
+        warnings: run.warnings,
+        errors: run.errors,
+    }
 }
 
 /// Reads the sessions, inventories the skills (user level plus the projects the

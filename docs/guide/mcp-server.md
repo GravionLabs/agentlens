@@ -8,6 +8,7 @@
 | ---------------------- | ------------------------------------------------------------------------------------------------- |
 | `sources`              | which agents left sessions on this machine, and how many                                          |
 | `skills`               | uses, load, carry, baseline and overhead tokens per skill                                         |
+| `advice`               | what to change to save tokens: unused skills, costly descriptions, large contexts, with the numbers behind each finding |
 | `context`              | static context: tool listings, MCP instructions, instruction files, agent and skill listings     |
 | `unused`               | installed skills, agents and MCP servers nobody used, and what they cost while idle               |
 | `flow`                 | context growth and compactions, tool errors and retry loops, hooks and permission waits           |

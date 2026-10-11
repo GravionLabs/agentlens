@@ -21,6 +21,7 @@ const SAMPLES: Record<string, () => Promise<{ default: unknown }>> = {
   refresh: () => Promise.resolve({ default: { data: null, warnings: 0, errors: [] } }),
   overview: () => import("./samples/overview.json"),
   skills: () => import("./samples/skills.json"),
+  advice: () => import("./samples/advice.json"),
   context: () => import("./samples/context.json"),
   unused: () => import("./samples/unused.json"),
   flow: () => import("./samples/flow.json"),

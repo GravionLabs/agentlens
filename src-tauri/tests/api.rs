@@ -206,6 +206,10 @@ fn json_samples_for_the_frontend_are_up_to_date() {
             serde_json::to_string_pretty(&api::skills(&ctx, &all).unwrap()).unwrap(),
         ),
         (
+            "advice",
+            serde_json::to_string_pretty(&api::advice(&ctx, &all).unwrap()).unwrap(),
+        ),
+        (
             "context",
             serde_json::to_string_pretty(&api::context(&ctx, &all).unwrap()).unwrap(),
         ),
@@ -290,6 +294,7 @@ fn exports_are_the_json_the_cli_prints_and_the_report_file() {
     // Every other view exports what it shows.
     for view in [
         "overview",
+        "advice",
         "context",
         "unused",
         "flow",
@@ -334,6 +339,7 @@ fn csv_exports_have_the_columns_of_the_cli() {
         file.content.lines().next().unwrap().to_owned()
     };
     assert!(header("skills", &none).starts_with("skill,in_inventory,uses,sessions,load_tokens"));
+    assert!(header("advice", &none).starts_with("finding,skill,tokens,tokens_measured,requests"));
     assert!(header("context", &none).starts_with("source,project,kind,owner,items"));
     assert!(header("unused", &none).starts_with("kind,name,project,clients,uses"));
     assert!(header("compare", &none).starts_with("source,sessions,requests,input_tokens"));

@@ -25,6 +25,24 @@ Two columns are often zero, and that is normal: `user` in the triggers is zero w
 
 Clients that attribute usage to a skill itself (Claude Code through an [OpenTelemetry export](../telemetry.md)) add an `attributed` column with the measured tokens of those requests. The **follow-on** columns count what happened after the skill until the next user turn, skill or compaction.
 
+## Advice
+
+```sh
+agentlens advise --since 30d
+```
+
+What to change to save tokens, made from the skill numbers above. No model is involved: the same sessions always give the same findings, and each one has a fixed explanation, a general action and the numbers it rests on, with the tilde for an estimate.
+
+| Finding                    | What it lists                                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Unused skills**          | installed skills that were neither loaded nor used through their files, what their listing cost, and its share of all listings |
+| **Costly descriptions**    | the descriptions that take the most tokens per request, and what shortening them to about 40 tokens would have saved        |
+| **Used but not installed** | skills that were loaded but are not installed now (renamed, removed, built into the client or supplied by a plugin)         |
+| **Large skill bodies**     | loaded bodies that stay in the context and are sent again with every later request                                          |
+| **Work on a large context** | the skills after which the work ran on the largest context per request                                                     |
+
+A finding says what it cannot know: a skill that is needed only now and then may be worth keeping although it shows up as unused, and the work after a skill is activity, not cost the skill caused. The CLI prints the findings as a table (`--format json` and `--format csv` have all of them), the application has an **Advice** view, and the [MCP server](mcp-server.md) has an `advice` tool, so an agent gets the findings and only has to explain and act on them.
+
 ## Context
 
 ```sh

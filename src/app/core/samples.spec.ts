@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type {
+  AdviceReport,
   Answer,
   CompareReport,
   ContextReport,
@@ -12,6 +13,7 @@ import type {
   Timeline,
   UnusedReport,
 } from "./types";
+import advice from "./samples/advice.json";
 import compare from "./samples/compare.json";
 import context from "./samples/context.json";
 import cost from "./samples/cost.json";
@@ -30,6 +32,7 @@ describe("samples from the backend", () => {
     const answers: Answer<unknown>[] = [
       overview as unknown as Answer<SourceOverview[]>,
       skills as unknown as Answer<SkillsData>,
+      advice as unknown as Answer<AdviceReport>,
       context as unknown as Answer<ContextReport>,
       unused as unknown as Answer<UnusedReport>,
       flow as unknown as Answer<FlowData>,
