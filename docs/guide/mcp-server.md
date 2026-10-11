@@ -17,7 +17,7 @@
 | `compare`              | the agents side by side over the same sessions                                                    |
 | `sessions`, `timeline` | the sessions in a period, and the context size of every request of one                            |
 
-Every tool takes the filter of the CLI (`since`, `sources`, `project`) and returns `{ data, warnings, errors }` as the application shows it. All tools are marked read-only. Estimated values stay marked: where a count has a `measured` flag it is kept, and the tool descriptions say which other values are estimates ([Measured and estimated](measured-and-estimated.md)). The results contain counts, names and paths, never prompts, responses, tool arguments or file contents ([Privacy](privacy.md)).
+Every tool takes the filter of the CLI (`since`, `sources`, `project`) and returns `{ schema_version, data, warnings, errors }` as the application shows it. All tools are marked read-only. Estimates stay marked: a count that can be an estimate has a `measured` flag ([Measured and estimated](measured-and-estimated.md)), and what the tools, the prompt and the fields promise is on the [Compatibility](compatibility.md) page. The results contain counts, names and paths, never prompts, responses, tool arguments or file contents ([Privacy](privacy.md)).
 
 ## A prompt and a glossary
 
