@@ -1,0 +1,68 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "data": {
+    "report": {
+      "rows": [
+        {
+          "key": "/work/demo",
+          "requests": 11,
+          "input": 100109,
+          "output": 10049,
+          "cache_read": 1700,
+          "cache_write": 1850,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 11,
+          "premium_requests": 1.0
+        }
+      ],
+      "total": {
+        "key": "total",
+        "requests": 11,
+        "input": 100109,
+        "output": 10049,
+        "cache_read": 1700,
+        "cache_write": 1850,
+        "measured_usd": 0.0,
+        "estimated_usd": 0.0,
+        "unpriced_requests": 11,
+        "premium_requests": 1.0
+      },
+      "unpriced_models": {
+        "claude-test-1": 10,
+        "model-a": 1
+      }
+    },
+    "what_if": {
+      "target": "claude-haiku-4-5",
+      "rows": [
+        {
+          "model": "claude-test-1",
+          "requests": 0,
+          "actual_usd": 0.0,
+          "what_if_usd": 0.0,
+          "excluded_requests": 10
+        },
+        {
+          "model": "model-a",
+          "requests": 0,
+          "actual_usd": 0.0,
+          "what_if_usd": 0.0,
+          "excluded_requests": 1
+        }
+      ],
+      "total": {
+        "model": "total",
+        "requests": 0,
+        "actual_usd": 0.0,
+        "what_if_usd": 0.0,
+        "excluded_requests": 11
+      }
+    }
+  },
+  "warnings": 2,
+  "errors": []
+}
