@@ -32,6 +32,7 @@ export function errorRate(t: ToolErrors): number | null {
   template: `
     <section class="view">
       <app-page-header
+        exportView="flow"
         title="Flow"
         summary="How sessions unfold: context growth, tool errors and permission waits."
       >

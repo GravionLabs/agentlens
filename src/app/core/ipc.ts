@@ -15,6 +15,7 @@ export class TauriIpc extends Ipc {
 
 const SAMPLES: Record<string, () => Promise<{ default: unknown }>> = {
   app_version: () => Promise.resolve({ default: "sample" }),
+  export_name: () => Promise.resolve({ default: "agentlens-export.json" }),
   update_check: () => Promise.resolve({ default: null }),
   update_install: () => Promise.resolve({ default: null }),
   refresh: () => Promise.resolve({ default: { data: null, warnings: 0, errors: [] } }),

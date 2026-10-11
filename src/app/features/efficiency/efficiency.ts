@@ -21,6 +21,8 @@ export function share(part: number, whole: number): number | null {
   template: `
     <section class="view">
       <app-page-header
+        exportView="efficiency"
+        [exportOptions]="{ by: by() }"
         title="Efficiency"
         summary="How well the prompt cache works and how much subagents contribute."
       >
