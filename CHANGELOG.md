@@ -5,6 +5,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.6.0] — 2026-10-11
+
+### Features
+- Status bar with the active version and a check for updates button (#224)
+- Scalable interface and a readable bar chart (#226)
+- Application command that exports a view to a file (#231)
+- Export menu in the page header of every view (#232)
+- CSV export for every analysis in the application (#234, #235)
+
+
+### Refactoring
+- Move the HTML report rendering to agentlens-core (#230)
+- Move the CSV rows of every analysis to agentlens-core (#233)
+
+
 ## [0.5.0] — 2026-10-11
 
 ### Bug Fixes
