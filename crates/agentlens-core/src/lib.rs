@@ -11,6 +11,7 @@ pub mod exact;
 pub mod export;
 pub mod instructions;
 pub mod inventory;
+pub mod mcp_setup;
 pub mod model;
 pub mod pipeline;
 pub mod prices;

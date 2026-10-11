@@ -1042,3 +1042,169 @@ fn without_exact_the_counts_are_estimates() {
         .unwrap();
     assert_eq!(demo["baseline"]["tokens"]["measured"], false);
 }
+
+// ---- mcp-setup ----
+
+/// A file standing in for `agentlens-mcp`.
+fn fake_mcp_binary(dir: &TempDir) -> std::path::PathBuf {
+    let path = dir.path().join("agentlens-mcp");
+    std::fs::write(&path, "").unwrap();
+    path
+}
+
+#[test]
+fn mcp_setup_shows_what_to_add_and_changes_nothing() {
+    let home = tempfile::tempdir().unwrap();
+    let bin = fake_mcp_binary(&home);
+    let before: Vec<_> = std::fs::read_dir(home.path()).unwrap().collect();
+    agentlens(&home)
+        .args(["mcp-setup", "--binary"])
+        .arg(&bin)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Claude Code"))
+        .stdout(predicates::str::contains(
+            "claude mcp add --scope user agentlens --",
+        ))
+        .stdout(predicates::str::contains("\"servers\""))
+        .stdout(predicates::str::contains("\"mcpServers\""))
+        .stdout(predicates::str::contains("\"mcp\""))
+        .stdout(predicates::str::contains("Nothing was changed"));
+    assert_eq!(
+        std::fs::read_dir(home.path()).unwrap().count(),
+        before.len()
+    );
+}
+
+#[test]
+fn mcp_setup_registers_is_idempotent_and_removes() {
+    let home = tempfile::tempdir().unwrap();
+    let bin = fake_mcp_binary(&home);
+    let file = home.path().join(".copilot/mcp-config.json");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(
+        &file,
+        r#"{"mcpServers":{"other":{"type":"http","url":"u","tools":["*"]}}}"#,
+    )
+    .unwrap();
+
+    let setup = |extra: &[&str]| {
+        let mut cmd = agentlens(&home);
+        cmd.args(["mcp-setup", "--client", "copilot-cli", "--yes", "--binary"])
+            .arg(&bin)
+            .args(extra);
+        cmd
+    };
+    setup(&["--write"])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Copilot CLI: added"))
+        .stdout(predicates::str::contains("backup:"));
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(doc["mcpServers"]["agentlens"]["type"], "local");
+    assert_eq!(doc["mcpServers"]["other"]["url"], "u");
+
+    setup(&["--write"])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("nothing changed"));
+
+    setup(&["--remove"])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Copilot CLI: removed"));
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert!(doc["mcpServers"].get("agentlens").is_none());
+    assert_eq!(doc["mcpServers"]["other"]["url"], "u");
+}
+
+#[test]
+fn mcp_setup_leaves_a_file_it_cannot_read_alone_and_says_so() {
+    let home = tempfile::tempdir().unwrap();
+    let bin = fake_mcp_binary(&home);
+    let file = home.path().join(".config/Code/User/mcp.json");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    let text = "{\n  // my servers\n  \"servers\": {}\n}\n";
+    std::fs::write(&file, text).unwrap();
+    agentlens(&home)
+        .args(["mcp-setup", "--write", "--yes", "--binary"])
+        .arg(&bin)
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("left untouched"))
+        .stderr(predicates::str::contains("could not be changed"));
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
+}
+
+#[test]
+fn mcp_setup_asks_before_writing_and_only_touches_found_clients() {
+    let home = tempfile::tempdir().unwrap();
+    let bin = fake_mcp_binary(&home);
+    // Nothing installed: nothing to do.
+    agentlens(&home)
+        .args(["mcp-setup", "--write", "--yes", "--binary"])
+        .arg(&bin)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("No supported client was found"));
+    // A client is there, but there is no terminal to ask in and no --yes.
+    std::fs::create_dir_all(home.path().join(".copilot")).unwrap();
+    agentlens(&home)
+        .args(["mcp-setup", "--write", "--binary"])
+        .arg(&bin)
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("--yes"));
+    assert!(!home.path().join(".copilot/mcp-config.json").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn mcp_setup_registers_claude_code_with_its_own_command() {
+    use std::os::unix::fs::PermissionsExt;
+    let home = tempfile::tempdir().unwrap();
+    let bin = fake_mcp_binary(&home);
+    // A `claude` that only records how it was called.
+    let tools = tempfile::tempdir().unwrap();
+    let log = tools.path().join("calls.log");
+    let claude = tools.path().join("claude");
+    std::fs::write(
+        &claude,
+        format!("#!/bin/sh\necho \"$@\" >> {}\n", log.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!(
+        "{}:{}",
+        tools.path().display(),
+        std::env::var("PATH").unwrap()
+    );
+
+    agentlens(&home)
+        .env("PATH", &path)
+        .args([
+            "mcp-setup",
+            "--client",
+            "claude-code",
+            "--write",
+            "--yes",
+            "--binary",
+        ])
+        .arg(&bin)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Claude Code: registered"));
+    agentlens(&home)
+        .env("PATH", &path)
+        .args(["mcp-setup", "--client", "claude-code", "--remove", "--yes"])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Claude Code: removed"));
+    let calls = std::fs::read_to_string(&log).unwrap();
+    let lines: Vec<&str> = calls.lines().collect();
+    assert_eq!(
+        lines[0],
+        format!("mcp add --scope user agentlens -- {}", bin.display())
+    );
+    assert_eq!(lines[1], "mcp remove --scope user agentlens");
+}

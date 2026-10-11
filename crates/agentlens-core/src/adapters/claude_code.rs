@@ -61,6 +61,12 @@ const BUILTIN_COMMANDS: &[&str] = &[
 
 pub struct ClaudeCodeAdapter;
 
+pub(crate) fn claude_home(env: &Env) -> PathBuf {
+    env.var("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| env.home().join(".claude"))
+}
+
 fn projects_dir(env: &Env) -> PathBuf {
     env.var("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)

@@ -23,7 +23,7 @@ use crate::model::{
 pub struct VsCodeCopilotAdapter;
 
 /// The `User` directories of VS Code and VS Code Insiders that exist.
-fn user_dirs(env: &Env) -> Vec<PathBuf> {
+pub(crate) fn user_dirs(env: &Env) -> Vec<PathBuf> {
     let mut bases = vec![
         crate::inventory::config_home(env),
         env.home().join("Library/Application Support"),

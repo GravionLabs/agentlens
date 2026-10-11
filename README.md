@@ -107,7 +107,9 @@ Supported sources today: Claude Code, OpenCode (SQLite database, and the JSON fi
 
 Every tool takes the filter of the CLI (`since`, `sources`, `project`) and returns `{ data, warnings, errors }` as the application shows it. Estimated values are marked as in the CLI: where a count has a `measured` flag it is kept, and the tool descriptions say which other values are estimates. The results contain counts, names and paths, never prompts, responses, tool arguments or file contents.
 
-Register the server in your client, with the full path to the binary:
+`agentlens mcp-setup` helps with the registration. Without options it only prints, for each client, what to add (and whether the client was found), and changes nothing. `agentlens mcp-setup --write` registers the server in the clients found on this machine (or those chosen with `--client claude-code|vscode|copilot-cli|opencode`): it asks for each client first (`--yes` skips the question), makes a backup copy of a configuration file before it changes it (`<file>.agentlens-backup-<time>`), adds only its own entry and keeps everything else, and does nothing when the entry is already there. A file it cannot read as JSON (VS Code's `mcp.json` may contain comments) is left untouched with a warning. `agentlens mcp-setup --remove` takes the entry out again. Claude Code is registered with its own `claude mcp add`, which `--write` runs for you. This is the only command of AgentLens that writes into files of the clients. `--binary FILE` names the server if it is neither next to `agentlens` nor on `PATH`.
+
+To do it by hand, register the server in your client with the full path to the binary:
 
 | Client | Registration |
 |---|---|
