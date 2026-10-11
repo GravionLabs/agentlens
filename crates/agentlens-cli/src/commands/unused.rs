@@ -1,6 +1,7 @@
 use agentlens_core::adapter::{Registry, SessionFilter};
 use agentlens_core::analyzers::unused::{UnusedItem, UnusedKind};
 use agentlens_core::env::Env;
+use agentlens_core::export;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::unused_run;
 use agentlens_core::tokens::{TokenEstimator, Tokens};
@@ -55,32 +56,7 @@ pub fn run(
             report.items.retain(|i| all || i.uses == 0);
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
-        Format::Csv => {
-            let header = [
-                "kind",
-                "name",
-                "project",
-                "clients",
-                "uses",
-                "requests",
-                "overhead_tokens",
-            ];
-            let rows = items
-                .iter()
-                .map(|i| {
-                    vec![
-                        kind(i.kind).to_owned(),
-                        i.name.clone(),
-                        project(i),
-                        clients(i),
-                        i.uses.to_string(),
-                        i.requests.to_string(),
-                        i.overhead_tokens.map(|t| t.to_string()).unwrap_or_default(),
-                    ]
-                })
-                .collect();
-            print!("{}", output::csv(&header, rows)?);
-        }
+        Format::Csv => print!("{}", export::csv::unused(&items)?),
         Format::Table => {
             let rows = items
                 .iter()

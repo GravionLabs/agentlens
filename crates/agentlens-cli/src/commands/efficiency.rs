@@ -3,6 +3,7 @@ use std::path::Path;
 use agentlens_core::adapter::{Registry, SessionFilter};
 use agentlens_core::analyzers::efficiency::{CacheBy, CacheRow, SubagentShare};
 use agentlens_core::env::Env;
+use agentlens_core::export;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::efficiency_run;
 use agentlens_core::prices;
@@ -23,33 +24,6 @@ fn hit_rate(r: &CacheRow) -> String {
     r.hit_rate
         .map(|h| format!("{:.1}%", h * 100.0))
         .unwrap_or_else(|| "n/a".into())
-}
-
-fn cache_csv(rows: &[CacheRow]) -> Result<String> {
-    let header = [
-        "key",
-        "source",
-        "requests",
-        "input_tokens",
-        "cache_read_tokens",
-        "cache_write_tokens",
-        "hit_rate",
-    ];
-    let body = rows
-        .iter()
-        .map(|r| {
-            vec![
-                r.key.clone(),
-                r.source.id().to_owned(),
-                r.requests.to_string(),
-                r.input.to_string(),
-                r.cache_read.to_string(),
-                r.cache_write.to_string(),
-                r.hit_rate.map(|h| format!("{h:.6}")).unwrap_or_default(),
-            ]
-        })
-        .collect();
-    output::csv(&header, body)
 }
 
 fn share_row(s: &SubagentShare) -> Vec<String> {
@@ -97,7 +71,7 @@ pub fn run(
 
     match format {
         Format::Json => println!("{}", serde_json::to_string_pretty(&json!(r))?),
-        Format::Csv => print!("{}", cache_csv(&r.cache)?),
+        Format::Csv => print!("{}", export::csv::cache(&r.cache)?),
         Format::Table => {
             let shown = if top == 0 {
                 r.cache.len()

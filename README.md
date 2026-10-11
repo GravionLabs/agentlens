@@ -106,6 +106,18 @@ cargo test -p agentlens-app
 
 The frontend only calls commands of the `agentlens-app` crate; it never reads client files. The JSON samples in `src/app/core/samples` are written by a Rust test (`UPDATE_SAMPLES=1 cargo test -p agentlens-app`) and the TypeScript types and tests are built on them.
 
+### Export
+
+Every view has an **Export** menu next to its title. It runs the analysis with the filters of the view and saves the result to a file you choose in the save dialog; nothing is written without that choice, and never into the client data.
+
+| Format | Views | Same as the CLI |
+|---|---|---|
+| JSON | all | `--format json` (flow and cost: the whole data of the view) |
+| CSV | skills, context, unused, flow (the open tab), cost (with its grouping or what-if), efficiency, compare | `--format csv`, same columns, produced by the same code in `agentlens-core` |
+| HTML report | skills | `agentlens report --html` |
+
+The status bar shows the version, has a **Check for updates** button and the size of the interface (`A−`, `A+`, or Ctrl +, Ctrl −, Ctrl 0).
+
 ## Layout
 
 | Path | Purpose |

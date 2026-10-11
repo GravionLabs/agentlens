@@ -19,7 +19,7 @@ use agentlens_core::analyzers::skills::SkillReport;
 use agentlens_core::analyzers::timeline::{SessionSummary, Timeline};
 use agentlens_core::analyzers::unused::UnusedReport;
 use agentlens_core::env::Env;
-use agentlens_core::export;
+use agentlens_core::export::{self, csv as csv_export};
 use agentlens_core::inventory::Duplicate;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline;
@@ -315,6 +315,10 @@ pub struct ExportOptions {
     pub by: Option<String>,
     /// The what-if model of the cost view.
     pub what_if: Option<String>,
+    /// The unused view lists items that have been used too, like `--all`.
+    pub all: Option<bool>,
+    /// The tab of the flow view: `growth`, `errors` or `hooks`.
+    pub section: Option<String>,
 }
 
 /// A file made from an analysis, not yet written.
@@ -326,6 +330,20 @@ pub struct Export {
     pub suggested_name: String,
     pub warnings: u64,
     pub errors: Vec<String>,
+}
+
+fn csv_file(
+    view: &str,
+    content: Result<String, csv_export::CsvError>,
+    warnings: u64,
+    errors: Vec<String>,
+) -> Result<Export, String> {
+    Ok(Export {
+        content: content.map_err(|e| e.to_string())?,
+        suggested_name: file_name(view, "csv"),
+        warnings,
+        errors,
+    })
 }
 
 fn json_of<T: Serialize>(value: &T) -> Result<String, String> {
@@ -357,7 +375,7 @@ fn file_name(view: &str, format: &str) -> String {
 }
 
 /// Runs the analysis of `view` with the same filters and options as the view and returns it in
-/// `format`: `json` for every view (what `--format json` of the CLI prints, for flow and cost the
+/// `format`: `csv` for the views whose CLI command has `--format csv` (the same columns), `json` for every view (what `--format json` of the CLI prints, for flow and cost the
 /// whole data of the view) and `html` for the skills view (the file of `agentlens report`).
 pub fn export(
     ctx: &Context,
@@ -393,6 +411,61 @@ pub fn export(
             })
         }
         (_, "html") => Err("only the skills view can be exported as HTML".into()),
+        ("skills", "csv") => {
+            let a = skills(ctx, f)?;
+            let mut list: Vec<_> = a.data.report.skills.iter().collect();
+            list.sort_by(|x, y| {
+                y.overhead_tokens()
+                    .cmp(&x.overhead_tokens())
+                    .then_with(|| x.name.cmp(&y.name))
+            });
+            csv_file(view, csv_export::skills(&list), a.warnings, a.errors)
+        }
+        ("context", "csv") => {
+            let a = context(ctx, f)?;
+            let rows: Vec<_> = a.data.rows.iter().collect();
+            csv_file(view, csv_export::context(&rows), a.warnings, a.errors)
+        }
+        ("unused", "csv") => {
+            let a = unused(ctx, f)?;
+            let all = options.all.unwrap_or(false);
+            let items: Vec<_> = a.data.items.iter().filter(|i| all || i.uses == 0).collect();
+            csv_file(view, csv_export::unused(&items), a.warnings, a.errors)
+        }
+        ("compare", "csv") => {
+            let a = compare(ctx, f)?;
+            csv_file(
+                view,
+                csv_export::compare(&a.data.sources),
+                a.warnings,
+                a.errors,
+            )
+        }
+        ("cost", "csv") => {
+            let by = options.by.as_deref().unwrap_or("model");
+            let a = cost(ctx, f, by, options.what_if.as_deref())?;
+            let content = match &a.data.what_if {
+                Some(w) => csv_export::what_if(w),
+                None => csv_export::cost(&a.data.report.rows, by),
+            };
+            csv_file(view, content, a.warnings, a.errors)
+        }
+        ("efficiency", "csv") => {
+            let by = options.by.as_deref().unwrap_or("session");
+            let a = efficiency(ctx, f, by)?;
+            csv_file(view, csv_export::cache(&a.data.cache), a.warnings, a.errors)
+        }
+        ("flow", "csv") => {
+            let a = flow(ctx, f)?;
+            let content = match options.section.as_deref().unwrap_or("growth") {
+                "growth" => csv_export::growth(&a.data.growth.sessions),
+                "errors" => csv_export::errors(&a.data.errors.tools),
+                "hooks" => csv_export::hooks(&a.data.hooks.hooks),
+                other => return Err(format!("unknown section `{other}`")),
+            };
+            csv_file(view, content, a.warnings, a.errors)
+        }
+        (view, "csv") => Err(format!("the view `{view}` cannot be exported as CSV")),
         ("overview", "json") => exported(view, format, overview(ctx, f)?),
         ("context", "json") => exported(view, format, context(ctx, f)?),
         ("unused", "json") => exported(view, format, unused(ctx, f)?),

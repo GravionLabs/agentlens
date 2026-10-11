@@ -33,6 +33,8 @@ export function errorRate(t: ToolErrors): number | null {
     <section class="view">
       <app-page-header
         exportView="flow"
+        [exportFormats]="['json', 'csv']"
+        [exportOptions]="{ section: tab() }"
         title="Flow"
         summary="How sessions unfold: context growth, tool errors and permission waits."
       >
