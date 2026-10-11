@@ -8,13 +8,14 @@ use std::process::{Command, Stdio};
 
 use serde_json::{Value, json};
 
-const MARKERS: [&str; 6] = [
+const MARKERS: [&str; 7] = [
     "CANARY-PROMPT-61c4",
     "CANARY-ANSWER-61c4",
     "CANARY-TOOL-ARG-61c4",
     "CANARY-TOOL-RESULT-61c4",
     "CANARY-INSTRUCTIONS-61c4",
     "CANARY-SKILL-BODY-61c4",
+    "CANARY-SCRIPT-61c4",
 ];
 
 fn session() -> String {
@@ -40,6 +41,14 @@ fn session() -> String {
         "content":[{"type":"text","text":MARKERS[1]}],
         "usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":100,"cache_creation_input_tokens":200}});
     out += &line(a2);
+    // A script run from the folder of an installed skill: its name may show, the rest of the call not.
+    let mut a3 = base("2026-10-01T10:00:03.500Z", "assistant");
+    a3["requestId"] = json!("r1");
+    a3["message"] = json!({"id":"m1","role":"assistant","model":"claude-test-1",
+        "content":[{"type":"tool_use","id":"t2","name":"Bash",
+            "input":{"command":format!("bash ~/.claude/skills/canary-skill/scripts/{}.sh", MARKERS[6])}}],
+        "usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":100,"cache_creation_input_tokens":200}});
+    out += &line(a3);
     let mut res = base("2026-10-01T10:00:04Z", "user");
     res["message"] = json!({"role":"user","content":[
         {"type":"tool_result","tool_use_id":"t1","content":MARKERS[3],"is_error":true}]});

@@ -86,6 +86,7 @@ pub fn skills(skills: &[&SkillStats]) -> Result<String, CsvError> {
         "baseline_measured",
         "carry_measured",
         "overhead_measured",
+        "file_uses",
     ];
     let rows = skills
         .iter()
@@ -109,6 +110,7 @@ pub fn skills(skills: &[&SkillStats]) -> Result<String, CsvError> {
                 s.carry.tokens.measured.to_string(),
                 (s.baseline.tokens.measured && s.load.measured && s.carry.tokens.measured)
                     .to_string(),
+                s.file_uses.to_string(),
             ]
         })
         .collect();

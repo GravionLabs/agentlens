@@ -483,6 +483,12 @@ impl Parser<'_> {
             if let Some(id) = &tool_id {
                 self.tool_idx.insert(id.clone(), (idx, at));
             }
+            for skill in skill_folders_touched(&name, input) {
+                self.push(at, EventKind::SkillFileUse(skill));
+            }
+            for skill in skill_folders_edited(&name, input) {
+                self.push(at, EventKind::SkillFileEdit(skill));
+            }
             if name == "Skill"
                 && let Some(skill) = str_of(input, "skill")
             {
@@ -625,6 +631,124 @@ impl Parser<'_> {
     }
 }
 
+/// The names after `skills/` in a piece of text: `.../skills/<name>/...` or `skills/<name>`. A word that
+/// only ends in `skills` (`myskills/x`) is no folder, and a bare `skills/` names nothing.
+fn skill_names_in(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut from = 0;
+    while let Some(found) = text[from..].find("skills/") {
+        let start = from + found;
+        from = start + "skills/".len();
+        let before = text[..start].chars().next_back();
+        if before.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+            continue;
+        }
+        let name: String = text[from..]
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
+            .collect();
+        if !name.is_empty() && name != "." && name != ".." && !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
+}
+
+/// Programs that run the file they are given: `bash <path>`, `python3 <path>`, ...
+const INTERPRETERS: &[&str] = &[
+    "bash",
+    "sh",
+    "zsh",
+    "python",
+    "python3",
+    "node",
+    "deno",
+    "bun",
+    "pwsh",
+    "powershell",
+    "ruby",
+    "perl",
+    "uv",
+    "npx",
+    "tsx",
+    "source",
+    ".",
+    "dotnet",
+];
+
+/// The skills whose scripts a shell command runs: a path in a skill's folder given to an interpreter, or
+/// run as a program. Listing, copying, printing, searching or committing files there is looking after
+/// the skill and does not count.
+fn skills_run_by(command: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for segment in command.split(['\n', ';', '|', '&']) {
+        let mut words = segment
+            .split_whitespace()
+            .map(|w| w.trim_matches(['"', '\'']));
+        let mut first = words.next();
+        // `FOO=1 sudo time ./run.sh`
+        while first.is_some_and(|w| {
+            (w.contains('=') && !w.contains('/')) || matches!(w, "sudo" | "time" | "env" | "exec")
+        }) {
+            first = words.next();
+        }
+        let Some(first) = first else { continue };
+        let program = first.rsplit('/').next().unwrap_or(first);
+        let candidates: Vec<&str> = if INTERPRETERS.contains(&program) {
+            words.collect()
+        } else {
+            vec![first]
+        };
+        for word in candidates {
+            for name in skill_names_in(word) {
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        }
+    }
+    names
+}
+
+/// The skills whose folder a tool call reads or searches, or whose script it runs. Only the name is
+/// returned; nothing else of the call is kept. A folder called `skills` in some other project matches
+/// too, so the analysis counts only names it knows as installed skills.
+fn skill_folders_touched(tool: &str, input: &Value) -> Vec<String> {
+    let fields: &[&str] = match tool {
+        "Read" => &["file_path"],
+        "Glob" => &["pattern", "path"],
+        "Grep" => &["path", "glob"],
+        "Bash" => {
+            return str_of(input, "command")
+                .map(skills_run_by)
+                .unwrap_or_default();
+        }
+        _ => return Vec::new(),
+    };
+    let mut names = Vec::new();
+    for field in fields {
+        for name in str_of(input, field).map(skill_names_in).unwrap_or_default() {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+    }
+    names
+}
+
+/// The skills whose files a tool call edits or writes.
+fn skill_folders_edited(tool: &str, input: &Value) -> Vec<String> {
+    match tool {
+        "Edit" | "Write" | "MultiEdit" => str_of(input, "file_path")
+            .map(skill_names_in)
+            .unwrap_or_default(),
+        "NotebookEdit" => str_of(input, "notebook_path")
+            .map(skill_names_in)
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    }
+}
+
 /// `<command-name>/foo</command-name>` -> `foo`.
 fn command_name(text: &str) -> Option<&str> {
     let rest = text.strip_prefix("<command-name>")?;
@@ -662,6 +786,104 @@ fn summarize(tool: &str, input: &Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn reading_and_running_in_a_skill_folder_names_the_skill() {
+        let touched = |tool: &str, input: Value| skill_folders_touched(tool, &input);
+        assert_eq!(
+            touched(
+                "Read",
+                json!({"file_path": "/home/u/.claude/skills/ng-developer/SKILL.md"})
+            ),
+            ["ng-developer"]
+        );
+        assert_eq!(
+            touched("Glob", json!({"pattern": "skills/ts-test/**/*.md"})),
+            ["ts-test"]
+        );
+        assert_eq!(
+            touched(
+                "Grep",
+                json!({"path": "/p/.claude/skills/a", "pattern": "x"})
+            ),
+            ["a"]
+        );
+        // A script run by an interpreter, by its path, or with a variable set in front.
+        for command in [
+            "bash ~/.claude/skills/github-issue/scripts/x.sh --issue 3",
+            "python3 -u ./.claude/skills/github-issue/run.py",
+            "FOO=1 sh \"$HOME/.claude/skills/github-issue/x.sh\"",
+            "~/.claude/skills/github-issue/scripts/x.sh arg",
+            "cd /p && bash skills/github-issue/x.sh | tee out",
+        ] {
+            assert_eq!(
+                touched("Bash", json!({"command": command})),
+                ["github-issue"],
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn looking_after_a_skill_is_not_using_it() {
+        // Listing, printing, copying, searching, committing and removing are maintenance.
+        for command in [
+            "ls ~/.claude/skills/a/",
+            "cat skills/a/SKILL.md",
+            "cp -r ~/.claude/skills/a /tmp/a",
+            "git add .claude/skills/a && git commit -m x",
+            "grep -rn foo ~/.claude/skills/a",
+            "rm -rf skills/a",
+            "echo skills/a",
+        ] {
+            assert!(
+                skill_folders_touched("Bash", &json!({"command": command})).is_empty(),
+                "{command}"
+            );
+        }
+        // Editing is not a use, and the other tools name nothing.
+        for tool in ["Edit", "Write", "Task", "WebFetch"] {
+            assert!(
+                skill_folders_touched(tool, &json!({"file_path": "/h/.claude/skills/x/SKILL.md"}))
+                    .is_empty(),
+                "{tool}"
+            );
+        }
+        // A listing of the whole folder, or a word that only ends in `skills`, names no skill.
+        assert!(
+            skill_folders_touched("Read", &json!({"file_path": "/h/.claude/skills/"})).is_empty()
+        );
+        assert!(skill_folders_touched("Glob", &json!({"pattern": "myskills/x"})).is_empty());
+        // The same skill twice in one call is one name.
+        assert_eq!(
+            skill_folders_touched(
+                "Glob",
+                &json!({"pattern": "skills/a/x", "path": "skills/a/y"})
+            ),
+            ["a"]
+        );
+    }
+
+    #[test]
+    fn writing_in_a_skill_folder_names_the_skill_as_edited() {
+        let edited = |tool: &str, input: Value| skill_folders_edited(tool, &input);
+        for tool in ["Edit", "Write", "MultiEdit"] {
+            assert_eq!(
+                edited(tool, json!({"file_path": "/h/.claude/skills/a/SKILL.md"})),
+                ["a"],
+                "{tool}"
+            );
+        }
+        assert_eq!(
+            edited(
+                "NotebookEdit",
+                json!({"notebook_path": "/h/.claude/skills/b/n.ipynb"})
+            ),
+            ["b"]
+        );
+        assert!(edited("Read", json!({"file_path": "/h/.claude/skills/a/SKILL.md"})).is_empty());
+    }
 
     #[test]
     fn command_name_is_extracted() {

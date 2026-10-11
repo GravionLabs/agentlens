@@ -1214,3 +1214,84 @@ fn mcp_setup_registers_claude_code_with_its_own_command() {
     );
     assert_eq!(lines[1], "mcp remove --scope user agentlens");
 }
+
+// ---- skills used through their files ----
+
+fn home_with_skill_files() -> TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let projects = dir.path().join(".claude/projects/-work-demo");
+    fs::create_dir_all(&projects).unwrap();
+    fs::copy(
+        fixtures().join("skill_files.jsonl"),
+        projects.join("skill_files.jsonl"),
+    )
+    .unwrap();
+    for name in ["demo", "idle"] {
+        let d = dir.path().join(format!(".claude/skills/{name}"));
+        fs::create_dir_all(&d).unwrap();
+        fs::write(
+            d.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: Does {name} things\n---\nbody"),
+        )
+        .unwrap();
+    }
+    dir
+}
+
+#[test]
+fn a_skill_used_only_through_its_files_is_not_unused() {
+    let home = home_with_skill_files();
+    // The skills view shows the file uses: two tool calls on the files of `demo`, none on `idle`.
+    let v = json(agentlens(&home).args(["skills", "--format", "json"]));
+    let skill = |name: &str| {
+        v["skills"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["name"] == name)
+            .unwrap_or_else(|| panic!("{name} missing"))
+            .clone()
+    };
+    assert_eq!(skill("demo")["file_uses"], 2);
+    assert_eq!(skill("demo")["invocations"], 0);
+    assert_eq!(skill("idle")["file_uses"], 0);
+    assert!(
+        v["skills"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|s| s["name"] != "skills.ts")
+    );
+    agentlens(&home)
+        .arg("skills")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("file uses"));
+
+    // `unused` lists the idle skill and not the one whose files are in use.
+    let u = json(agentlens(&home).args(["unused", "--format", "json"]));
+    let names: Vec<&str> = u["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|i| i["kind"] == "skill")
+        .map(|i| i["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["idle"]);
+    // The CSV keeps its columns and adds the count at the end.
+    let out = agentlens(&home)
+        .args(["skills", "--format", "csv"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let header = String::from_utf8(out).unwrap();
+    assert!(
+        header
+            .lines()
+            .next()
+            .unwrap()
+            .ends_with(",overhead_measured,file_uses")
+    );
+}

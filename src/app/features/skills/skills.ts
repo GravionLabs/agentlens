@@ -167,6 +167,14 @@ export class Skills {
       { key: "uses", label: "Uses", value: (s) => s.invocations, numeric: true },
       { key: "sessions", label: "Sessions", value: (s) => s.sessions, numeric: true },
       {
+        key: "file_uses",
+        label: "File uses",
+        term: "file-use",
+        value: (s) => s.file_uses,
+        numeric: true,
+        title: "Tool calls that read or ran files in the skill's folder without loading it",
+      },
+      {
         key: "load",
         label: "Load",
         term: "load",

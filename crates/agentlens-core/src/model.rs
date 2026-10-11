@@ -138,6 +138,12 @@ pub enum EventKind {
     UserTurn,
     ToolCall(ToolCall),
     SkillInvoked(SkillInvoked),
+    /// A tool call read or searched the files of a skill, or ran a script in its folder, without
+    /// loading the skill. Only the skill name is kept (taken from the path), never the call.
+    SkillFileUse(String),
+    /// A tool call edited or wrote a file in the folder of a skill. Only the skill name is kept. A
+    /// session that works on a skill is not a session that uses it.
+    SkillFileEdit(String),
     Usage(Usage),
     /// The context was compacted; earlier content no longer counts as carried.
     Compaction,

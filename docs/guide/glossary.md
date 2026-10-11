@@ -70,6 +70,10 @@ Clients list installed skills by name and description in each request so the mod
 
 When a skill is invoked, its full instructions enter the context once. Load is the size of that content.
 
+### File use
+
+A skill is not only loaded by the client's skill tool or by typing its name: a model also reads its files and runs the scripts in its folder. AgentLens counts those tool calls per installed skill (only the skill name is kept, never the command or the path), and a skill with file uses is not listed as unused. Looking after a skill does not count: listing, printing, copying or committing its files, and editing them, and neither do the file accesses of a session that edits the skill. It is a signal, not proof. Loads are shown in the uses column; file uses are listed next to them.
+
 ### Carry
 
 Once loaded, the skill text stays in the conversation and is re-sent with every following request until a compaction removes it. Carry is that repeated cost and always an estimate.

@@ -314,3 +314,41 @@ fn the_same_session_under_two_project_directories_counts_once() {
         "the complete copy was kept"
     );
 }
+
+#[test]
+fn tool_calls_in_a_skill_folder_become_file_uses_that_keep_only_the_skill_name() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/skill_files.jsonl",
+        &format!("{SLUG}/skill_files.jsonl"),
+    );
+    let se = read_all(&home).remove(0);
+    let names: Vec<&str> = se
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::SkillFileUse(n) => Some(n.as_str()),
+            _ => None,
+        })
+        .collect();
+    // Read and a run script in the folder of `demo`, and the project folder `features/skills/skills.ts`,
+    // which yields a name the analysis will not know. Listing and printing the files of `idle` is not
+    // a use, and the Edit of `other` is working on it.
+    assert_eq!(names, ["demo", "demo", "skills.ts"]);
+    let edited: Vec<&str> = se
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::SkillFileEdit(n) => Some(n.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(edited, ["other"]);
+    // Nothing of the calls is kept: no argument, no path.
+    let dump = format!("{:?}", se.events);
+    assert!(
+        !dump.contains("secret-argument"),
+        "arguments are never stored"
+    );
+    assert!(!dump.contains("run.sh"));
+}
