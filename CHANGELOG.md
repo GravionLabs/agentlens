@@ -5,6 +5,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.0] — 2026-10-11
+
+### Features
+- A download section on the site (#256)
+- A measured flag on every token count that can be an estimate (#246)
+- Count a skill as used when its files are read or its scripts run (#260)
+- An advice analysis with findings and their evidence (#261)
+- An MCP prompt and a glossary resource for agents (#262)
+
+
 ## [0.7.0] — 2026-10-11
 
 ### Documentation
