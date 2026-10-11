@@ -3,6 +3,7 @@ source: crates/agentlens-core/tests/output_contract.rs
 description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
 ---
 {
+  "schema_version": 2,
   "data": {
     "sessions": 4,
     "items": [

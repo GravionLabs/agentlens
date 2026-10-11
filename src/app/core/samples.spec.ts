@@ -43,7 +43,8 @@ describe("samples from the backend", () => {
       timeline as unknown as Answer<Timeline>,
     ];
     for (const a of answers) {
-      expect(Object.keys(a).sort()).toEqual(["data", "errors", "warnings"]);
+      expect(Object.keys(a).sort()).toEqual(["data", "errors", "schema_version", "warnings"]);
+      expect(a.schema_version).toBeGreaterThanOrEqual(2);
     }
   });
 

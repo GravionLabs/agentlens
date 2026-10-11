@@ -16,6 +16,7 @@ mod support;
 
 use agentlens_core::adapters::default_registry;
 use agentlens_core::api::{self, Context, Filters};
+use agentlens_core::report::SCHEMA_VERSION;
 use serde::Serialize;
 use support::TempHome;
 
@@ -75,9 +76,14 @@ fn claude() -> Filters {
     }
 }
 
-/// Pretty JSON with the temporary home replaced, as the CLI would print it.
+/// Pretty JSON with the temporary home replaced, as the CLI would print it. Every snapshot carries the
+/// schema version of its envelope, so raising `SCHEMA_VERSION` has to be accepted in all of them.
 fn text<T: Serialize>(home: &TempHome, value: &T) -> String {
     let json = serde_json::to_string_pretty(value).unwrap();
+    assert!(
+        json.contains(&format!("\"schema_version\": {SCHEMA_VERSION},")),
+        "the answer says which version of the layout it has"
+    );
     json.replace(&home.path().display().to_string(), "/home/user")
 }
 

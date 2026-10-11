@@ -18,6 +18,8 @@ export interface Filters {
 }
 
 export interface Answer<T> {
+  /** The version of the layout of `data`; raised when a field is renamed, removed or retyped. */
+  schema_version: number;
   data: T;
   warnings: number;
   errors: string[];
