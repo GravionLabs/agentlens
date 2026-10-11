@@ -17,6 +17,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - One glossary for the application and the guide (#217)
 - A shorter README that points to the guide
 - Describe the documentation site in AGENTS.md
+- Update CHANGELOG.md for v0.7.0
 
 
 ### Features
