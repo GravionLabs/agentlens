@@ -749,9 +749,15 @@ fn skill_folders_edited(tool: &str, input: &Value) -> Vec<String> {
     }
 }
 
-/// `<command-name>/foo</command-name>` -> `foo`.
+/// The name of a typed slash command: `<command-name>/foo</command-name>` -> `foo`. A built-in command
+/// starts with the name tag; a command that runs a skill or a prompt starts with the message tag
+/// (`<command-message>foo</command-message>`, then the name, then the arguments), so the name is looked
+/// for in the tags at the start of the text, in whatever order they come.
 fn command_name(text: &str) -> Option<&str> {
-    let rest = text.strip_prefix("<command-name>")?;
+    if !text.starts_with("<command-") {
+        return None;
+    }
+    let rest = &text[text.find("<command-name>")? + "<command-name>".len()..];
     let name = rest.split("</command-name>").next()?;
     Some(name.trim().trim_start_matches('/')).filter(|n| !n.is_empty())
 }
@@ -892,6 +898,17 @@ mod tests {
             Some("orch")
         );
         assert_eq!(command_name("hello"), None);
+    }
+
+    #[test]
+    fn a_command_that_runs_a_skill_starts_with_the_message_tag() {
+        // What Claude Code writes for a typed skill: the message, the name, then the arguments.
+        let text = "<command-message>cliff-setup</command-message>\n<command-name>/cliff-setup</command-name>\n<command-args>0.8</command-args>";
+        assert_eq!(command_name(text), Some("cliff-setup"));
+        // A user who merely writes the tag later in a sentence typed no command.
+        assert_eq!(command_name("see <command-name>/x</command-name>"), None);
+        // A message tag without a name names nothing.
+        assert_eq!(command_name("<command-message>x</command-message>"), None);
     }
 
     #[test]

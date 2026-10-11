@@ -1355,3 +1355,36 @@ fn advise_has_nothing_to_say_without_sessions() {
         .success()
         .stdout(predicate::str::contains("Nothing to suggest"));
 }
+
+// ---- typed skill commands ----
+
+#[test]
+fn a_skill_the_user_typed_counts_as_a_user_trigger() {
+    let dir = tempfile::tempdir().unwrap();
+    let projects = dir.path().join(".claude/projects/-work-demo");
+    fs::create_dir_all(&projects).unwrap();
+    fs::copy(
+        fixtures().join("typed_skill.jsonl"),
+        projects.join("typed_skill.jsonl"),
+    )
+    .unwrap();
+    let skill = dir.path().join(".claude/skills/cliff-setup");
+    fs::create_dir_all(&skill).unwrap();
+    fs::write(
+        skill.join("SKILL.md"),
+        "---\nname: cliff-setup\ndescription: Sets up a changelog\n---\nbody",
+    )
+    .unwrap();
+    let v = json(agentlens(&dir).args(["skills", "--format", "json"]));
+    let cliff = v["skills"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == "cliff-setup")
+        .expect("cliff-setup");
+    assert_eq!(cliff["invocations"], 1);
+    assert_eq!(cliff["triggers"]["user"], 1);
+    assert_eq!(cliff["triggers"]["model"], 0);
+    // Built-in commands such as /statusline and /clear are neither skills nor ignored commands.
+    assert!(v["ignored_commands"].as_array().unwrap().is_empty());
+}
