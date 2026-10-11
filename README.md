@@ -14,7 +14,7 @@ Early development. The plan lives in the GitHub issues and the [AgentLens projec
 
 ## Installation
 
-Every push to `main` publishes a release. Download the archive for your platform from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` on your `PATH`:
+Every push to `main` publishes a release. Download the archive for your platform from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` and `agentlens-mcp` (the [MCP server](#mcp-server)) on your `PATH`:
 
 | Platform | Archive |
 |---|---|
@@ -28,7 +28,7 @@ The desktop application comes as installers in the same release: a `.deb`, `.rpm
 
 The application checks for a newer release only when you click **Check for updates**, and installs it after you confirm; see [docs/updater.md](docs/updater.md).
 
-To build from source, install the Rust toolchain and run `cargo install --path crates/agentlens-cli`.
+To build from source, install the Rust toolchain and run `cargo install --path crates/agentlens-cli` (and `--path crates/agentlens-mcp` for the MCP server).
 
 ## Usage
 
@@ -88,6 +88,35 @@ agentlens --exact --exact-model claude-opus-5-5 unused
 OpenTelemetry exports of Claude Code can be added with `--otel FILE` or inspected with `agentlens import-otel FILE`; see [docs/telemetry.md](docs/telemetry.md) for how to produce them. The measured per-skill attribution from the export shows up as the `attributed` column of `agentlens skills`.
 
 Supported sources today: Claude Code, OpenCode (SQLite database, and the JSON files of versions before 1.2.0 under `~/.local/share/opencode/storage`; a session in both is counted once), GitHub Copilot CLI and GitHub Copilot Chat in VS Code and VS Code Insiders (`chatSessions` files, including the `.jsonl` operation log). Copilot CLI sessions without per-request rows in `session-store.db` fall back to the session totals from `session.shutdown`, which cannot be split per request. VS Code reports prompt and completion tokens per request without a cache split, plus the share of system instructions and tool definitions in the prompt, which `agentlens context` uses as reported token counts. Cost for Copilot sources is computed with the vendor's API list prices when the model is in the price table; Copilot itself bills premium requests, so treat it as a comparison figure, not an invoice.
+
+## MCP server
+
+`agentlens-mcp` lets a coding agent ask AgentLens itself, for example "which skills cost the most and which are never used", instead of you copying CLI output into a chat. It is a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio: the client starts the process, nothing listens on a port and nothing leaves the machine. It only reads the same client files as the CLI and writes nothing.
+
+| Tool | What it returns |
+|---|---|
+| `sources` | which agents left sessions on this machine, and how many |
+| `skills` | uses, load, carry, baseline and overhead tokens per skill |
+| `context` | static context: tool listings, MCP instructions, instruction files, agent and skill listings |
+| `unused` | installed skills, agents and MCP servers nobody used, and what they cost while idle |
+| `flow` | context growth and compactions, tool errors and retry loops, hooks and permission waits |
+| `cost` | USD per model, project, branch or issue, measured and estimated apart; `what_if` compares a model |
+| `efficiency` | prompt cache hit rate and the subagents' share |
+| `compare` | the agents side by side over the same sessions |
+| `sessions`, `timeline` | the sessions in a period, and the context size of every request of one |
+
+Every tool takes the filter of the CLI (`since`, `sources`, `project`) and returns `{ data, warnings, errors }` as the application shows it. Estimated values are marked as in the CLI: where a count has a `measured` flag it is kept, and the tool descriptions say which other values are estimates. The results contain counts, names and paths, never prompts, responses, tool arguments or file contents.
+
+Register the server in your client, with the full path to the binary:
+
+| Client | Registration |
+|---|---|
+| Claude Code | `claude mcp add agentlens -- /path/to/agentlens-mcp` (add `--scope user` for all projects) |
+| VS Code | `.vscode/mcp.json` or the user `mcp.json`: `{ "servers": { "agentlens": { "type": "stdio", "command": "/path/to/agentlens-mcp" } } }` |
+| Copilot CLI | `~/.copilot/mcp-config.json`: `{ "mcpServers": { "agentlens": { "type": "local", "command": "/path/to/agentlens-mcp", "args": [], "tools": ["*"] } } }` |
+| OpenCode | `opencode.json`: `{ "mcp": { "agentlens": { "type": "local", "command": ["/path/to/agentlens-mcp"], "enabled": true } } }` |
+
+The formats are the ones the clients document at the time of writing; if your version differs, the client's own documentation wins. `agentlens-mcp --version` prints the version.
 
 ## Application
 

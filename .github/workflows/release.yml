@@ -27,8 +27,9 @@ jobs:
     with:
       # The application crate needs system libraries; app.yml checks it.
       ci-exclude: agentlens-app
-      cli-package: agentlens-cli
-      cli-binary: agentlens
+      # One archive per target holds the CLI and the MCP server.
+      cli-package: agentlens-cli agentlens-mcp
+      cli-binary: agentlens agentlens-mcp
       tauri: true
       installer-args: --config src-tauri/tauri.bundle.conf.json
     # TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) sign the update packages the in-app updater verifies (docs/updater.md).
