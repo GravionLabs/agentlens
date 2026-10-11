@@ -10,10 +10,11 @@ The pages are listed in reading order; the list is also the sidebar of the site.
 4. [Measured and estimated](measured-and-estimated.md): how to read a number, and why some are guesses.
 5. [The analyses](analyses.md): skills, context, unused, flow, cost, efficiency and compare.
 6. [Reports and export](reports-and-export.md): JSON, CSV and the offline HTML report.
-7. [The desktop application](application.md): views, filters, export, updates.
-8. [The MCP server](mcp-server.md): let an agent ask AgentLens itself.
-9. [Exact token counts](exact-tokens.md): the one opt-in feature that sends text away.
-10. [Privacy](privacy.md): what is read, what is written, what leaves the machine.
-11. [Glossary](glossary.md): the terms in one place, the same entries as the application.
-12. [Importing OpenTelemetry data](../telemetry.md): exports of Claude Code, Copilot CLI and VS Code Copilot.
-13. [Updating the application](../updater.md): how the update check and the installation work.
+7. [Compatibility](compatibility.md): what in the output is stable and what may change.
+8. [The desktop application](application.md): views, filters, export, updates.
+9. [The MCP server](mcp-server.md): let an agent ask AgentLens itself.
+10. [Exact token counts](exact-tokens.md): the one opt-in feature that sends text away.
+11. [Privacy](privacy.md): what is read, what is written, what leaves the machine.
+12. [Glossary](glossary.md): the terms in one place, the same entries as the application.
+13. [Importing OpenTelemetry data](../telemetry.md): exports of Claude Code, Copilot CLI and VS Code Copilot.
+14. [Updating the application](../updater.md): how the update check and the installation work.
