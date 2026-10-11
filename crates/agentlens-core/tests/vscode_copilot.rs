@@ -129,7 +129,7 @@ fn skill_reads_become_skill_invocations() {
 }
 
 #[test]
-fn tool_calls_keep_their_completion_state_and_cancelled_requests_stay_unknown() {
+fn tool_calls_keep_their_completion_state_and_canceled_requests_stay_unknown() {
     let se = first("session.json");
     let calls: Vec<_> = se
         .events
@@ -162,7 +162,7 @@ fn tool_calls_keep_their_completion_state_and_cancelled_requests_stay_unknown() 
 fn usage_is_measured_with_the_premium_multiplier() {
     let se = first("session.json");
     let u = usages(&se);
-    assert_eq!(u.len(), 1, "the cancelled request has no usage");
+    assert_eq!(u.len(), 1, "the canceled request has no usage");
     assert_eq!((u[0].input, u[0].output), (10_000, 200));
     assert!(u[0].measured);
     assert_eq!(u[0].model.as_deref(), Some("claude-test"));
