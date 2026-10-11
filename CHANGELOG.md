@@ -5,6 +5,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.0] — 2026-10-11
+
+### Documentation
+- A compatibility page that says what is stable (#274)
+
+
+### Features
+- The schema version in every machine-readable result (#273)
+
+
 ## [0.8.1] — 2026-10-11
 
 ### Bug Fixes
