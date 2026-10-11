@@ -23,7 +23,7 @@ client files ─► Adapter ─► normalized events ─► Analyzer ─► repo
 
 ## Desktop application
 
-- `src-tauri` (crate `agentlens-app`) is a thin shell: `src/api.rs` holds one plain function per analysis taking the CLI's filter and returning the core's report types in an `Answer { data, warnings, errors }`; `src/lib.rs` only wraps them as Tauri commands. New logic belongs in `agentlens-core` so the CLI benefits too.
+- `src-tauri` (crate `agentlens-app`) is a thin shell: the plain function per analysis (taking the CLI's filter and returning the core's report types in an `Answer { data, warnings, errors }`) lives in `agentlens-core::api` and is shared with the MCP server; `src/api.rs` only re-exports it and `src/lib.rs` wraps the functions as Tauri commands. New logic belongs in `agentlens-core` so the CLI benefits too.
 - `src` is Angular 22 (standalone components, signals, pnpm). Views call commands through `analysis()` in `src/app/core`; types in `types.ts` mirror the JSON, and the samples in `src/app/core/samples` come from the Rust tests (`UPDATE_SAMPLES=1`). A change in a core report type needs a matching change in `types.ts`.
 - The CLI workflow (`ci.yml`) excludes the app crate and needs no system libraries; `app.yml` checks the frontend and the crate.
 - Estimates carry a tilde and missing data is `n/a`, as in the CLI. Prettier covers the frontend only.
