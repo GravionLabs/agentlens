@@ -5,6 +5,7 @@ mod counter;
 mod efficiency;
 mod flow;
 mod import_otel;
+mod mcp_setup;
 mod report;
 mod scan;
 mod skills;
@@ -25,6 +26,22 @@ pub fn run(cli: Cli) -> Result<()> {
     let est = counter.estimator();
     let result = match cli.command {
         Command::ImportOtel { file } => import_otel::run(&env, &file, cli.format),
+        Command::McpSetup {
+            clients,
+            write,
+            remove,
+            binary,
+            yes,
+        } => mcp_setup::run(
+            &env,
+            mcp_setup::Params {
+                clients: &clients,
+                write,
+                remove,
+                binary: binary.as_deref(),
+                yes,
+            },
+        ),
         Command::Scan => scan::run(&registry, &env, &filter, &cli.source, cli.format),
         Command::Skills => skills::run(&registry, &env, &filter, &cli.source, est, cli.format),
         Command::Compare => compare::run(&registry, &env, &filter, &cli.source, est, cli.format),
