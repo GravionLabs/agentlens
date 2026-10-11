@@ -398,3 +398,41 @@ fn a_copilot_export_replaces_the_usage_of_the_local_session_it_covers() {
     assert_eq!(inputs.len(), 4, "3 exported + 1 local outside the range");
     assert_eq!(inputs.iter().filter(|i| **i == 7).count(), 1);
 }
+
+// ---- VS Code Copilot (same agent host and schema as Copilot CLI) ----
+
+#[test]
+fn a_vscode_copilot_export_reads_like_the_cli_and_skips_host_spans() {
+    let home = TempHome::new();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/otel/vscode_copilot.jsonl");
+    let adapter = OtelAdapter::new(vec![path]);
+    let all: Vec<SessionEvents> = adapter
+        .sessions(&home.env(), &SessionFilter::default())
+        .map(|r| r.unwrap())
+        .collect();
+    assert_eq!(all.len(), 1);
+    let se = &all[0];
+    assert_eq!(se.session.id, "conv-synthetic-vscode");
+    assert_eq!(se.session.source, Source::CopilotCli);
+    let u = usages(se);
+    assert_eq!(u.len(), 2);
+    assert!(u.iter().all(|u| u.measured));
+    assert_eq!(u[0].input, 100, "2000 minus 1900 cache write");
+    assert_eq!(u[1].cache_read, 1900);
+    assert_eq!(u[1].input, 100, "2200 minus 1900 read minus 200 write");
+    assert_eq!(
+        se.events
+            .iter()
+            .filter(|e| matches!(e.kind, EventKind::ToolCall(_)))
+            .count(),
+        1
+    );
+    assert_eq!(
+        se.events
+            .iter()
+            .filter(|e| matches!(e.kind, EventKind::UserTurn))
+            .count(),
+        1
+    );
+}
