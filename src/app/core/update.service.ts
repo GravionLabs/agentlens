@@ -13,10 +13,20 @@ export type UpdateState = "idle" | "checking" | "upToDate" | "available" | "inst
 export class UpdateService {
   private readonly ipc = inject(Ipc);
 
+  /** The running version; null until it is known (or when it cannot be read). */
+  readonly version = signal<string | null>(null);
   readonly state = signal<UpdateState>("idle");
   readonly info = signal<UpdateInfo | null>(null);
   readonly error = signal<string | null>(null);
   readonly busy = computed(() => this.state() === "checking" || this.state() === "installing");
+
+  async loadVersion(): Promise<void> {
+    try {
+      this.version.set(await this.ipc.invoke<string>("app_version"));
+    } catch {
+      this.version.set(null);
+    }
+  }
 
   async check(): Promise<void> {
     if (this.busy()) return;
