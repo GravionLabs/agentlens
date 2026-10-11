@@ -13,7 +13,7 @@ on:
 
 concurrency:
   group: release-${{ github.ref }}
-  # A release in progress is never cancelled.
+  # A release in progress is never canceled.
   cancel-in-progress: false
 
 permissions:

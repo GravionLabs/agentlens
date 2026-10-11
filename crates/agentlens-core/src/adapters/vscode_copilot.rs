@@ -255,7 +255,7 @@ fn parse_file(path: &Path, project: Option<PathBuf>) -> Result<SessionEvents, Ad
     let mut last_model = None;
     for r in requests {
         let at = millis(r, "timestamp");
-        let cancelled = r.get("isCanceled").and_then(Value::as_bool) == Some(true);
+        let canceled = r.get("isCanceled").and_then(Value::as_bool) == Some(true);
         se.push(at, EventKind::UserTurn);
         for part in r
             .get("response")
@@ -264,7 +264,7 @@ fn parse_file(path: &Path, project: Option<PathBuf>) -> Result<SessionEvents, Ad
             .unwrap_or_default()
         {
             if str_of(part, "kind") == Some("toolInvocationSerialized") {
-                tool(part, at, cancelled, &mut se);
+                tool(part, at, canceled, &mut se);
             }
         }
         let model =
@@ -292,12 +292,12 @@ fn tool_paths(part: &Value) -> Vec<PathBuf> {
         .collect()
 }
 
-fn tool(part: &Value, at: Option<Timestamp>, cancelled: bool, se: &mut SessionEvents) {
+fn tool(part: &Value, at: Option<Timestamp>, canceled: bool, se: &mut SessionEvents) {
     let Some(name) = str_of(part, "toolId") else {
         return;
     };
     let paths = tool_paths(part);
-    let status = if part.get("isComplete").and_then(Value::as_bool) == Some(true) && !cancelled {
+    let status = if part.get("isComplete").and_then(Value::as_bool) == Some(true) && !canceled {
         ToolStatus::Ok
     } else {
         ToolStatus::Unknown

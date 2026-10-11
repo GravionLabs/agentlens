@@ -63,6 +63,6 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     socialLinks: [{ icon: "github", link: REPO_URL }],
-    footer: { message: "Released under the MIT licence." },
+    footer: { message: "Released under the MIT license." },
   },
 });
