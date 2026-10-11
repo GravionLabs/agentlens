@@ -4,6 +4,7 @@
 pub mod adapter;
 pub mod adapters;
 pub mod analyzers;
+pub mod api;
 pub mod catalog;
 pub mod env;
 pub mod exact;
