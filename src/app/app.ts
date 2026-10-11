@@ -30,7 +30,7 @@ import { inject } from "@angular/core";
       </nav>
       <app-filter-bar />
       <div class="foot">
-        <button type="button" class="refresh" (click)="refresh()" [disabled]="loading.busy()">
+        <button type="button" class="btn" (click)="refresh()" [disabled]="loading.busy()">
           Refresh
         </button>
       </div>
@@ -129,18 +129,6 @@ import { inject } from "@angular/core";
       color: var(--accent);
       background: color-mix(in srgb, var(--accent) 12%, transparent);
       font-weight: 600;
-    }
-    .refresh {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 0 14px;
-      cursor: pointer;
-    }
-    .refresh:disabled {
-      opacity: 0.5;
-      cursor: default;
     }
     main {
       padding: 12px 20px 24px;

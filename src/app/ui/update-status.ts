@@ -17,7 +17,7 @@ import { UpdateService } from "../core/update.service";
         <span class="note" [title]="updates.info()?.notes ?? ''">
           Version {{ updates.info()?.version }} is available
         </span>
-        <button type="button" class="primary" (click)="updates.install()">
+        <button type="button" class="btn btn-sm" (click)="updates.install()">
           Install and restart
         </button>
       }
@@ -29,7 +29,12 @@ import { UpdateService } from "../core/update.service";
       }
     }
     @if (updates.state() !== "available" && updates.state() !== "installing") {
-      <button type="button" [disabled]="updates.busy()" (click)="updates.check()">
+      <button
+        type="button"
+        class="btn btn-link btn-sm"
+        [disabled]="updates.busy()"
+        (click)="updates.check()"
+      >
         Check for updates
       </button>
     }
@@ -46,23 +51,6 @@ import { UpdateService } from "../core/update.service";
     }
     .err {
       color: var(--warn);
-    }
-    button {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 0 14px;
-      cursor: pointer;
-    }
-    button:disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
-    button.primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
     }
   `,
 })

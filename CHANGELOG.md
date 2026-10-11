@@ -5,6 +5,33 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.0] — 2026-10-11
+
+### Documentation
+- ADR 0004 for the MCP server (#204)
+- Accept the ADR
+- ADR 0005 for the documentation site (#214)
+- Accept the ADR
+- The user guide (#216)
+- US English spelling (license, canceled)
+- One glossary for the application and the guide (#217)
+- A shorter README that points to the guide
+- Describe the documentation site in AGENTS.md
+
+
+### Features
+- Documentation site generator reading docs/ in place (#215)
+- Buttons after the Helix button; check for updates as a link
+- Agentlens-mcp binary with read-only analysis tools (#206, #207)
+- Ship agentlens-mcp in the release archives and document it (#208, #209)
+- Agentlens mcp-setup registers the MCP server in the clients (#211)
+- The application as a live demo (#218)
+
+
+### Refactoring
+- Share the analysis entry points between the app and the new server (#205)
+
+
 ## [0.6.0] — 2026-10-11
 
 ### Documentation

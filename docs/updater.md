@@ -1,8 +1,9 @@
 # Updates of the desktop application
 
 The application updates itself from the latest GitHub release. It checks only when the user clicks
-**Check for updates**; it makes no other network call. If a newer version exists, the header shows
-it with its release notes and **Install and restart** downloads, verifies and installs it.
+**Check for updates** (a link in the status bar at the bottom, next to the running version); it makes
+no other network call. If a newer version exists, the status bar shows it with its release notes and
+**Install and restart** downloads, verifies and installs it.
 
 ## Signing
 

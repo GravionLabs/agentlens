@@ -22,7 +22,7 @@ use crate::model::{
 
 pub struct CopilotCliAdapter;
 
-fn copilot_home(env: &Env) -> PathBuf {
+pub(crate) fn copilot_home(env: &Env) -> PathBuf {
     env.var("COPILOT_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| env.home().join(".copilot"))

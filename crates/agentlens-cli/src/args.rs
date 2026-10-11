@@ -106,6 +106,29 @@ pub enum Command {
         #[arg(long)]
         all: bool,
     },
+    /// Show how to register the MCP server in the coding agents, and register it
+    ///
+    /// Without `--write` or `--remove` nothing is changed: for each client the configuration to add is
+    /// printed. `--write` adds the server to the configuration of the clients (a backup of the file is
+    /// made first), `--remove` takes it out again. This is the only command that writes into files of the
+    /// clients.
+    McpSetup {
+        /// Client to handle; repeat for several. Default: the clients found on this machine
+        #[arg(long = "client", value_enum)]
+        clients: Vec<McpClient>,
+        /// Register the server in the configuration of the clients
+        #[arg(long)]
+        write: bool,
+        /// Remove the registration again
+        #[arg(long, conflicts_with = "write")]
+        remove: bool,
+        /// Path of agentlens-mcp (default: next to this program, or on PATH)
+        #[arg(long, value_name = "FILE")]
+        binary: Option<std::path::PathBuf>,
+        /// Do not ask before changing a file
+        #[arg(long)]
+        yes: bool,
+    },
     /// Write a self-contained report
     Report {
         /// Write an HTML file that works offline
@@ -145,6 +168,14 @@ pub enum FlowSection {
     Growth,
     Errors,
     Hooks,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum McpClient {
+    ClaudeCode,
+    Vscode,
+    CopilotCli,
+    Opencode,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]

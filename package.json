@@ -13,7 +13,13 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "docs:dev": "vitepress dev site",
+    "docs:build": "vitepress build site",
+    "docs:preview": "vitepress preview site",
+    "docs:glossary": "UPDATE_GLOSSARY=1 vitest run site/tests/glossary.spec.ts",
+    "build:demo": "ng build --base-href \"${DEMO_BASE:-/agentlens/app/}\"",
+    "docs:assemble": "node site/scripts/assemble.mts"
   },
   "dependencies": {
     "@angular/common": "^22.2.1",
@@ -38,6 +44,7 @@
     "prettier": "^3.9.9",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.0",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.11"
   }
 }

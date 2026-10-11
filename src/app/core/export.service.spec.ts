@@ -42,7 +42,7 @@ describe("ExportService", () => {
     expect(service.status()).toEqual({ kind: "done", path: "/tmp/out.json", warnings: 1 });
   });
 
-  it("writes nothing when the dialog is cancelled", async () => {
+  it("writes nothing when the dialog is canceled", async () => {
     const invoke = vi.fn(async () => "name.json");
     const service = create(invoke, async () => null);
     await service.export("skills", "json");

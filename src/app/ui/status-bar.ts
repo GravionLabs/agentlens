@@ -14,6 +14,16 @@ import { UpdateStatus } from "./update-status";
       AgentLens
       @if (sampleMode) {
         <span class="sample">sample data</span>
+        <span class="demo-note">
+          Nothing here is read from your machine.
+          <a
+            href="https://github.com/GravionLabs/agentlens/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Install the application</a
+          >
+          to analyze your own sessions.
+        </span>
       } @else if (updates.version(); as v) {
         <strong>v{{ v }}</strong>
       }
@@ -22,16 +32,29 @@ import { UpdateStatus } from "./update-status";
       <span class="zoom" role="group" aria-label="Interface size">
         <button
           type="button"
+          class="btn btn-text btn-sm"
           title="Smaller (Ctrl -)"
           aria-label="Smaller"
           (click)="zoom.zoomOut()"
         >
           A−
         </button>
-        <button type="button" title="Reset (Ctrl 0)" aria-label="Reset size" (click)="zoom.reset()">
+        <button
+          type="button"
+          class="btn btn-text btn-sm"
+          title="Reset (Ctrl 0)"
+          aria-label="Reset size"
+          (click)="zoom.reset()"
+        >
           {{ percent() }}%
         </button>
-        <button type="button" title="Larger (Ctrl +)" aria-label="Larger" (click)="zoom.zoomIn()">
+        <button
+          type="button"
+          class="btn btn-text btn-sm"
+          title="Larger (Ctrl +)"
+          aria-label="Larger"
+          (click)="zoom.zoomIn()"
+        >
           A+
         </button>
       </span>
@@ -67,18 +90,8 @@ import { UpdateStatus } from "./update-status";
     .zoom {
       gap: 2px;
     }
-    .zoom button {
-      background: none;
-      border: 1px solid transparent;
-      border-radius: 4px;
-      color: var(--muted);
-      cursor: pointer;
-      min-width: 32px;
-      padding: 0 6px;
-    }
-    .zoom button:hover {
-      color: var(--text);
-      border-color: var(--line);
+    .demo-note a {
+      color: var(--accent);
     }
     strong {
       color: var(--text);

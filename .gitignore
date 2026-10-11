@@ -9,3 +9,7 @@
 
 # Tauri
 /src-tauri/gen
+
+# VitePress
+site/.vitepress/dist
+site/.vitepress/cache
