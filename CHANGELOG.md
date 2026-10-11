@@ -7,6 +7,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [0.6.0] — 2026-10-11
 
+### Documentation
+- Update CHANGELOG.md for v0.6.0
+
+
 ### Features
 - Status bar with the active version and a check for updates button (#224)
 - Scalable interface and a readable bar chart (#226)
