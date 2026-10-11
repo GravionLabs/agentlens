@@ -1,0 +1,156 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "data": {
+    "growth": {
+      "sessions": [
+        {
+          "source": "copilot-cli",
+          "session": "cp-1",
+          "project": "/work/demo",
+          "model": "model-a",
+          "requests": 1,
+          "first_tokens": 99999,
+          "last_tokens": 99999,
+          "peak_tokens": 99999,
+          "compactions": [],
+          "window": null,
+          "window_basis": null,
+          "near_limit": false
+        },
+        {
+          "source": "claude-code",
+          "session": "context",
+          "project": "/work/demo",
+          "model": "claude-test-1",
+          "requests": 3,
+          "first_tokens": 1010,
+          "last_tokens": 820,
+          "peak_tokens": 1060,
+          "compactions": [
+            1060
+          ],
+          "window": 200000,
+          "window_basis": "documented",
+          "near_limit": false
+        },
+        {
+          "source": "claude-code",
+          "session": "skill_files",
+          "project": "/work/demo",
+          "model": "claude-test-1",
+          "requests": 6,
+          "first_tokens": 110,
+          "last_tokens": 110,
+          "peak_tokens": 110,
+          "compactions": [],
+          "window": 200000,
+          "window_basis": "documented",
+          "near_limit": false
+        },
+        {
+          "source": "claude-code",
+          "session": "typed_skill",
+          "project": "/work/demo",
+          "model": "claude-test-1",
+          "requests": 1,
+          "first_tokens": 110,
+          "last_tokens": 110,
+          "peak_tokens": 110,
+          "compactions": [],
+          "window": 200000,
+          "window_basis": "documented",
+          "near_limit": false
+        }
+      ]
+    },
+    "errors": {
+      "tools": [
+        {
+          "source": "copilot-cli",
+          "tool": "bash",
+          "calls": 1,
+          "errors": 1,
+          "unknown": 0,
+          "loops": 0
+        },
+        {
+          "source": "claude-code",
+          "tool": "Bash",
+          "calls": 3,
+          "errors": 0,
+          "unknown": 3,
+          "loops": 0
+        },
+        {
+          "source": "claude-code",
+          "tool": "Edit",
+          "calls": 1,
+          "errors": 0,
+          "unknown": 1,
+          "loops": 0
+        },
+        {
+          "source": "claude-code",
+          "tool": "Glob",
+          "calls": 1,
+          "errors": 0,
+          "unknown": 1,
+          "loops": 0
+        },
+        {
+          "source": "claude-code",
+          "tool": "Read",
+          "calls": 1,
+          "errors": 0,
+          "unknown": 1,
+          "loops": 0
+        },
+        {
+          "source": "copilot-cli",
+          "tool": "view",
+          "calls": 1,
+          "errors": 0,
+          "unknown": 0,
+          "loops": 0
+        }
+      ],
+      "loops": []
+    },
+    "hooks": {
+      "hooks": [
+        {
+          "source": "copilot-cli",
+          "hook": "preToolUse",
+          "runs": 1,
+          "failures": 1,
+          "unknown": 0,
+          "total_ms": 500
+        },
+        {
+          "source": "copilot-cli",
+          "hook": "postToolUse",
+          "runs": 2,
+          "failures": 0,
+          "unknown": 1,
+          "total_ms": 250
+        }
+      ],
+      "permissions": [
+        {
+          "source": "copilot-cli",
+          "prompts": 2,
+          "answered": 1,
+          "total_wait_ms": 1500
+        }
+      ],
+      "unavailable": {
+        "claude-code": 3
+      }
+    }
+  },
+  "warnings": 2,
+  "errors": []
+}

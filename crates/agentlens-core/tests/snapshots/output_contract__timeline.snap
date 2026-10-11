@@ -1,0 +1,56 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "data": {
+    "session": {
+      "source": "claude-code",
+      "id": "context",
+      "project": "/work/demo",
+      "model": "claude-test-1",
+      "started_at": "2026-10-02T09:00:00Z",
+      "ended_at": "2026-10-02T09:00:30Z",
+      "requests": 3,
+      "peak_tokens": 1060
+    },
+    "points": [
+      {
+        "request": 0,
+        "at": "2026-10-02T09:00:05Z",
+        "context_tokens": 1010,
+        "output_tokens": 5,
+        "cost_usd": null,
+        "cost_estimated": false
+      },
+      {
+        "request": 1,
+        "at": "2026-10-02T09:00:10Z",
+        "context_tokens": 1060,
+        "output_tokens": 5,
+        "cost_usd": null,
+        "cost_estimated": false
+      },
+      {
+        "request": 2,
+        "at": "2026-10-02T09:00:30Z",
+        "context_tokens": 820,
+        "output_tokens": 5,
+        "cost_usd": null,
+        "cost_estimated": false
+      }
+    ],
+    "markers": [
+      {
+        "request": 2,
+        "at": "2026-10-02T09:00:20Z",
+        "kind": {
+          "type": "compaction"
+        }
+      }
+    ],
+    "thinned_from": null
+  },
+  "warnings": 0,
+  "errors": []
+}

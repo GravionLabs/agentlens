@@ -1,0 +1,54 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "data": [
+    {
+      "source": "claude-code",
+      "found": true,
+      "roots": [
+        "/home/user/.claude/projects"
+      ],
+      "note": null,
+      "sessions": 3,
+      "events": 35,
+      "warnings": 0,
+      "errors": []
+    },
+    {
+      "source": "opencode",
+      "found": false,
+      "roots": [],
+      "note": "/home/user/.local/share/opencode/opencode.db and /home/user/.local/share/opencode/storage do not exist",
+      "sessions": 0,
+      "events": 0,
+      "warnings": 0,
+      "errors": []
+    },
+    {
+      "source": "copilot-cli",
+      "found": true,
+      "roots": [
+        "/home/user/.copilot/session-state"
+      ],
+      "note": null,
+      "sessions": 1,
+      "events": 12,
+      "warnings": 2,
+      "errors": []
+    },
+    {
+      "source": "vscode-copilot",
+      "found": false,
+      "roots": [],
+      "note": "no VS Code user directory with chat storage found",
+      "sessions": 0,
+      "events": 0,
+      "warnings": 0,
+      "errors": []
+    }
+  ],
+  "warnings": 2,
+  "errors": []
+}

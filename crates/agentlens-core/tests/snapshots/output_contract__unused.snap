@@ -1,0 +1,78 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "data": {
+    "sessions": 4,
+    "items": [
+      {
+        "kind": "skill",
+        "name": "cliff-setup",
+        "project": null,
+        "clients": [
+          "claude-code",
+          "opencode",
+          "copilot-cli",
+          "vscode-copilot"
+        ],
+        "uses": 1,
+        "requests": 11,
+        "overhead_tokens": {
+          "count": 110,
+          "measured": false
+        }
+      },
+      {
+        "kind": "skill",
+        "name": "demo",
+        "project": null,
+        "clients": [
+          "claude-code",
+          "opencode",
+          "copilot-cli",
+          "vscode-copilot"
+        ],
+        "uses": 2,
+        "requests": 11,
+        "overhead_tokens": {
+          "count": 66,
+          "measured": false
+        }
+      },
+      {
+        "kind": "skill",
+        "name": "idle",
+        "project": null,
+        "clients": [
+          "claude-code",
+          "opencode",
+          "copilot-cli",
+          "vscode-copilot"
+        ],
+        "uses": 0,
+        "requests": 11,
+        "overhead_tokens": {
+          "count": 66,
+          "measured": false
+        }
+      },
+      {
+        "kind": "agent",
+        "name": "reviewer",
+        "project": null,
+        "clients": [
+          "claude-code"
+        ],
+        "uses": 0,
+        "requests": 10,
+        "overhead_tokens": {
+          "count": 50,
+          "measured": false
+        }
+      }
+    ]
+  },
+  "warnings": 2,
+  "errors": []
+}
