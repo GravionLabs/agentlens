@@ -181,6 +181,12 @@ fn a_tool_returns_what_the_application_shows() {
         structured["data"]["report"]["skills"].is_array(),
         "{structured}"
     );
+    assert!(
+        structured["schema_version"]
+            .as_u64()
+            .is_some_and(|v| v >= 2),
+        "the result says which version of the layout it has: {structured}"
+    );
     assert!(structured["warnings"].is_u64());
     assert!(structured["errors"].is_array());
     // The same JSON as the text content, for clients that only read text.

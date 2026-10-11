@@ -95,6 +95,9 @@ impl Filters {
 /// A result plus what went wrong while reading the sessions.
 #[derive(Debug, Serialize)]
 pub struct Answer<T> {
+    /// The version of the layout of `data` (`report::SCHEMA_VERSION`): raised when a field of a report is
+    /// renamed, removed or retyped, not when one is added.
+    pub schema_version: u32,
     pub data: T,
     pub warnings: u64,
     pub errors: Vec<String>,
@@ -102,6 +105,7 @@ pub struct Answer<T> {
 
 fn answer<T>(data: T, warnings: u64, errors: Vec<String>) -> Result<Answer<T>, String> {
     Ok(Answer {
+        schema_version: crate::report::SCHEMA_VERSION,
         data,
         warnings,
         errors,
