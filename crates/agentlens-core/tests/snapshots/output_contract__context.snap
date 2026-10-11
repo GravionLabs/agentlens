@@ -1,0 +1,149 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "schema_version": 2,
+  "data": {
+    "sessions": 4,
+    "rows": [
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "skill-listing",
+        "owner": "skills",
+        "items": 1,
+        "bytes": 800,
+        "tokens": {
+          "count": 200,
+          "measured": false
+        },
+        "requests": 3,
+        "overhead_tokens": {
+          "count": 600,
+          "measured": false
+        }
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "instruction-file",
+        "owner": "/work/demo/CLAUDE.md",
+        "items": 1,
+        "bytes": 400,
+        "tokens": {
+          "count": 100,
+          "measured": false
+        },
+        "requests": 3,
+        "overhead_tokens": {
+          "count": 300,
+          "measured": false
+        }
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "mcp-instructions",
+        "owner": "srv",
+        "items": 1,
+        "bytes": 300,
+        "tokens": {
+          "count": 75,
+          "measured": false
+        },
+        "requests": 3,
+        "overhead_tokens": {
+          "count": 225,
+          "measured": false
+        }
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "tool-definition",
+        "owner": "srv",
+        "items": 1,
+        "bytes": 150,
+        "tokens": {
+          "count": 38,
+          "measured": false
+        },
+        "requests": 3,
+        "overhead_tokens": {
+          "count": 114,
+          "measured": false
+        }
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "agent-listing",
+        "owner": "agents",
+        "items": 1,
+        "bytes": 100,
+        "tokens": {
+          "count": 25,
+          "measured": false
+        },
+        "requests": 3,
+        "overhead_tokens": {
+          "count": 75,
+          "measured": false
+        }
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "tool-listing",
+        "owner": "srv",
+        "items": 2,
+        "bytes": 29,
+        "tokens": {
+          "count": 8,
+          "measured": false
+        },
+        "requests": 6,
+        "overhead_tokens": {
+          "count": 24,
+          "measured": false
+        }
+      },
+      {
+        "source": "claude-code",
+        "project": "/work/demo",
+        "kind": "tool-listing",
+        "owner": "built-in",
+        "items": 1,
+        "bytes": 8,
+        "tokens": {
+          "count": 2,
+          "measured": false
+        },
+        "requests": 3,
+        "overhead_tokens": {
+          "count": 6,
+          "measured": false
+        }
+      }
+    ],
+    "unavailable": {
+      "claude-code": 2,
+      "copilot-cli": 1
+    },
+    "first_request": {
+      "claude-code": {
+        "sessions": 3,
+        "total_tokens": 1230,
+        "max_tokens": 1010
+      },
+      "copilot-cli": {
+        "sessions": 1,
+        "total_tokens": 99999,
+        "max_tokens": 99999
+      }
+    }
+  },
+  "warnings": 2,
+  "errors": []
+}

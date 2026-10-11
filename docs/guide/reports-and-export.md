@@ -12,6 +12,8 @@ agentlens cost --by project --format csv > cost.csv
 - **JSON** is the report type of the analysis, with the `measured` flags of its counts and the warnings of reading the sessions.
 - **CSV** holds one table with fixed columns: counts are plain integers, money and rates have six decimals, an unknown value is an empty cell, and measured and estimated values are separate columns where a report distinguishes them. `flow` has three tables, so `--format csv` needs `--section growth|errors|hooks`.
 
+The shape of the JSON and the columns of the CSV are guarded; [Compatibility](compatibility.md) says what you can rely on.
+
 ## The HTML report
 
 ```sh

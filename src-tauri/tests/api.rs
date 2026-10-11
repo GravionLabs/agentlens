@@ -70,7 +70,10 @@ fn overview_lists_every_source_with_its_session_count() {
     assert!(find("claude-code").found && find("claude-code").sessions == 1);
     assert!(find("copilot-cli").found && find("copilot-cli").sessions == 1);
     assert!(!find("opencode").found);
-    assert_eq!(keys(&json(&a)), ["data", "errors", "warnings"]);
+    assert_eq!(
+        keys(&json(&a)),
+        ["data", "errors", "schema_version", "warnings"]
+    );
 }
 
 #[test]

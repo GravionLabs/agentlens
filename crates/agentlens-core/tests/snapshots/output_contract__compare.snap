@@ -1,0 +1,49 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "schema_version": 2,
+  "data": {
+    "sources": [
+      {
+        "source": "claude-code",
+        "sessions": 3,
+        "requests": 10,
+        "input_tokens": 3660,
+        "output_tokens": 50,
+        "cache_hit_rate": 0.4644808743169399,
+        "tool_calls": 6,
+        "tool_errors": 0,
+        "tool_error_rate": null,
+        "skill_invocations": 1,
+        "skill_overhead_tokens": {
+          "count": 300,
+          "measured": false
+        },
+        "total_duration_ms": 156000,
+        "mean_session_ms": 52000
+      },
+      {
+        "source": "copilot-cli",
+        "sessions": 1,
+        "requests": 1,
+        "input_tokens": 99999,
+        "output_tokens": 9999,
+        "cache_hit_rate": null,
+        "tool_calls": 2,
+        "tool_errors": 1,
+        "tool_error_rate": 0.5,
+        "skill_invocations": 2,
+        "skill_overhead_tokens": {
+          "count": 25,
+          "measured": false
+        },
+        "total_duration_ms": 9000,
+        "mean_session_ms": 9000
+      }
+    ]
+  },
+  "warnings": 2,
+  "errors": []
+}
