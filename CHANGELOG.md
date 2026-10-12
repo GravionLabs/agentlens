@@ -7,6 +7,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [0.10.0] — 2026-10-12
 
+### Documentation
+- Update CHANGELOG.md for v0.10.0
+
+
 ### Features
 - Put every finding in proportion: share of all tokens and a context-size finding (#283)
 - A finding for skills that are listed but only loaded through their files (#284)
