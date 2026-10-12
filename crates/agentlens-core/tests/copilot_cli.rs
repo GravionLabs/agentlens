@@ -323,9 +323,8 @@ fn the_event_types_of_newer_versions_are_known_and_do_not_warn() {
     );
     let se = read_all(&home).remove(0);
     let messages: Vec<&str> = se.warnings.iter().map(|w| w.message.as_str()).collect();
-    // The usage records, the checkpoints and the `model.*` events are known and ignored: on real
-    // sessions the numbers of the records equal the rows of the session store, which is where they come
-    // from. A type that nobody knows still warns, and is the only one named.
+    // The usage records, the checkpoints and the `model.*` events are known: a type that nobody knows
+    // still warns, and is the only one named.
     assert_eq!(messages.len(), 1, "{messages:?}");
     assert!(messages[0].contains("something.made.up"), "{messages:?}");
     for known in [
@@ -339,10 +338,78 @@ fn the_event_types_of_newer_versions_are_known_and_do_not_warn() {
             "{known} must not be reported as unknown"
         );
     }
-    assert!(
-        se.events
-            .iter()
-            .all(|e| !matches!(e.kind, EventKind::Usage(_))),
-        "without a store row or a shutdown event a session has no requests (the records are not read)"
+}
+
+#[test]
+fn usage_records_fill_in_for_a_session_without_store_rows() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "copilot_cli/newer_cli.jsonl",
+        &format!("{STATE}/cp-3/events.jsonl"),
     );
+    let se = read_all(&home).remove(0);
+    let u = usages(&se);
+    assert_eq!(u.len(), 2);
+    assert!(u.iter().all(|u| u.measured));
+    // `inputTokens` is the whole prompt: 1000 - 600 - 100.
+    assert_eq!((u[0].input, u[0].output), (300, 50));
+    assert_eq!(
+        (u[0].cache_read, u[0].cache_write, u[0].reasoning),
+        (600, 100, 7)
+    );
+    assert_eq!(u[0].model.as_deref(), Some("model-c"));
+    assert_eq!(u[0].premium_requests, Some(2.0));
+    assert!(!u[0].subagent);
+    // An agent follow-up is not charged, as in the store.
+    assert_eq!((u[1].input, u[1].cache_read), (300, 1200));
+    assert_eq!(u[1].premium_requests, Some(0.0));
+}
+
+#[test]
+fn the_store_wins_when_the_session_has_rows_and_records() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "copilot_cli/newer_cli.jsonl",
+        &format!("{STATE}/cp-3/events.jsonl"),
+    );
+    write_store(&home);
+    let conn = Connection::open(home.path().join(".copilot/session-store.db")).unwrap();
+    conn.execute_batch(
+        "INSERT INTO assistant_usage_events
+           (session_id, turn_index, model, input_tokens, output_tokens, cache_read_tokens,
+            cache_write_tokens, reasoning_tokens, request_multiplier, initiator, created_at)
+         VALUES ('cp-3', 0, 'model-c', 1000, 50, 600, 100, 0, 1.0, 'user', '2026-10-05T08:00:03.200Z');",
+    )
+    .unwrap();
+    drop(conn);
+    let se = session(&home, "cp-3");
+    let u = usages(&se);
+    assert_eq!(u.len(), 1, "the records are not counted again");
+    assert_eq!(
+        u[0].premium_requests,
+        Some(1.0),
+        "the row of the store, not the record"
+    );
+}
+
+#[test]
+fn a_record_without_tokens_and_a_session_with_records_and_shutdown_count_once() {
+    let home = TempHome::new();
+    let events = [
+        r#"{"type":"session.start","data":{"sessionId":"cp-4","context":{"cwd":"/work/x"}},"id":"a","timestamp":"2026-10-05T08:00:00.000Z","parentId":null}"#,
+        r#"{"type":"session.usage_record","data":{"usage":{"model":"m","inputTokens":0,"outputTokens":0}},"id":"b","timestamp":"2026-10-05T08:00:01.000Z","parentId":null}"#,
+        r#"{"type":"session.usage_record","data":{"usage":{"model":"m","inputTokens":100,"outputTokens":10}},"id":"c","timestamp":"2026-10-05T08:00:02.000Z","parentId":null}"#,
+        r#"{"type":"session.shutdown","data":{"currentModel":"m","modelMetrics":{"m":{"usage":{"inputTokens":100,"outputTokens":10,"cacheReadTokens":0,"cacheWriteTokens":0},"requests":{"cost":1}}}},"id":"d","timestamp":"2026-10-05T08:00:03.000Z","parentId":null}"#,
+    ];
+    let path = home.path().join(format!("{STATE}/cp-4/events.jsonl"));
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, events.join("\n")).unwrap();
+    let se = read_all(&home).remove(0);
+    let u = usages(&se);
+    assert_eq!(
+        u.len(),
+        1,
+        "the totals of the shutdown event are not added to the records"
+    );
+    assert_eq!(u[0].input, 100);
 }

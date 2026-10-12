@@ -5,7 +5,8 @@
 {"type":"model.model_call_started","data":{"callId":"c1","modelCall":{"model":"model-c"}},"id":"n5","timestamp":"2026-10-05T08:00:02.100Z","parentId":null}
 {"type":"model.model_call_success","data":{"callId":"c1","modelCall":{"model":"model-c"},"modelCallDurationMs":900},"id":"n6","timestamp":"2026-10-05T08:00:03.000Z","parentId":null}
 {"type":"model.response","data":{"callId":"c1","turn":0},"id":"n7","timestamp":"2026-10-05T08:00:03.100Z","parentId":null}
-{"type":"session.usage_record","data":{"usage":{"model":"model-c","inputTokens":1000,"outputTokens":50,"cacheReadTokens":600,"cacheWriteTokens":100}},"id":"n8","timestamp":"2026-10-05T08:00:03.200Z","parentId":null}
+{"type":"session.usage_record","data":{"usage":{"model":"model-c","inputTokens":1000,"outputTokens":50,"cacheReadTokens":600,"cacheWriteTokens":100,"reasoningTokens":7,"cost":2.0,"initiator":"user","duration":900,"response":"never read"}},"id":"n8","timestamp":"2026-10-05T08:00:03.200Z","parentId":null}
+{"type":"session.usage_record","data":{"usage":{"model":"model-d","inputTokens":1500,"outputTokens":80,"cacheReadTokens":1200,"cacheWriteTokens":0,"cost":2.0,"initiator":"agent"}},"id":"n8b","timestamp":"2026-10-05T08:00:03.250Z","parentId":null}
 {"type":"session.usage_checkpoint","data":{"accountingSnapshot":{"currentModel":"model-c"}},"id":"n9","timestamp":"2026-10-05T08:00:03.300Z","parentId":null}
 {"type":"model.turn_ended","data":{"kind":"x","model":"model-c"},"id":"n10","timestamp":"2026-10-05T08:00:03.400Z","parentId":null}
 {"type":"model.captured_assignment_context","data":{},"id":"n11","timestamp":"2026-10-05T08:00:03.500Z","parentId":null}

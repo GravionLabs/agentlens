@@ -17,7 +17,7 @@ The clients differ in what they record, and AgentLens shows the difference inste
 
 - **Claude Code** reports tokens per request with the cache split, the static context the client adds to every request, tool calls with their outcome, subagents, compactions and the git branch. It is the only source that reports the static context, so `agentlens context` and the idle cost of `unused` depend on it.
 - **OpenCode** reports tokens per request and the cost it computed itself (shown as is).
-- **Copilot CLI** reports tokens and premium requests per request from `session-store.db`; a session without per-request rows falls back to the session totals, which cannot be split per request. It also records hooks and permission prompts.
+- **Copilot CLI** reports tokens and premium requests per request from `session-store.db`; a session without rows in the store is read from the `session.usage_record` events of newer versions (one per request, measured), and failing that from the session totals, which cannot be split per request. When both the store and the records exist, the store is used and the records are not counted again. The records carry no subagent marker as far as seen, so their requests count as main-agent requests. It also records hooks and permission prompts.
 - **VS Code Copilot** reports prompt and completion tokens per request without a cache split, plus the share of system instructions and tool definitions in the prompt, which `agentlens context` uses as reported token counts.
 
 A value a client does not record is `n/a`, never 0.
