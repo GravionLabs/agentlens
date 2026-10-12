@@ -37,7 +37,20 @@ import { UpdateStatus } from "./update-status";
           aria-label="Smaller"
           (click)="zoom.zoomOut()"
         >
-          A−
+          <svg
+            class="icon"
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="7" cy="7" r="4.5" />
+            <path d="M10.5 10.5 14 14M5 7h4" />
+          </svg>
         </button>
         <button
           type="button"
@@ -55,7 +68,20 @@ import { UpdateStatus } from "./update-status";
           aria-label="Larger"
           (click)="zoom.zoomIn()"
         >
-          A+
+          <svg
+            class="icon"
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="7" cy="7" r="4.5" />
+            <path d="M10.5 10.5 14 14M5 7h4M7 5v4" />
+          </svg>
         </button>
       </span>
       @if (!sampleMode) {
@@ -89,6 +115,10 @@ import { UpdateStatus } from "./update-status";
     }
     .zoom {
       gap: 2px;
+    }
+    .zoom .btn {
+      display: inline-flex;
+      align-items: center;
     }
     .demo-note a {
       color: var(--accent);
