@@ -802,4 +802,39 @@ mod tests {
                 .all(|f| f.kind != FindingKind::ListedButLoadedByHand)
         );
     }
+
+    #[test]
+    fn file_only_skills_are_sorted_cut_and_measured_only_if_all_are() {
+        let mut skills: Vec<SkillStats> = (0..12)
+            .map(|i| {
+                let mut s = skill(&format!("s{i:02}"), true, 0, 1, (10, 100 + i));
+                s.baseline.tokens = Tokens::measured(100 + i);
+                s
+            })
+            .collect();
+        skills.push(skill("tie-b", true, 0, 1, (10, 111)));
+        skills.push(skill("tie-a", true, 0, 1, (10, 111)));
+        let mut r = report(skills.clone());
+        r.totals.tokens = 1_000_000;
+        let f = find(&analyze(&r), FindingKind::ListedButLoadedByHand).clone();
+        assert_eq!(f.count, 14);
+        assert_eq!(f.items.len(), TOP);
+        let names: Vec<&str> = f.items.iter().take(4).map(|i| i.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["s11", "tie-a", "tie-b", "s10"],
+            "most tokens first, equal tokens by name"
+        );
+        assert!(!f.total.unwrap().measured, "the tie skills are estimated");
+        assert_eq!(f.total.unwrap().count, (100..112).sum::<u64>() + 222);
+        assert!(f.share_of_total_tokens.is_some());
+
+        skills.truncate(12);
+        let f = find(
+            &analyze(&report(skills)),
+            FindingKind::ListedButLoadedByHand,
+        )
+        .clone();
+        assert!(f.total.unwrap().measured);
+    }
 }
