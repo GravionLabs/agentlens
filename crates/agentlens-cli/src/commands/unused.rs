@@ -4,6 +4,7 @@ use agentlens_core::env::Env;
 use agentlens_core::export;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::unused_run;
+use agentlens_core::references::Reference;
 use agentlens_core::tokens::TokenEstimator;
 use anyhow::Result;
 
@@ -71,6 +72,11 @@ pub fn run(
                         i.overhead_tokens
                             .map(output::tokens)
                             .unwrap_or_else(|| "unknown".into()),
+                        i.referenced_by
+                            .iter()
+                            .map(Reference::label)
+                            .collect::<Vec<_>>()
+                            .join(", "),
                     ]
                 })
                 .collect();
@@ -84,14 +90,15 @@ pub fn run(
                         "clients",
                         "uses",
                         "requests",
-                        "idle cost"
+                        "idle cost",
+                        "referenced by"
                     ],
                     rows,
                     4
                 )
             );
             println!(
-                "~ estimated. idle cost = baseline tokens x requests that carried the item; `unknown` means the client reports no data for MCP servers."
+                "~ estimated. referenced by = installed agents, commands and skills that name an unused skill (a mention does not prove use). idle cost = baseline tokens x requests that carried the item; `unknown` means the client reports no data for MCP servers."
             );
             println!("{} sessions in the period.", run.report.sessions);
         }

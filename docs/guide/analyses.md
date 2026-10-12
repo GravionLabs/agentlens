@@ -63,6 +63,8 @@ agentlens unused --days 30          # --all also lists items that were used
 
 Installed skills (loaded or used through their files), agents (`.claude/agents`, `.github/agents`, `.opencode/agents`) and configured MCP servers that were not used in the period, with what they cost while idle. The idle cost is the estimated baseline tokens times the requests that carried the item; for MCP servers it comes from the context items the client reports, so servers of other clients show `unknown`. MCP configuration files are read for server names only.
 
+**Referenced by.** For an unused skill, the table lists the installed agents, commands (`.claude/commands`, `.opencode/commands`, `.github/prompts`) and other skills whose own files contain its exact name, for example the phases of a workflow agent. Such skills are ranked after the others, and **Advice** marks them the same way. The files are only searched for the name; nothing else is read or stored. A mention does not prove that the skill is used, only that something is meant to use it, and a short, common word as a skill name can be mentioned in ordinary text. Commands shipped by plugins are not searched.
+
 ## Flow
 
 ```sh

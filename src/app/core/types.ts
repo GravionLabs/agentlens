@@ -108,7 +108,14 @@ export type FindingKind =
   | "large-context"
   | "context-size";
 
+export interface Reference {
+  kind: "agent" | "command" | "skill";
+  name: string;
+}
+
 export interface AdviceItem {
+  /** Unused skills only: the agents, commands and skills whose files name it. */
+  referenced_by?: Reference[];
   name: string;
   tokens: Tokens;
   requests: number;
@@ -181,6 +188,8 @@ export interface UnusedItem {
   uses: number;
   requests: number;
   overhead_tokens: Tokens | null;
+  /** Unused skills only: the agents, commands and skills whose files name it. */
+  referenced_by?: Reference[];
 }
 
 export interface UnusedReport {

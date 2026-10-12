@@ -15,6 +15,7 @@ pub mod mcp_setup;
 pub mod model;
 pub mod pipeline;
 pub mod prices;
+pub mod references;
 pub mod report;
 pub mod since;
 pub mod tokens;

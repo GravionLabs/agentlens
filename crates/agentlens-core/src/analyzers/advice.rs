@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::analyzers::skills::{LARGE_CONTEXT_TOKENS, SkillReport, SkillStats};
+use crate::references::{Reference, References};
 use crate::tokens::Tokens;
 
 /// A description of about this many tokens is enough to tell when a skill applies.
@@ -101,6 +102,9 @@ pub struct Item {
     pub requests: u64,
     /// The numbers in words, for a table.
     pub detail: String,
+    /// For an unused skill: the installed agents, commands and skills whose files name it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub referenced_by: Vec<Reference>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -189,6 +193,11 @@ fn per_request(s: &SkillStats) -> u64 {
 }
 
 pub fn analyze(report: &SkillReport) -> AdviceReport {
+    analyze_with(report, &References::new())
+}
+
+/// Like [`analyze`], and marks the unused skills that an agent, a command or a skill names.
+pub fn analyze_with(report: &SkillReport, references: &References) -> AdviceReport {
     let installed: Vec<&SkillStats> = report.skills.iter().filter(|s| s.in_inventory).collect();
     let baseline_total = Tokens {
         count: installed.iter().map(|s| s.baseline.tokens.count).sum(),
@@ -210,11 +219,11 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         .copied()
         .filter(|s| s.invocations == 0 && s.file_uses == 0)
         .collect();
+    let referenced = |s: &SkillStats| references.get(&s.name).is_some_and(|r| !r.is_empty());
     unused.sort_by(|a, b| {
-        b.baseline
-            .tokens
-            .count
-            .cmp(&a.baseline.tokens.count)
+        referenced(a)
+            .cmp(&referenced(b))
+            .then_with(|| b.baseline.tokens.count.cmp(&a.baseline.tokens.count))
             .then_with(|| a.name.cmp(&b.name))
     });
     if !unused.is_empty() {
@@ -224,11 +233,19 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
                 name: s.name.clone(),
                 tokens: s.baseline.tokens,
                 requests: s.baseline.requests,
-                detail: format!(
-                    "{} tokens in {} requests",
-                    n(s.baseline.tokens.count),
-                    n(s.baseline.requests)
-                ),
+                detail: {
+                    let mut detail = format!(
+                        "{} tokens in {} requests",
+                        n(s.baseline.tokens.count),
+                        n(s.baseline.requests)
+                    );
+                    if let Some(refs) = references.get(&s.name).filter(|r| !r.is_empty()) {
+                        let labels: Vec<String> = refs.iter().map(Reference::label).collect();
+                        detail.push_str(&format!("; referenced by {}", labels.join(", ")));
+                    }
+                    detail
+                },
+                referenced_by: references.get(&s.name).cloned().unwrap_or_default(),
             })
             .collect();
         let total = sum(&items);
@@ -241,6 +258,11 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         f.notes.push(
             "A skill that is only needed now and then, or by a tool outside the sessions that were read, can still be worth keeping.".to_owned(),
         );
+        if unused.iter().any(|s| referenced(s)) {
+            f.notes.push(
+                "Skills that an installed agent, command or skill names are listed last. A mention in a file does not prove that the skill is used, only that something is meant to use it.".to_owned(),
+            );
+        }
         findings.push(f);
     }
 
@@ -271,6 +293,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
                     n(s.baseline.tokens.count),
                     times(s.file_uses)
                 ),
+                referenced_by: Vec::new(),
             })
             .collect();
         let total = Tokens {
@@ -321,6 +344,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
                     n(per_request(s)),
                     n(saving(s))
                 ),
+                referenced_by: Vec::new(),
             })
             .collect();
         let mut f = finding(
@@ -356,6 +380,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
                 tokens: s.load,
                 requests: u64::from(s.invocations),
                 detail: format!("loaded {}", times(s.invocations)),
+                referenced_by: Vec::new(),
             })
             .collect();
         let mut f = finding(FindingKind::UsedButNotInstalled, items.len(), items, None);
@@ -392,6 +417,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
                     times(s.invocations),
                     n(s.carry.requests)
                 ),
+                referenced_by: Vec::new(),
             })
             .collect();
         let carry_total = Tokens::estimated(bodies.iter().map(|s| s.carry.tokens.count).sum());
@@ -437,6 +463,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
                     n(average(s)),
                     n(s.follow_on.requests)
                 ),
+                referenced_by: Vec::new(),
             })
             .collect();
         let mut f = finding(FindingKind::LargeContext, heavy.len(), items, None);
@@ -465,6 +492,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
                     n(c.average_context),
                     n(c.requests)
                 ),
+                referenced_by: Vec::new(),
             })
             .collect();
         let mut f = finding(
@@ -836,5 +864,41 @@ mod tests {
         )
         .clone();
         assert!(f.total.unwrap().measured);
+    }
+
+    #[test]
+    fn unused_skills_that_something_names_are_marked_and_ranked_last() {
+        use crate::references::ReferenceKind;
+        let mut refs = References::new();
+        refs.insert(
+            "big".into(),
+            vec![Reference {
+                kind: ReferenceKind::Agent,
+                name: "flow".into(),
+            }],
+        );
+        let r = report(vec![
+            skill("big", true, 0, 0, (10, 9_000)),
+            skill("small", true, 0, 0, (10, 100)),
+            skill("mid", true, 0, 0, (10, 500)),
+        ]);
+        let a = analyze_with(&r, &refs);
+        let f = find(&a, FindingKind::UnusedSkills);
+        let names: Vec<&str> = f.items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["mid", "small", "big"],
+            "referenced skills come last"
+        );
+        assert_eq!(f.items[2].referenced_by.len(), 1);
+        assert!(f.items[2].detail.contains("referenced by agent flow"));
+        assert!(f.items[0].referenced_by.is_empty());
+        assert!(!f.items[0].detail.contains("referenced"));
+        assert!(f.notes.iter().any(|n| n.contains("does not prove")));
+        // Without references nothing changes.
+        let plain = analyze(&r);
+        let f = find(&plain, FindingKind::UnusedSkills);
+        assert_eq!(f.items[0].name, "big");
+        assert!(f.notes.iter().all(|n| !n.contains("does not prove")));
     }
 }
