@@ -23,7 +23,9 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::inventory::{Inventory, SkillEntry};
-use crate::model::{EventKind, SessionEvents, SkillInvoked, SkillTrigger, Source, Usage};
+use crate::model::{
+    ContextKind, EventKind, SessionEvents, SkillInvoked, SkillTrigger, Source, Usage,
+};
 use crate::tokens::{TokenEstimator, Tokens};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,6 +154,13 @@ pub struct PeriodTotals {
     pub measured: bool,
     /// The sessions with the largest average context, largest first.
     pub largest_sessions: Vec<SessionContext>,
+    /// Sessions in which the client reported the skill listing it sent (Claude Code), and its size in
+    /// tokens added up over those sessions (reported by the client, else estimated from the bytes).
+    /// This is everything the client lists, including skills AgentLens has no file for.
+    #[serde(default)]
+    pub listing_sessions: u64,
+    #[serde(default)]
+    pub listing_tokens: Tokens,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -196,11 +205,23 @@ pub fn analyze(
     }
 
     let mut all_measured = true;
+    let mut listing_measured = true;
     let mut session_contexts: Vec<SessionContext> = Vec::new();
     for se in sessions {
         report.sessions += 1;
         let (mut session_requests, mut session_context) = (0u64, 0u64);
+        let mut has_listing = false;
         for e in &se.events {
+            if let EventKind::ContextItem(item) = &e.kind
+                && item.kind == ContextKind::SkillListing
+            {
+                let tokens = item
+                    .tokens
+                    .map_or_else(|| estimator.count_bytes(item.bytes), Tokens::measured);
+                report.totals.listing_tokens.count += tokens.count;
+                listing_measured &= tokens.measured;
+                has_listing = true;
+            }
             if let EventKind::Usage(u) = &e.kind {
                 let totals = &mut report.totals;
                 totals.requests += 1;
@@ -213,6 +234,7 @@ pub fn analyze(
                 session_context += u.total_input();
             }
         }
+        report.totals.listing_sessions += u64::from(has_listing);
         if let Some(average) = session_context.checked_div(session_requests) {
             session_contexts.push(SessionContext {
                 id: se.session.id.clone(),
@@ -297,6 +319,7 @@ pub fn analyze(
     }
 
     report.totals.measured = report.totals.requests > 0 && all_measured;
+    report.totals.listing_tokens.measured = report.totals.listing_sessions > 0 && listing_measured;
     session_contexts.sort_by(|a, b| {
         b.average_context
             .cmp(&a.average_context)
@@ -953,6 +976,49 @@ mod tests {
             .collect();
         let r = analyze(&inventory(vec![]), &tie, &CharsPerToken);
         assert_eq!(r.totals.largest_sessions[0].id, "a");
+    }
+
+    #[test]
+    fn the_skill_listing_the_client_reports_is_added_up_per_session() {
+        use crate::model::ContextItem;
+        let listing = |bytes: u64, tokens: Option<u64>| {
+            EventKind::ContextItem(ContextItem {
+                kind: ContextKind::SkillListing,
+                name: None,
+                bytes,
+                tokens,
+            })
+        };
+        let a = session(
+            "a",
+            Source::ClaudeCode,
+            "/work/a",
+            vec![listing(4_000, None), listing(400, None)],
+        );
+        let b = session(
+            "b",
+            Source::ClaudeCode,
+            "/work/b",
+            vec![listing(0, Some(500))],
+        );
+        let none = session(
+            "c",
+            Source::ClaudeCode,
+            "/work/c",
+            vec![usage(1, 1, 1, 1, false)],
+        );
+        let r = analyze(
+            &inventory(vec![]),
+            &[a.clone(), b.clone(), none],
+            &CharsPerToken,
+        );
+        assert_eq!(r.totals.listing_sessions, 2);
+        assert_eq!(r.totals.listing_tokens, Tokens::estimated(1_100 + 500));
+        let r = analyze(&inventory(vec![]), &[b], &CharsPerToken);
+        assert_eq!(r.totals.listing_tokens, Tokens::measured(500));
+        let r = analyze(&inventory(vec![]), &[], &CharsPerToken);
+        assert_eq!(r.totals.listing_sessions, 0);
+        assert!(!r.totals.listing_tokens.measured);
     }
 
     #[test]

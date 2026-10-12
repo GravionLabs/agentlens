@@ -87,6 +87,9 @@ export interface PeriodTotals {
   large_context_requests: number;
   measured: boolean;
   largest_sessions: SessionContext[];
+  /** Sessions in which the client reported its skill listing, and the listing tokens added up. */
+  listing_sessions: number;
+  listing_tokens: Tokens;
 }
 
 export interface SkillReport {

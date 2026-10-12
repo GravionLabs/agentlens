@@ -22,7 +22,12 @@
             "requests": 3,
             "average_context": 963
           }
-        ]
+        ],
+        "listing_sessions": 1,
+        "listing_tokens": {
+          "count": 200,
+          "measured": false
+        }
       },
       "sessions": 2,
       "first_event": "2026-07-15T04:00:01Z",

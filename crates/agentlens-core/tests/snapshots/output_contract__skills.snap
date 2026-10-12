@@ -38,7 +38,12 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
             "requests": 1,
             "average_context": 110
           }
-        ]
+        ],
+        "listing_sessions": 1,
+        "listing_tokens": {
+          "count": 200,
+          "measured": false
+        }
       },
       "sessions": 4,
       "first_event": "2026-07-15T04:00:01Z",

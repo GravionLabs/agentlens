@@ -23,7 +23,12 @@ expression: report
         "requests": 2,
         "average_context": 155
       }
-    ]
+    ],
+    "listing_sessions": 0,
+    "listing_tokens": {
+      "count": 0,
+      "measured": false
+    }
   },
   "sessions": 2,
   "first_event": "2026-10-01T10:00:00Z",
