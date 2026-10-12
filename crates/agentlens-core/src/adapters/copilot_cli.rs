@@ -2,6 +2,7 @@
 //! events, `<copilot home>/session-store.db` for per-request token usage.
 //!
 //! Only some sessions have rows in `assistant_usage_events`. For the others the
+//! `session.usage_record` events (newer versions) carry the requests, and failing that the
 //! `session.shutdown` event carries per-model totals, which are used instead.
 
 use std::collections::{BTreeMap, HashMap};
@@ -37,11 +38,10 @@ fn state_dir(env: &Env) -> PathBuf {
 /// Newer versions of the CLI also write the requests into the event log: `session.usage_record` (one
 /// per request, with the tokens, the model and the cost), `session.usage_checkpoint` (running totals)
 /// and the `model.*` events of each model call. On real sessions the usage records matched the rows of
-/// `session-store.db` request by request (the same tokens, cache read and cache write), which is where
-/// the numbers come from, so reading them as well would count a request twice. They are known, not
-/// unknown: a warning for them only made every session of a new CLI look broken. A session that has no
-/// rows in the store and no shutdown event shows no requests; the usage records could fill that gap
-/// (they would need the same de-duplication against the store as an OpenTelemetry export has).
+/// `session-store.db` request by request (the same tokens, cache read and cache write), so the store
+/// stays the source and the records are read only for a session that has no rows in it (the store is
+/// missing or was cleaned); reading both would count a request twice. They are known, not unknown: a
+/// warning for them only made every session of a new CLI look broken.
 const IGNORED: &[&str] = &[
     "abort",
     "model.captured_assignment_context",
@@ -54,7 +54,6 @@ const IGNORED: &[&str] = &[
     "model.turn_started",
     "session.auto_mode_resolved",
     "session.usage_checkpoint",
-    "session.usage_record",
     "assistant.message",
     "assistant.turn_end",
     "assistant.turn_start",
@@ -308,6 +307,7 @@ fn parse_session(
     let mut prompts: HashMap<String, (usize, Option<Timestamp>)> = HashMap::new();
     let mut unknown: BTreeMap<String, u64> = BTreeMap::new();
     let mut shutdowns: Vec<(Option<Timestamp>, Vec<Usage>)> = Vec::new();
+    let mut records: Vec<UsageRow> = Vec::new();
     let mut first: Option<Timestamp> = None;
     let mut last: Option<Timestamp> = None;
     let mut model: Option<String> = None;
@@ -432,6 +432,11 @@ fn parse_session(
             "session.model_change" => {
                 model = str_of(data, "newModel").map(str::to_owned).or(model);
             }
+            "session.usage_record" => {
+                if let Some(usage) = data.get("usage").and_then(record_usage) {
+                    records.push(UsageRow { at, usage });
+                }
+            }
             "session.shutdown" => {
                 model = str_of(data, "currentModel").map(str::to_owned).or(model);
                 shutdowns.push((at, shutdown_usage(data)));
@@ -441,7 +446,10 @@ fn parse_session(
         }
     }
 
-    // Per-request rows when the store has them, otherwise the shutdown totals.
+    // Per-request rows when the store has them, else the usage records of the event log, else the
+    // shutdown totals (which the records add up to, so they are not read as well).
+    // All or nothing per session: a store that has only some of the rows of a session is used as it is.
+    let rows = if rows.is_empty() { records } else { rows };
     if rows.is_empty() {
         for (at, usages) in shutdowns {
             for usage in usages {
@@ -476,6 +484,40 @@ fn parse_session(
 fn elapsed_ms(start: Option<Timestamp>, end: Option<Timestamp>) -> Option<u64> {
     let (s, e) = (start?, end?);
     u64::try_from(e.as_millisecond() - s.as_millisecond()).ok()
+}
+
+/// The request of a `session.usage_record`. Only the numbers are read, nothing of the messages.
+/// `inputTokens` is the whole prompt. As in the store, only a request the user started is charged:
+/// `cost` is the premium requests (the multiplier) for `initiator: user`, and 0 for agent follow-ups.
+fn record_usage(u: &Value) -> Option<Usage> {
+    let (input, cache_read, cache_write) = (
+        u64_of(u, "inputTokens"),
+        u64_of(u, "cacheReadTokens"),
+        u64_of(u, "cacheWriteTokens"),
+    );
+    let output = u64_of(u, "outputTokens");
+    if input == 0 && output == 0 && cache_read == 0 && cache_write == 0 {
+        return None;
+    }
+    Some(Usage {
+        model: str_of(u, "model").map(str::to_owned),
+        input: input.saturating_sub(cache_read.saturating_add(cache_write)),
+        output,
+        cache_read,
+        cache_write,
+        reasoning: u64_of(u, "reasoningTokens"),
+        cost_usd: None,
+        measured: true,
+        // The records seen so far carry no agent fields, so this cannot be told apart.
+        subagent: false,
+        skill: None,
+        premium_requests: u.get("cost").and_then(Value::as_f64).map(|m| {
+            match str_of(u, "initiator") {
+                Some("user") | None => m,
+                Some(_) => 0.0,
+            }
+        }),
+    })
 }
 
 /// One usage record per model from the `session.shutdown` metrics.
