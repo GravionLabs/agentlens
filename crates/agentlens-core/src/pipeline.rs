@@ -94,7 +94,8 @@ pub fn advice_run(
     only: &[Source],
     estimator: &dyn TokenEstimator,
 ) -> AdviceRun {
-    let run = skill_run(registry, env, filter, only, estimator);
+    let (sessions, errors) = read_sessions(registry, env, filter, only);
+    let run = skill_run_from(env, &sessions, errors, estimator);
     let catalog = catalog::scan(env, &run.projects, estimator);
     let references = references::scan(
         env,
@@ -103,9 +104,12 @@ pub fn advice_run(
         &run.inventory,
         &catalog,
     );
+    let instructions = instructions::scan(env, &run.projects, estimator);
+    let context_report = context::analyze(&sessions, &instructions.files, estimator);
+    let mcp = advice::mcp_servers(&context_report, &sessions);
     AdviceRun {
-        report: advice::analyze_with(&run.report, &references),
-        warnings: run.warnings + catalog.warnings.len() as u64,
+        report: advice::analyze_with(&run.report, &references, &mcp),
+        warnings: run.warnings + catalog.warnings.len() as u64 + instructions.warnings.len() as u64,
         errors: run.errors,
     }
 }
@@ -129,6 +133,16 @@ pub fn skill_run(
     only: &[Source],
     estimator: &dyn TokenEstimator,
 ) -> SkillRun {
+    let (sessions, errors) = read_sessions(registry, env, filter, only);
+    skill_run_from(env, &sessions, errors, estimator)
+}
+
+fn read_sessions(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    only: &[Source],
+) -> (Vec<SessionEvents>, Vec<String>) {
     let mut sessions: Vec<SessionEvents> = Vec::new();
     let mut errors = Vec::new();
     for r in registry.sessions(env, filter, only) {
@@ -137,6 +151,15 @@ pub fn skill_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    (sessions, errors)
+}
+
+fn skill_run_from(
+    env: &Env,
+    sessions: &[SessionEvents],
+    errors: Vec<String>,
+    estimator: &dyn TokenEstimator,
+) -> SkillRun {
     let warnings = sessions.iter().map(|s| s.warnings.len() as u64).sum();
     let projects: BTreeSet<PathBuf> = sessions
         .iter()
@@ -144,7 +167,7 @@ pub fn skill_run(
         .collect();
     let projects: Vec<PathBuf> = projects.into_iter().collect();
     let inventory = inventory::scan(&inventory::locations(env, &projects), estimator);
-    let report = skills::analyze(&inventory, &sessions, estimator);
+    let report = skills::analyze(&inventory, sessions, estimator);
     SkillRun {
         report,
         inventory,

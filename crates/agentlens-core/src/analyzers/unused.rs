@@ -53,7 +53,7 @@ pub struct UnusedReport {
 }
 
 /// `claude.ai Claude Docs` and `claude_ai_Claude_Docs` name the same server.
-fn norm(name: &str) -> String {
+pub(crate) fn norm(name: &str) -> String {
     name.chars()
         .map(|c| {
             if c.is_alphanumeric() {
@@ -65,7 +65,7 @@ fn norm(name: &str) -> String {
         .collect()
 }
 
-fn calls_server(tool: &str, server: &str) -> bool {
+pub(crate) fn calls_server(tool: &str, server: &str) -> bool {
     mcp_server(tool).is_some_and(|s| norm(s) == server)
         || norm(tool).starts_with(&format!("{server}_"))
 }

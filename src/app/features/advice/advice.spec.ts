@@ -20,6 +20,7 @@ describe("findings", () => {
     expect(findingTitle("unused-skills")).toBe("Unused skills");
     expect(findingTitle("large-context")).toBe("Work on a large context");
     expect(findingTitle("listed-but-loaded-by-hand")).toBe("Listed but loaded by hand");
+    expect(findingTitle("costly-mcp-servers")).toBe("Costly MCP servers");
     expect(findingTitle("context-size")).toBe("Context size");
   });
 

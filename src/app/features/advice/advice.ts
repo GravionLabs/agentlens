@@ -14,6 +14,7 @@ const TITLES: Record<FindingKind, string> = {
   "used-but-not-installed": "Used but not installed",
   "large-bodies": "Large skill bodies",
   "large-context": "Work on a large context",
+  "costly-mcp-servers": "Costly MCP servers",
   "context-size": "Context size",
 };
 

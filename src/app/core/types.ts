@@ -106,6 +106,7 @@ export type FindingKind =
   | "used-but-not-installed"
   | "large-bodies"
   | "large-context"
+  | "costly-mcp-servers"
   | "context-size";
 
 export interface Reference {
