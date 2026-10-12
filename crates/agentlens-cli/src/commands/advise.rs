@@ -18,6 +18,7 @@ fn title(f: &Finding) -> String {
         FindingKind::UsedButNotInstalled => format!("Used but not installed ({})", f.count),
         FindingKind::LargeBodies => format!("Large skill bodies ({})", f.count),
         FindingKind::LargeContext => format!("Work on a large context ({})", f.count),
+        FindingKind::CostlyMcpServers => format!("Costly MCP servers ({})", f.count),
         FindingKind::ContextSize => format!("Context size ({})", f.count),
     }
 }

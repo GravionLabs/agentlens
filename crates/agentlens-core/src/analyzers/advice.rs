@@ -4,9 +4,14 @@
 //! each with the flag that says whether it was measured. The CLI, the application and the MCP server show
 //! the same findings, so an agent that gets them only has to explain and act, not to recompute.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
+use crate::analyzers::context::ContextReport;
 use crate::analyzers::skills::{LARGE_CONTEXT_TOKENS, SkillReport, SkillStats};
+use crate::analyzers::unused::{calls_server, norm};
+use crate::model::{ContextKind, EventKind, SessionEvents};
 use crate::references::{Reference, References};
 use crate::tokens::Tokens;
 
@@ -32,6 +37,8 @@ pub enum FindingKind {
     LargeBodies,
     /// The skills after which the work ran on the largest context.
     LargeContext,
+    /// MCP servers whose static context is large next to how often their tools were called.
+    CostlyMcpServers,
     /// How large the context of the average request is, and how much of the work ran on large contexts.
     ContextSize,
 }
@@ -57,6 +64,9 @@ impl FindingKind {
             }
             FindingKind::LargeContext => {
                 "The skills after which the work ran on the largest context, per request. Follow-on is the activity after a skill, not cost the skill caused: a skill used late in a long session inherits that session's context."
+            }
+            FindingKind::CostlyMcpServers => {
+                "MCP servers put their instructions, tool listing and tool definitions into every request, whether or not a tool is called. Ranked by the static context per tool call; a server that is called a lot is listed as such, the point is the ratio."
             }
             FindingKind::ContextSize => {
                 "Every request sends the whole context again, so its size drives the cost far more than the skills do. This is how large the context of a request was on average, how many requests ran on a large context, and which sessions had the largest."
@@ -84,6 +94,9 @@ impl FindingKind {
             }
             FindingKind::LargeContext => {
                 "Start work such as a release or a pull request in a fresh session instead of at the end of a long one, and clear the context between tasks."
+            }
+            FindingKind::CostlyMcpServers => {
+                "Enable the server only in the projects that need it, or switch it off when it is not in use."
             }
             FindingKind::ContextSize => {
                 "Start new work in a fresh session, clear the context between tasks, and delegate exploration and review to subagents, whose context stays separate."
@@ -193,11 +206,69 @@ fn per_request(s: &SkillStats) -> u64 {
 }
 
 pub fn analyze(report: &SkillReport) -> AdviceReport {
-    analyze_with(report, &References::new())
+    analyze_with(report, &References::new(), &[])
+}
+
+/// What one MCP server costs in static context and how often its tools were called.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpServerUse {
+    pub server: String,
+    /// Instructions, tool listing and tool definitions, per request times requests. Measured only if
+    /// the client reported every size.
+    pub tokens: Tokens,
+    /// The main-agent requests that carried the server's context.
+    pub requests: u64,
+    /// Calls of the server's tools (`mcp__<server>__…`) in the period.
+    pub calls: u64,
+}
+
+/// The MCP servers whose context the clients reported, with the calls of their tools. Servers that the
+/// clients do not report (nothing in the context rows) are not listed.
+pub fn mcp_servers(context: &ContextReport, sessions: &[SessionEvents]) -> Vec<McpServerUse> {
+    let mut found: BTreeMap<String, (String, Tokens, u64)> = BTreeMap::new();
+    for r in context.rows.iter().filter(|r| {
+        matches!(
+            r.kind,
+            ContextKind::ToolListing | ContextKind::ToolDefinition | ContextKind::McpInstructions
+        )
+    }) {
+        // The context rows of client tools and of all tools together belong to no server.
+        if matches!(r.owner.as_str(), "built-in" | "all tools") {
+            continue;
+        }
+        let entry = found
+            .entry(norm(&r.owner))
+            .or_insert_with(|| (r.owner.clone(), Tokens::measured(0), 0));
+        if r.kind != ContextKind::McpInstructions {
+            entry.0 = r.owner.clone();
+        }
+        entry.1.count += r.overhead_tokens.count;
+        entry.1.measured &= r.overhead_tokens.measured;
+        entry.2 = entry.2.max(r.requests);
+    }
+    found
+        .into_iter()
+        .map(|(key, (server, tokens, requests))| McpServerUse {
+            calls: sessions
+                .iter()
+                .flat_map(|se| &se.events)
+                .filter(
+                    |e| matches!(&e.kind, EventKind::ToolCall(c) if calls_server(&c.name, &key)),
+                )
+                .count() as u64,
+            server,
+            tokens,
+            requests,
+        })
+        .collect()
 }
 
 /// Like [`analyze`], and marks the unused skills that an agent, a command or a skill names.
-pub fn analyze_with(report: &SkillReport, references: &References) -> AdviceReport {
+pub fn analyze_with(
+    report: &SkillReport,
+    references: &References,
+    mcp: &[McpServerUse],
+) -> AdviceReport {
     let installed: Vec<&SkillStats> = report.skills.iter().filter(|s| s.in_inventory).collect();
     let baseline_total = Tokens {
         count: installed.iter().map(|s| s.baseline.tokens.count).sum(),
@@ -470,6 +541,54 @@ pub fn analyze_with(report: &SkillReport, references: &References) -> AdviceRepo
         f.notes.push(format!(
             "Only skills with at least {MIN_FOLLOW_ON_REQUESTS} requests after them are listed. The sizes are what the client reported."
         ));
+        findings.push(f);
+    }
+
+    // MCP servers: static context against calls.
+    let per_call = |m: &McpServerUse| m.tokens.count / m.calls.max(1);
+    let mut servers: Vec<&McpServerUse> = mcp.iter().filter(|m| m.tokens.count > 0).collect();
+    servers.sort_by(|a, b| {
+        per_call(b)
+            .cmp(&per_call(a))
+            .then_with(|| a.server.cmp(&b.server))
+    });
+    if !servers.is_empty() {
+        let items: Vec<Item> = servers
+            .iter()
+            .take(TOP)
+            .map(|m| Item {
+                name: m.server.clone(),
+                tokens: m.tokens,
+                requests: m.requests,
+                detail: format!(
+                    "{} tokens per request, {} in total; {} tool {}, {} tokens per call",
+                    n(m.tokens.count.checked_div(m.requests).unwrap_or(0)),
+                    n(m.tokens.count),
+                    n(m.calls),
+                    if m.calls == 1 { "call" } else { "calls" },
+                    n(per_call(m))
+                ),
+                referenced_by: Vec::new(),
+            })
+            .collect();
+        let total = Tokens {
+            count: servers.iter().map(|m| m.tokens.count).sum(),
+            measured: servers.iter().all(|m| m.tokens.measured),
+        };
+        let mut f = finding(
+            FindingKind::CostlyMcpServers,
+            servers.len(),
+            items,
+            Some(total),
+        );
+        f.share_of_total_tokens = share(total.count, total_tokens.count);
+        if !total.measured {
+            f.notes
+                .push("The sizes are estimates where the client did not report them.".to_owned());
+        }
+        f.notes.push(
+            "Only servers whose context the client reports are listed (Claude Code today). A server that is called a lot can be worth its context; the tokens per call show the ratio.".to_owned(),
+        );
         findings.push(f);
     }
 
@@ -882,7 +1001,7 @@ mod tests {
             skill("small", true, 0, 0, (10, 100)),
             skill("mid", true, 0, 0, (10, 500)),
         ]);
-        let a = analyze_with(&r, &refs);
+        let a = analyze_with(&r, &refs, &[]);
         let f = find(&a, FindingKind::UnusedSkills);
         let names: Vec<&str> = f.items.iter().map(|i| i.name.as_str()).collect();
         assert_eq!(
@@ -900,5 +1019,153 @@ mod tests {
         let f = find(&plain, FindingKind::UnusedSkills);
         assert_eq!(f.items[0].name, "big");
         assert!(f.notes.iter().all(|n| !n.contains("does not prove")));
+    }
+
+    fn mcp_row(
+        owner: &str,
+        kind: ContextKind,
+        requests: u64,
+        overhead: u64,
+        measured: bool,
+    ) -> crate::analyzers::context::ContextRow {
+        crate::analyzers::context::ContextRow {
+            source: crate::model::Source::ClaudeCode,
+            project: None,
+            kind,
+            owner: owner.into(),
+            items: 1,
+            bytes: 0,
+            tokens: Tokens::estimated(0),
+            requests,
+            overhead_tokens: Tokens {
+                count: overhead,
+                measured,
+            },
+        }
+    }
+
+    fn calls(tool: &str, n: usize) -> SessionEvents {
+        use crate::model::{Event, Session, Source, ToolCall, ToolStatus};
+        SessionEvents {
+            session: Session::new("s", Source::ClaudeCode),
+            events: (0..n)
+                .map(|_| Event {
+                    at: None,
+                    kind: EventKind::ToolCall(ToolCall {
+                        name: tool.into(),
+                        input_summary: None,
+                        status: ToolStatus::Ok,
+                        duration_ms: None,
+                    }),
+                })
+                .collect(),
+            warnings: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn mcp_servers_are_ranked_by_static_context_per_call() {
+        use crate::analyzers::context::ContextReport;
+        let context = ContextReport {
+            rows: vec![
+                mcp_row(
+                    "claude_ai_Claude_Docs",
+                    ContextKind::ToolListing,
+                    100,
+                    1_000,
+                    true,
+                ),
+                mcp_row(
+                    "claude_ai_Claude_Docs",
+                    ContextKind::ToolDefinition,
+                    100,
+                    3_000,
+                    true,
+                ),
+                mcp_row(
+                    "claude.ai Claude Docs",
+                    ContextKind::McpInstructions,
+                    100,
+                    500,
+                    false,
+                ),
+                mcp_row("busy", ContextKind::ToolListing, 100, 6_000, true),
+                mcp_row("built-in", ContextKind::ToolListing, 100, 99_999, true),
+                mcp_row("all tools", ContextKind::ToolDefinition, 100, 99_999, true),
+            ],
+            ..ContextReport::default()
+        };
+        let sessions = [
+            calls("mcp__claude_ai_Claude_Docs__read", 2),
+            calls("mcp__busy__run", 60),
+            calls("Read", 5),
+        ];
+        let servers = mcp_servers(&context, &sessions);
+        assert_eq!(servers.len(), 2, "built-in and all tools are no servers");
+        let docs = servers
+            .iter()
+            .find(|m| m.server == "claude_ai_Claude_Docs")
+            .unwrap();
+        assert_eq!(
+            (docs.tokens.count, docs.calls, docs.requests),
+            (4_500, 2, 100)
+        );
+        assert!(!docs.tokens.measured, "one row was estimated");
+
+        let mut r = report(vec![]);
+        r.totals.tokens = 100_000;
+        let a = analyze_with(&r, &References::new(), &servers);
+        let f = find(&a, FindingKind::CostlyMcpServers);
+        assert_eq!(f.count, 2);
+        // 4,500 / 2 = 2,250 per call; 6,000 / 60 = 100 per call.
+        assert_eq!(f.items[0].name, "claude_ai_Claude_Docs");
+        assert!(
+            f.items[0]
+                .detail
+                .contains("2 tool calls, 2,250 tokens per call"),
+            "{}",
+            f.items[0].detail
+        );
+        assert_eq!(
+            f.items[1].name, "busy",
+            "a busy server is listed, with its ratio"
+        );
+        assert_eq!(f.total, Some(Tokens::estimated(10_500)));
+        assert_eq!(f.share_of_total_tokens, Some(0.105));
+        assert!(f.action.contains("only in the projects that need it"));
+    }
+
+    #[test]
+    fn a_server_without_calls_costs_all_of_its_context_per_call() {
+        let unused = McpServerUse {
+            server: "idle".into(),
+            tokens: Tokens::measured(700),
+            requests: 7,
+            calls: 0,
+        };
+        let busy = McpServerUse {
+            server: "busy".into(),
+            tokens: Tokens::measured(800),
+            requests: 8,
+            calls: 4,
+        };
+        let a = analyze_with(&report(vec![]), &References::new(), &[busy, unused]);
+        let f = find(&a, FindingKind::CostlyMcpServers);
+        assert_eq!(f.items[0].name, "idle");
+        assert!(
+            f.items[0]
+                .detail
+                .contains("0 tool calls, 700 tokens per call")
+        );
+        assert!(f.items[1].detail.contains("4 tool calls"));
+        assert!(f.total.unwrap().measured);
+        assert!(find_none(
+            &analyze(&report(vec![])),
+            FindingKind::CostlyMcpServers
+        ));
+    }
+
+    fn find_none(r: &AdviceReport, kind: FindingKind) -> bool {
+        r.findings.iter().all(|f| f.kind != kind)
     }
 }

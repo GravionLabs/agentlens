@@ -350,6 +350,33 @@ fn unused_and_advise_say_which_agents_and_commands_name_an_unused_skill() {
 }
 
 #[test]
+fn advise_lists_mcp_servers_by_their_static_context() {
+    let home = home_with_context();
+    let a = json(agentlens(&home).args(["advise", "--since", "2026-01-01", "--format", "json"]));
+    let f = a["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["kind"] == "costly-mcp-servers")
+        .expect("the finding");
+    assert_eq!(f["items"][0]["name"], "srv");
+    // The same 363 estimated tokens as `unused` shows for this server.
+    assert_eq!(f["items"][0]["tokens"]["count"], 363);
+    assert_eq!(f["items"][0]["tokens"]["measured"], false);
+    assert!(
+        f["items"][0]["detail"]
+            .as_str()
+            .unwrap()
+            .contains("0 tool calls")
+    );
+    agentlens(&home)
+        .args(["advise", "--since", "2026-01-01"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Costly MCP servers (1)"));
+}
+
+#[test]
 fn unused_hides_used_items_unless_all_is_given() {
     let home = home();
     let csv = |args: &[&str]| {
