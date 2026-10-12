@@ -33,8 +33,28 @@ fn state_dir(env: &Env) -> PathBuf {
 }
 
 /// Event types that are known but carry nothing the analyzers need.
+///
+/// Newer versions of the CLI also write the requests into the event log: `session.usage_record` (one
+/// per request, with the tokens, the model and the cost), `session.usage_checkpoint` (running totals)
+/// and the `model.*` events of each model call. On real sessions the usage records matched the rows of
+/// `session-store.db` request by request (the same tokens, cache read and cache write), which is where
+/// the numbers come from, so reading them as well would count a request twice. They are known, not
+/// unknown: a warning for them only made every session of a new CLI look broken. A session that has no
+/// rows in the store and no shutdown event shows no requests; the usage records could fill that gap
+/// (they would need the same de-duplication against the store as an OpenTelemetry export has).
 const IGNORED: &[&str] = &[
     "abort",
+    "model.captured_assignment_context",
+    "model.message",
+    "model.messages_snapshot",
+    "model.model_call_started",
+    "model.model_call_success",
+    "model.response",
+    "model.turn_ended",
+    "model.turn_started",
+    "session.auto_mode_resolved",
+    "session.usage_checkpoint",
+    "session.usage_record",
     "assistant.message",
     "assistant.turn_end",
     "assistant.turn_start",
