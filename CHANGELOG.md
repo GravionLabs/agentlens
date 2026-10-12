@@ -5,6 +5,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.1] — 2026-10-12
+
+### Bug Fixes
+- The event types of newer Copilot CLI versions are known (no warning)
+
+
 ## [0.9.0] — 2026-10-11
 
 ### Documentation
