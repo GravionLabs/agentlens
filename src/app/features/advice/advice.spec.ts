@@ -19,6 +19,7 @@ describe("findings", () => {
   it("have a title for every kind", () => {
     expect(findingTitle("unused-skills")).toBe("Unused skills");
     expect(findingTitle("large-context")).toBe("Work on a large context");
+    expect(findingTitle("listed-but-loaded-by-hand")).toBe("Listed but loaded by hand");
     expect(findingTitle("context-size")).toBe("Context size");
   });
 

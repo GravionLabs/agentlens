@@ -13,6 +13,7 @@ use crate::output;
 fn title(f: &Finding) -> String {
     match f.kind {
         FindingKind::UnusedSkills => format!("Unused skills ({})", f.count),
+        FindingKind::ListedButLoadedByHand => format!("Listed but loaded by hand ({})", f.count),
         FindingKind::CostlyDescriptions => format!("Costly descriptions ({})", f.count),
         FindingKind::UsedButNotInstalled => format!("Used but not installed ({})", f.count),
         FindingKind::LargeBodies => format!("Large skill bodies ({})", f.count),

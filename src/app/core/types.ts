@@ -101,6 +101,7 @@ export interface SkillReport {
 
 export type FindingKind =
   | "unused-skills"
+  | "listed-but-loaded-by-hand"
   | "costly-descriptions"
   | "used-but-not-installed"
   | "large-bodies"

@@ -9,6 +9,7 @@ import { Status } from "../../ui/status";
 
 const TITLES: Record<FindingKind, string> = {
   "unused-skills": "Unused skills",
+  "listed-but-loaded-by-hand": "Listed but loaded by hand",
   "costly-descriptions": "Costly descriptions",
   "used-but-not-installed": "Used but not installed",
   "large-bodies": "Large skill bodies",
