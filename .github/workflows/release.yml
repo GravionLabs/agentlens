@@ -24,6 +24,8 @@ jobs:
     uses: GravionLabs/ci/.github/workflows/tauri-app.yml@main
     permissions:
       contents: write
+      issues: write
+      pull-requests: read
     with:
       # The application crate needs system libraries; app.yml checks it.
       ci-exclude: agentlens-app
