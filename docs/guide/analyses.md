@@ -40,6 +40,9 @@ What to change to save tokens, made from the skill numbers above. No model is in
 | **Used but not installed** | skills that were loaded but are not installed now (renamed, removed, built into the client or supplied by a plugin)         |
 | **Large skill bodies**     | loaded bodies that stay in the context and are sent again with every later request                                          |
 | **Work on a large context** | the skills after which the work ran on the largest context per request                                                     |
+| **Context size**           | the average context of a request, the share of requests above 200,000 tokens, the share of requests that subagents made, and the sessions with the largest context (all measured where the client reports it) |
+
+Every sum is also given as a share of all tokens of the period (`share_of_total_tokens`, input, output and cache together), so that a small share is not read as the main lever (the carry of **Large skill bodies** now has a sum and a share too; the skill report's `totals` holds the period's request, subagent and context numbers): the descriptions of all installed skills are often well under 1% of the tokens, while the size of the context decides the rest. The **Context size** finding is that scale: it ends with the fixed advice to start new work in a fresh session, to clear the context between tasks and to delegate exploration and review to subagents, whose context stays separate.
 
 A finding says what it cannot know: a skill that is needed only now and then may be worth keeping although it shows up as unused, and the work after a skill is activity, not cost the skill caused. The CLI prints the findings as a table (`--format json` and `--format csv` have all of them), the application has an **Advice** view, and the [MCP server](mcp-server.md) has an `advice` tool, so an agent gets the findings and only has to explain and act on them.
 

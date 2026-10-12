@@ -2,6 +2,28 @@
   "schema_version": 2,
   "data": {
     "report": {
+      "totals": {
+        "requests": 4,
+        "subagent_requests": 0,
+        "tokens": 112903,
+        "context_tokens": 102889,
+        "large_context_requests": 0,
+        "measured": true,
+        "largest_sessions": [
+          {
+            "id": "cp-1",
+            "project": "/work/demo",
+            "requests": 1,
+            "average_context": 99999
+          },
+          {
+            "id": "context",
+            "project": "/work/demo",
+            "requests": 3,
+            "average_context": 963
+          }
+        ]
+      },
       "sessions": 2,
       "first_event": "2026-07-15T04:00:01Z",
       "last_event": "2026-10-02T09:00:30Z",

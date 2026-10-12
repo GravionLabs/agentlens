@@ -72,7 +72,25 @@ export interface SkillStats {
   baseline: { requests: number; tokens: Tokens };
 }
 
+export interface SessionContext {
+  id: string;
+  project: string | null;
+  requests: number;
+  average_context: number;
+}
+
+export interface PeriodTotals {
+  requests: number;
+  subagent_requests: number;
+  tokens: number;
+  context_tokens: number;
+  large_context_requests: number;
+  measured: boolean;
+  largest_sessions: SessionContext[];
+}
+
 export interface SkillReport {
+  totals: PeriodTotals;
   sessions: number;
   first_event: string | null;
   last_event: string | null;
@@ -86,7 +104,8 @@ export type FindingKind =
   | "costly-descriptions"
   | "used-but-not-installed"
   | "large-bodies"
-  | "large-context";
+  | "large-context"
+  | "context-size";
 
 export interface AdviceItem {
   name: string;
@@ -102,6 +121,7 @@ export interface Finding {
   count: number;
   total: Tokens | null;
   share_of_baseline: number | null;
+  share_of_total_tokens: number | null;
   items: AdviceItem[];
   notes: string[];
 }
@@ -110,6 +130,7 @@ export interface AdviceReport {
   sessions: number;
   installed_skills: number;
   baseline_total: Tokens;
+  total_tokens: Tokens;
   findings: Finding[];
 }
 

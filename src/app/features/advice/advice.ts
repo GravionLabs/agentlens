@@ -13,6 +13,7 @@ const TITLES: Record<FindingKind, string> = {
   "used-but-not-installed": "Used but not installed",
   "large-bodies": "Large skill bodies",
   "large-context": "Work on a large context",
+  "context-size": "Context size",
 };
 
 export function findingTitle(kind: FindingKind): string {
@@ -27,7 +28,11 @@ export function findingTotal(f: Finding): string | null {
     f.share_of_baseline === null
       ? ""
       : `, ${Math.round(f.share_of_baseline * 100)}% of the baseline`;
-  return `Together they ${what} ${tokens(f.total.count, !f.total.measured)} tokens${share}.`;
+  const overall =
+    f.share_of_total_tokens === null
+      ? ""
+      : `, ${f.total.measured ? "" : "~"}${(f.share_of_total_tokens * 100).toFixed(2)}% of all tokens`;
+  return `Together they ${what} ${tokens(f.total.count, !f.total.measured)} tokens${share}${overall}.`;
 }
 
 @Component({

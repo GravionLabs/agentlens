@@ -6,6 +6,40 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
   "schema_version": 2,
   "data": {
     "report": {
+      "totals": {
+        "requests": 11,
+        "subagent_requests": 0,
+        "tokens": 113708,
+        "context_tokens": 103659,
+        "large_context_requests": 0,
+        "measured": true,
+        "largest_sessions": [
+          {
+            "id": "cp-1",
+            "project": "/work/demo",
+            "requests": 1,
+            "average_context": 99999
+          },
+          {
+            "id": "context",
+            "project": "/work/demo",
+            "requests": 3,
+            "average_context": 963
+          },
+          {
+            "id": "skill_files",
+            "project": "/work/demo",
+            "requests": 6,
+            "average_context": 110
+          },
+          {
+            "id": "typed_skill",
+            "project": "/work/demo",
+            "requests": 1,
+            "average_context": 110
+          }
+        ]
+      },
       "sessions": 4,
       "first_event": "2026-07-15T04:00:01Z",
       "last_event": "2026-10-02T11:02:00Z",
