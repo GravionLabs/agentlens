@@ -21,6 +21,8 @@ pub const MIN_FOLLOW_ON_REQUESTS: u64 = 20;
 pub enum FindingKind {
     /// Installed, but neither loaded nor used through its files in the period.
     UnusedSkills,
+    /// Installed and read through its files, but never loaded: the listing is paid, the model never picks it.
+    ListedButLoadedByHand,
     /// The descriptions that cost the most in every request.
     CostlyDescriptions,
     /// Loaded in the period but no longer installed.
@@ -39,6 +41,9 @@ impl FindingKind {
         match self {
             FindingKind::UnusedSkills => {
                 "Installed skills that were neither loaded nor used through their files in the period. Their name and description are in the context of every request anyway."
+            }
+            FindingKind::ListedButLoadedByHand => {
+                "Installed skills that were never loaded but whose files were read or run, for example a stack skill that another skill opens on instruction. Their name and description are in the context of every request, although the model never picks them from the listing."
             }
             FindingKind::CostlyDescriptions => {
                 "The skill descriptions that take the most tokens in every request. A short description is enough to tell when a skill applies."
@@ -63,6 +68,9 @@ impl FindingKind {
         match self {
             FindingKind::UnusedSkills => {
                 "Remove the skill from the global folder or install it only in the projects that use it. If the client supports it, mark a skill that should only run on request as not automatically invoked in its front matter."
+            }
+            FindingKind::ListedButLoadedByHand => {
+                "Put such a skill below the skill that opens it (as a file in its folder) instead of listing it on its own, or mark it as not automatically invoked in its front matter if the client supports it."
             }
             FindingKind::CostlyDescriptions => {
                 "Shorten the description to the trigger conditions; leave how the skill works to its body."
@@ -232,6 +240,56 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         }
         f.notes.push(
             "A skill that is only needed now and then, or by a tool outside the sessions that were read, can still be worth keeping.".to_owned(),
+        );
+        findings.push(f);
+    }
+
+    // Installed skills that are read through their files but never loaded.
+    let mut by_hand: Vec<&SkillStats> = installed
+        .iter()
+        .copied()
+        .filter(|s| s.invocations == 0 && s.file_uses > 0)
+        .collect();
+    by_hand.sort_by(|a, b| {
+        b.baseline
+            .tokens
+            .count
+            .cmp(&a.baseline.tokens.count)
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    if !by_hand.is_empty() {
+        let items: Vec<Item> = by_hand
+            .iter()
+            .take(TOP)
+            .map(|s| Item {
+                name: s.name.clone(),
+                tokens: s.baseline.tokens,
+                requests: s.baseline.requests,
+                detail: format!(
+                    "{} tokens per request, {} in total; files used {}",
+                    n(per_request(s)),
+                    n(s.baseline.tokens.count),
+                    times(s.file_uses)
+                ),
+            })
+            .collect();
+        let total = Tokens {
+            count: by_hand.iter().map(|s| s.baseline.tokens.count).sum(),
+            measured: by_hand.iter().all(|s| s.baseline.tokens.measured),
+        };
+        let mut f = finding(
+            FindingKind::ListedButLoadedByHand,
+            by_hand.len(),
+            items,
+            Some(total),
+        );
+        f.share_of_baseline = share(total.count, baseline_total.count);
+        f.share_of_total_tokens = share(total.count, total_tokens.count);
+        if !total.measured {
+            f.notes.push(estimate_note());
+        }
+        f.notes.push(
+            "That the files were read on instruction of another skill is inferred: a file use does not prove who asked for it, and a skill that is also useful on its own can stay listed.".to_owned(),
         );
         findings.push(f);
     }
@@ -706,6 +764,42 @@ mod tests {
         assert_eq!(
             find(&a, FindingKind::ContextSize).share_of_total_tokens,
             None
+        );
+    }
+
+    #[test]
+    fn skills_that_are_only_used_through_their_files_have_their_own_finding() {
+        let by_hand = {
+            let mut s = skill("stack", true, 0, 3, (10, 2_000));
+            s.baseline.tokens = Tokens::estimated(2_000);
+            s
+        };
+        let a = analyze(&report(vec![
+            by_hand,
+            skill("idle", true, 0, 0, (10, 500)),
+            skill("loaded", true, 2, 4, (10, 800)),
+            skill("gone", false, 0, 2, (10, 900)),
+        ]));
+        let f = find(&a, FindingKind::ListedButLoadedByHand);
+        assert_eq!(f.count, 1);
+        assert_eq!(f.items[0].name, "stack");
+        assert_eq!(f.items[0].requests, 10);
+        assert!(f.items[0].detail.contains("files used 3 times"));
+        assert_eq!(f.total, Some(Tokens::estimated(2_000)));
+        assert!(f.notes.iter().any(|n| n.contains("inferred")));
+        // `unused` keeps only skills with neither loads nor file uses.
+        let unused = find(&a, FindingKind::UnusedSkills);
+        assert_eq!(unused.count, 1);
+        assert_eq!(unused.items[0].name, "idle");
+    }
+
+    #[test]
+    fn no_file_only_skill_no_finding() {
+        let a = analyze(&report(vec![skill("loaded", true, 2, 4, (10, 800))]));
+        assert!(
+            a.findings
+                .iter()
+                .all(|f| f.kind != FindingKind::ListedButLoadedByHand)
         );
     }
 }

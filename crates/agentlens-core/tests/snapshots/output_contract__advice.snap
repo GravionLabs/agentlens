@@ -44,6 +44,33 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         ]
       },
       {
+        "kind": "listed-but-loaded-by-hand",
+        "explanation": "Installed skills that were never loaded but whose files were read or run, for example a stack skill that another skill opens on instruction. Their name and description are in the context of every request, although the model never picks them from the listing.",
+        "action": "Put such a skill below the skill that opens it (as a file in its folder) instead of listing it on its own, or mark it as not automatically invoked in its front matter if the client supports it.",
+        "count": 1,
+        "total": {
+          "count": 66,
+          "measured": false
+        },
+        "share_of_baseline": 0.2727272727272727,
+        "share_of_total_tokens": 0.0005804340943469237,
+        "items": [
+          {
+            "name": "demo",
+            "tokens": {
+              "count": 66,
+              "measured": false
+            },
+            "requests": 11,
+            "detail": "6 tokens per request, 66 in total; files used 2 times"
+          }
+        ],
+        "notes": [
+          "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API.",
+          "That the files were read on instruction of another skill is inferred: a file use does not prove who asked for it, and a skill that is also useful on its own can stay listed."
+        ]
+      },
+      {
         "kind": "used-but-not-installed",
         "explanation": "Skills that were loaded in the period but are not installed now: renamed, removed, or built into the client or a plugin. References to them can be cleaned up.",
         "action": "Check instruction files and prompts that still refer to the skill.",

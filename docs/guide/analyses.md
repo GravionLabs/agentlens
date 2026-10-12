@@ -36,6 +36,7 @@ What to change to save tokens, made from the skill numbers above. No model is in
 | Finding                    | What it lists                                                                                                               |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Unused skills**          | installed skills that were neither loaded nor used through their files, what their listing cost, and its share of all listings |
+| **Listed but loaded by hand** | installed skills that were never loaded but whose files were read or run (a stack skill that another skill opens), what their listing cost per request and in total, and how often their files were used; that it was another skill who asked is inferred |
 | **Costly descriptions**    | the descriptions that take the most tokens per request, and what shortening them to about 40 tokens would have saved        |
 | **Used but not installed** | skills that were loaded but are not installed now (renamed, removed, built into the client or supplied by a plugin)         |
 | **Large skill bodies**     | loaded bodies that stay in the context and are sent again with every later request                                          |
