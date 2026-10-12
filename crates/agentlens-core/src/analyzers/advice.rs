@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::analyzers::skills::{SkillReport, SkillStats};
+use crate::analyzers::skills::{LARGE_CONTEXT_TOKENS, SkillReport, SkillStats};
 use crate::tokens::Tokens;
 
 /// A description of about this many tokens is enough to tell when a skill applies.
@@ -29,6 +29,8 @@ pub enum FindingKind {
     LargeBodies,
     /// The skills after which the work ran on the largest context.
     LargeContext,
+    /// How large the context of the average request is, and how much of the work ran on large contexts.
+    ContextSize,
 }
 
 impl FindingKind {
@@ -50,6 +52,9 @@ impl FindingKind {
             FindingKind::LargeContext => {
                 "The skills after which the work ran on the largest context, per request. Follow-on is the activity after a skill, not cost the skill caused: a skill used late in a long session inherits that session's context."
             }
+            FindingKind::ContextSize => {
+                "Every request sends the whole context again, so its size drives the cost far more than the skills do. This is how large the context of a request was on average, how many requests ran on a large context, and which sessions had the largest."
+            }
         }
     }
 
@@ -70,6 +75,9 @@ impl FindingKind {
             }
             FindingKind::LargeContext => {
                 "Start work such as a release or a pull request in a fresh session instead of at the end of a long one, and clear the context between tasks."
+            }
+            FindingKind::ContextSize => {
+                "Start new work in a fresh session, clear the context between tasks, and delegate exploration and review to subagents, whose context stays separate."
             }
         }
     }
@@ -98,6 +106,9 @@ pub struct Finding {
     pub total: Option<Tokens>,
     /// `total` as a share of the baseline cost of all installed skills.
     pub share_of_baseline: Option<f64>,
+    /// `total` as a share of all tokens of the period (input, output and cache).
+    #[serde(default)]
+    pub share_of_total_tokens: Option<f64>,
     pub items: Vec<Item>,
     /// What the finding cannot know.
     pub notes: Vec<String>,
@@ -109,6 +120,9 @@ pub struct AdviceReport {
     pub installed_skills: u32,
     /// Baseline cost (name and description in every request) of all installed skills.
     pub baseline_total: Tokens,
+    /// All tokens of the period (input, output and cache) that the shares are taken of.
+    #[serde(default)]
+    pub total_tokens: Tokens,
     pub findings: Vec<Finding>,
 }
 
@@ -152,6 +166,7 @@ fn finding(kind: FindingKind, count: usize, items: Vec<Item>, total: Option<Toke
         count: count as u32,
         total,
         share_of_baseline: None,
+        share_of_total_tokens: None,
         items,
         notes: Vec::new(),
     }
@@ -170,6 +185,10 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
     let baseline_total = Tokens {
         count: installed.iter().map(|s| s.baseline.tokens.count).sum(),
         measured: !installed.is_empty() && installed.iter().all(|s| s.baseline.tokens.measured),
+    };
+    let total_tokens = Tokens {
+        count: report.totals.tokens,
+        measured: report.totals.measured,
     };
     let estimate_note = || {
         "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API."
@@ -207,6 +226,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         let total = sum(&items);
         let mut f = finding(FindingKind::UnusedSkills, items.len(), items, Some(total));
         f.share_of_baseline = share(total.count, baseline_total.count);
+        f.share_of_total_tokens = share(total.count, total_tokens.count);
         if !total.measured {
             f.notes.push(estimate_note());
         }
@@ -252,6 +272,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
             Some(total),
         );
         f.share_of_baseline = share(total.count, baseline_total.count);
+        f.share_of_total_tokens = share(total.count, total_tokens.count);
         f.notes.push(format!(
             "`total` is what shortening every listed description to {DESCRIPTION_TARGET_TOKENS} tokens would have saved in the period; it is an estimate."
         ));
@@ -315,7 +336,14 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
                 ),
             })
             .collect();
-        let mut f = finding(FindingKind::LargeBodies, bodies.len(), items, None);
+        let carry_total = Tokens::estimated(bodies.iter().map(|s| s.carry.tokens.count).sum());
+        let mut f = finding(
+            FindingKind::LargeBodies,
+            bodies.len(),
+            items,
+            Some(carry_total),
+        );
+        f.share_of_total_tokens = share(carry_total.count, total_tokens.count);
         f.notes.push(
             "Carry is an estimate: the body size times the requests after it; most of it is served from the cache, which is cheap.".to_owned(),
         );
@@ -360,10 +388,59 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         findings.push(f);
     }
 
+    // The scale of it all: the context of every request, not the skills.
+    let totals = &report.totals;
+    if totals.requests > 0 {
+        let average = totals.context_tokens / totals.requests;
+        let items: Vec<Item> = totals
+            .largest_sessions
+            .iter()
+            .map(|c| Item {
+                name: c.id.clone(),
+                tokens: Tokens::measured(c.average_context),
+                requests: c.requests,
+                detail: format!(
+                    "{} tokens per request on average over {} requests",
+                    n(c.average_context),
+                    n(c.requests)
+                ),
+            })
+            .collect();
+        let mut f = finding(
+            FindingKind::ContextSize,
+            items.len(),
+            items,
+            Some(Tokens {
+                count: totals.context_tokens,
+                measured: totals.measured,
+            }),
+        );
+        f.share_of_total_tokens = share(totals.context_tokens, totals.tokens);
+        let pct = |part: u64| share(part, totals.requests).unwrap_or(0.0) * 100.0;
+        f.notes.push(format!(
+            "The average request carried {} tokens of context. {:.1}% of the {} requests had at least {} tokens; subagents made {:.1}% of the requests.",
+            n(average),
+            pct(totals.large_context_requests),
+            n(totals.requests),
+            n(LARGE_CONTEXT_TOKENS),
+            pct(totals.subagent_requests),
+        ));
+        f.notes.push(
+            "`total` is the input size of all requests added up (most of it served from the cache); the listed sessions are those with the largest average context."
+                .to_owned(),
+        );
+        if !totals.measured {
+            f.notes
+                .push("Some requests are estimated, not reported by the client.".to_owned());
+        }
+        findings.push(f);
+    }
+
     AdviceReport {
         sessions: report.sessions,
         installed_skills: installed.len() as u32,
         baseline_total,
+        total_tokens,
         findings,
     }
 }
@@ -528,5 +605,51 @@ mod tests {
         assert!(r.findings.is_empty());
         assert_eq!(r.installed_skills, 1);
         assert_eq!(analyze(&SkillReport::default()).findings, []);
+    }
+
+    #[test]
+    fn context_size_puts_the_work_in_proportion() {
+        use crate::analyzers::skills::{PeriodTotals, SessionContext};
+        let mut unused = skill("idle", true, 0, 0, (100, 10_000));
+        unused.baseline.tokens = Tokens::measured(10_000);
+        let mut r = report(vec![unused]);
+        r.totals = PeriodTotals {
+            requests: 100,
+            subagent_requests: 10,
+            tokens: 1_000_000,
+            context_tokens: 900_000,
+            large_context_requests: 25,
+            measured: true,
+            largest_sessions: vec![SessionContext {
+                id: "s1".into(),
+                project: None,
+                requests: 60,
+                average_context: 250_000,
+            }],
+        };
+        let a = analyze(&r);
+        assert_eq!(a.total_tokens, Tokens::measured(1_000_000));
+        let idle = find(&a, FindingKind::UnusedSkills);
+        assert_eq!(idle.share_of_total_tokens, Some(0.01));
+        let c = find(&a, FindingKind::ContextSize);
+        assert_eq!(c.total, Some(Tokens::measured(900_000)));
+        assert_eq!(c.share_of_total_tokens, Some(0.9));
+        assert_eq!(c.items[0].name, "s1");
+        assert!(c.items[0].tokens.measured);
+        assert!(c.notes[0].contains("9,000 tokens"), "{:?}", c.notes);
+        assert!(c.notes[0].contains("25.0%"), "{:?}", c.notes);
+        assert!(c.notes[0].contains("10.0%"), "{:?}", c.notes);
+        assert!(c.action.contains("fresh session"));
+    }
+
+    #[test]
+    fn no_requests_no_context_finding() {
+        let a = analyze(&report(vec![skill("idle", true, 0, 0, (10, 100))]));
+        assert!(
+            a.findings
+                .iter()
+                .all(|f| f.kind != FindingKind::ContextSize)
+        );
+        assert_eq!(a.findings[0].share_of_total_tokens, None);
     }
 }

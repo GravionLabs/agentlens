@@ -121,8 +121,43 @@ pub struct IgnoredCommand {
     pub count: u32,
 }
 
+/// A request with at least this many input tokens (cached or not) counts as running on a large context.
+pub const LARGE_CONTEXT_TOKENS: u64 = 200_000;
+/// Sessions kept in `PeriodTotals::largest_sessions`.
+pub const LARGEST_SESSIONS: usize = 5;
+
+/// One session in `PeriodTotals::largest_sessions`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionContext {
+    pub id: String,
+    pub project: Option<PathBuf>,
+    pub requests: u64,
+    /// The average input size (cached or not) of its requests.
+    pub average_context: u64,
+}
+
+/// What all requests of the selected sessions amount to: the scale to put findings against.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PeriodTotals {
+    pub requests: u64,
+    /// Requests made by subagents.
+    pub subagent_requests: u64,
+    /// Input, output and cache tokens of all requests.
+    pub tokens: u64,
+    /// The input size (cached or not) of all requests added up.
+    pub context_tokens: u64,
+    /// Requests with at least `LARGE_CONTEXT_TOKENS` of input.
+    pub large_context_requests: u64,
+    /// `false` if any request's numbers were estimated rather than reported.
+    pub measured: bool,
+    /// The sessions with the largest average context, largest first.
+    pub largest_sessions: Vec<SessionContext>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SkillReport {
+    #[serde(default)]
+    pub totals: PeriodTotals,
     pub sessions: u32,
     pub first_event: Option<Timestamp>,
     pub last_event: Option<Timestamp>,
@@ -160,8 +195,32 @@ pub fn analyze(
         acc.stats.clients.sort();
     }
 
+    let mut all_measured = true;
+    let mut session_contexts: Vec<SessionContext> = Vec::new();
     for se in sessions {
         report.sessions += 1;
+        let (mut session_requests, mut session_context) = (0u64, 0u64);
+        for e in &se.events {
+            if let EventKind::Usage(u) = &e.kind {
+                let totals = &mut report.totals;
+                totals.requests += 1;
+                totals.subagent_requests += u64::from(u.subagent);
+                totals.tokens += u.total_input() + u.output;
+                totals.context_tokens += u.total_input();
+                totals.large_context_requests += u64::from(u.total_input() >= LARGE_CONTEXT_TOKENS);
+                all_measured &= u.measured;
+                session_requests += 1;
+                session_context += u.total_input();
+            }
+        }
+        if let Some(average) = session_context.checked_div(session_requests) {
+            session_contexts.push(SessionContext {
+                id: se.session.id.clone(),
+                project: se.session.project_dir.clone(),
+                requests: session_requests,
+                average_context: average,
+            });
+        }
         let requests = se
             .events
             .iter()
@@ -237,6 +296,14 @@ pub fn analyze(
         acc.stats.baseline = baseline(&entries, sessions);
     }
 
+    report.totals.measured = report.totals.requests > 0 && all_measured;
+    session_contexts.sort_by(|a, b| {
+        b.average_context
+            .cmp(&a.average_context)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    session_contexts.truncate(LARGEST_SESSIONS);
+    report.totals.largest_sessions = session_contexts;
     report.skills = accs.into_values().map(Acc::finish).collect();
     report.ignored_commands = ignored
         .into_iter()

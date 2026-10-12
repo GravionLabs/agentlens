@@ -7,6 +7,10 @@
       "count": 24,
       "measured": false
     },
+    "total_tokens": {
+      "count": 112903,
+      "measured": true
+    },
     "findings": [
       {
         "kind": "unused-skills",
@@ -18,6 +22,7 @@
           "measured": false
         },
         "share_of_baseline": 1.0,
+        "share_of_total_tokens": 0.00021257185371513601,
         "items": [
           {
             "name": "demo",
@@ -41,6 +46,7 @@
         "count": 1,
         "total": null,
         "share_of_baseline": null,
+        "share_of_total_tokens": null,
         "items": [
           {
             "name": "demo-skill",
@@ -54,6 +60,42 @@
         ],
         "notes": [
           "Skills built into the client or supplied by a plugin are not in the folders AgentLens inventories and show up here too."
+        ]
+      },
+      {
+        "kind": "context-size",
+        "explanation": "Every request sends the whole context again, so its size drives the cost far more than the skills do. This is how large the context of a request was on average, how many requests ran on a large context, and which sessions had the largest.",
+        "action": "Start new work in a fresh session, clear the context between tasks, and delegate exploration and review to subagents, whose context stays separate.",
+        "count": 2,
+        "total": {
+          "count": 102889,
+          "measured": true
+        },
+        "share_of_baseline": null,
+        "share_of_total_tokens": 0.9113043940373595,
+        "items": [
+          {
+            "name": "cp-1",
+            "tokens": {
+              "count": 99999,
+              "measured": true
+            },
+            "requests": 1,
+            "detail": "99,999 tokens per request on average over 1 requests"
+          },
+          {
+            "name": "context",
+            "tokens": {
+              "count": 963,
+              "measured": true
+            },
+            "requests": 3,
+            "detail": "963 tokens per request on average over 3 requests"
+          }
+        ],
+        "notes": [
+          "The average request carried 25,722 tokens of context. 0.0% of the 4 requests had at least 200,000 tokens; subagents made 0.0% of the requests.",
+          "`total` is the input size of all requests added up (most of it served from the cache); the listed sessions are those with the largest average context."
         ]
       }
     ]
