@@ -5,13 +5,14 @@
 //! the same findings, so an agent that gets them only has to explain and act, not to recompute.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::analyzers::context::ContextReport;
 use crate::analyzers::skills::{LARGE_CONTEXT_TOKENS, SkillReport, SkillStats};
 use crate::analyzers::unused::{calls_server, norm};
-use crate::model::{ContextKind, EventKind, SessionEvents};
+use crate::model::{ContextKind, EventKind, SessionEvents, Source};
 use crate::references::{Reference, References};
 use crate::tokens::Tokens;
 
@@ -225,7 +226,15 @@ pub struct McpServerUse {
 /// The MCP servers whose context the clients reported, with the calls of their tools. Servers that the
 /// clients do not report (nothing in the context rows) are not listed.
 pub fn mcp_servers(context: &ContextReport, sessions: &[SessionEvents]) -> Vec<McpServerUse> {
-    let mut found: BTreeMap<String, (String, Tokens, u64)> = BTreeMap::new();
+    #[derive(Default)]
+    struct Found {
+        /// Tool rows name the server the way its tools do; their owner is preferred, then the smaller one.
+        name: Option<(bool, String)>,
+        tokens: Option<Tokens>,
+        /// The most requests of any row, per client and project: those are disjoint sets of requests.
+        requests: BTreeMap<(Source, Option<PathBuf>), u64>,
+    }
+    let mut found: BTreeMap<String, Found> = BTreeMap::new();
     for r in context.rows.iter().filter(|r| {
         matches!(
             r.kind,
@@ -236,29 +245,43 @@ pub fn mcp_servers(context: &ContextReport, sessions: &[SessionEvents]) -> Vec<M
         if matches!(r.owner.as_str(), "built-in" | "all tools") {
             continue;
         }
-        let entry = found
-            .entry(norm(&r.owner))
-            .or_insert_with(|| (r.owner.clone(), Tokens::measured(0), 0));
-        if r.kind != ContextKind::McpInstructions {
-            entry.0 = r.owner.clone();
+        let entry = found.entry(norm(&r.owner)).or_default();
+        let candidate = (r.kind == ContextKind::McpInstructions, r.owner.clone());
+        if entry.name.as_ref().is_none_or(|n| candidate < *n) {
+            entry.name = Some(candidate);
         }
-        entry.1.count += r.overhead_tokens.count;
-        entry.1.measured &= r.overhead_tokens.measured;
-        entry.2 = entry.2.max(r.requests);
+        let tokens = entry.tokens.get_or_insert(Tokens::measured(0));
+        tokens.count += r.overhead_tokens.count;
+        tokens.measured &= r.overhead_tokens.measured;
+        let requests = entry
+            .requests
+            .entry((r.source, r.project.clone()))
+            .or_default();
+        *requests = (*requests).max(r.requests);
     }
     found
         .into_iter()
-        .map(|(key, (server, tokens, requests))| McpServerUse {
-            calls: sessions
+        .map(|(key, f)| {
+            // Only calls in the sessions whose context was reported: the ratio compares like with like.
+            let calls = sessions
                 .iter()
+                .filter(|se| {
+                    f.requests.keys().any(|(source, project)| {
+                        *source == se.session.source
+                            && (project.is_none() || *project == se.session.project_dir)
+                    })
+                })
                 .flat_map(|se| &se.events)
                 .filter(
                     |e| matches!(&e.kind, EventKind::ToolCall(c) if calls_server(&c.name, &key)),
                 )
-                .count() as u64,
-            server,
-            tokens,
-            requests,
+                .count() as u64;
+            McpServerUse {
+                server: f.name.map(|n| n.1).unwrap_or_default(),
+                tokens: f.tokens.unwrap_or(Tokens::measured(0)),
+                requests: f.requests.values().sum(),
+                calls,
+            }
         })
         .collect()
 }
@@ -1163,6 +1186,88 @@ mod tests {
             &analyze(&report(vec![])),
             FindingKind::CostlyMcpServers
         ));
+    }
+
+    #[test]
+    fn requests_add_up_over_clients_and_projects_and_calls_stay_in_those_sessions() {
+        use crate::analyzers::context::ContextReport;
+        use crate::model::Session;
+        let mut a = mcp_row("srv", ContextKind::ToolListing, 40, 400, true);
+        a.project = Some("/work/a".into());
+        let mut b = mcp_row("srv", ContextKind::ToolListing, 60, 600, true);
+        b.project = Some("/work/b".into());
+        let mut b_def = mcp_row("srv", ContextKind::ToolDefinition, 50, 500, true);
+        b_def.project = Some("/work/b".into());
+        let context = ContextReport {
+            rows: vec![a, b, b_def],
+            ..ContextReport::default()
+        };
+        let call = |source: Source, project: &str| {
+            let mut c = calls("mcp__srv__run", 1);
+            c.session = Session::new("x", source);
+            c.session.project_dir = Some(project.into());
+            c
+        };
+        let sessions = [
+            call(Source::ClaudeCode, "/work/a"),
+            call(Source::ClaudeCode, "/work/b"),
+            call(Source::ClaudeCode, "/work/other"),
+            call(Source::OpenCode, "/work/a"),
+        ];
+        let servers = mcp_servers(&context, &sessions);
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].tokens.count, 1_500);
+        assert_eq!(servers[0].requests, 100, "40 in a, the larger 60 in b");
+        assert_eq!(
+            servers[0].calls, 2,
+            "other projects and clients do not count"
+        );
+    }
+
+    #[test]
+    fn the_name_of_a_server_does_not_depend_on_the_row_order() {
+        use crate::analyzers::context::ContextReport;
+        let rows = vec![
+            mcp_row("claude.ai Docs", ContextKind::McpInstructions, 1, 10, true),
+            mcp_row("claude_ai_Docs", ContextKind::ToolListing, 1, 10, true),
+        ];
+        let forward = mcp_servers(
+            &ContextReport {
+                rows: rows.clone(),
+                ..ContextReport::default()
+            },
+            &[],
+        );
+        let backward = mcp_servers(
+            &ContextReport {
+                rows: rows.into_iter().rev().collect(),
+                ..ContextReport::default()
+            },
+            &[],
+        );
+        assert_eq!(forward[0].server, "claude_ai_Docs");
+        assert_eq!(forward, backward);
+    }
+
+    #[test]
+    fn servers_with_the_same_cost_per_call_are_ordered_by_name() {
+        let server = |name: &str| McpServerUse {
+            server: name.into(),
+            tokens: Tokens::measured(100),
+            requests: 1,
+            calls: 1,
+        };
+        let a = analyze_with(
+            &report(vec![]),
+            &References::new(),
+            &[server("zeta"), server("alpha")],
+        );
+        let names: Vec<&str> = find(&a, FindingKind::CostlyMcpServers)
+            .items
+            .iter()
+            .map(|i| i.name.as_str())
+            .collect();
+        assert_eq!(names, ["alpha", "zeta"]);
     }
 
     fn find_none(r: &AdviceReport, kind: FindingKind) -> bool {

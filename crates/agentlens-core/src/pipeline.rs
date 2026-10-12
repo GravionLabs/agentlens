@@ -109,7 +109,7 @@ pub fn advice_run(
     let mcp = advice::mcp_servers(&context_report, &sessions);
     AdviceRun {
         report: advice::analyze_with(&run.report, &references, &mcp),
-        warnings: run.warnings + catalog.warnings.len() as u64,
+        warnings: run.warnings + catalog.warnings.len() as u64 + instructions.warnings.len() as u64,
         errors: run.errors,
     }
 }
