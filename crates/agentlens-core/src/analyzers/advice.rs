@@ -301,6 +301,26 @@ pub fn analyze_with(
         count: report.totals.tokens,
         measured: report.totals.measured,
     };
+    // The client's own listing is the whole truth about what it sent; the baseline covers only the skills
+    // AgentLens has a file for. Say so where the numbers appear.
+    let listing_note = {
+        let t = &report.totals;
+        let per_session = t.listing_tokens.count.checked_div(t.listing_sessions);
+        let per_request = baseline_total.count.checked_div(t.requests);
+        match (per_session, per_request) {
+            (Some(listed), Some(computed)) if t.listing_sessions > 0 && computed > 0 => {
+                Some(format!(
+                    "The client reported skill listings of {}{} tokens per session on average ({} sessions); the {} installed skills AgentLens found cost {} tokens per request. The listing also holds skills AgentLens has no file for (built into the client, supplied by plugins or the account); the files may also have changed since the session. So the two do not add up. Use the context view for what the client sent.",
+                    if t.listing_tokens.measured { "" } else { "~" },
+                    n(listed),
+                    n(t.listing_sessions),
+                    installed.len(),
+                    n(computed),
+                ))
+            }
+            _ => None,
+        }
+    };
     let estimate_note = || {
         "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API."
             .to_owned()
@@ -352,6 +372,7 @@ pub fn analyze_with(
         f.notes.push(
             "A skill that is only needed now and then, or by a tool outside the sessions that were read, can still be worth keeping.".to_owned(),
         );
+        f.notes.extend(listing_note.clone());
         if unused.iter().any(|s| referenced(s)) {
             f.notes.push(
                 "Skills that an installed agent, command or skill names are listed last. A mention in a file does not prove that the skill is used, only that something is meant to use it.".to_owned(),
@@ -449,6 +470,7 @@ pub fn analyze_with(
         );
         f.share_of_baseline = share(total.count, baseline_total.count);
         f.share_of_total_tokens = share(total.count, total_tokens.count);
+        f.notes.extend(listing_note.clone());
         f.notes.push(format!(
             "`total` is what shortening every listed description to {DESCRIPTION_TARGET_TOKENS} tokens would have saved in the period; it is an estimate."
         ));
@@ -857,6 +879,7 @@ mod tests {
                 requests: 60,
                 average_context: 250_000,
             }],
+            ..PeriodTotals::default()
         };
         let a = analyze(&r);
         assert_eq!(a.total_tokens, Tokens::measured(1_000_000));
@@ -1272,5 +1295,43 @@ mod tests {
 
     fn find_none(r: &AdviceReport, kind: FindingKind) -> bool {
         r.findings.iter().all(|f| f.kind != kind)
+    }
+
+    #[test]
+    fn the_client_listing_is_compared_with_the_computed_baseline() {
+        use crate::analyzers::skills::PeriodTotals;
+        let mut r = report(vec![skill("idle", true, 0, 0, (100, 20_000))]);
+        r.totals = PeriodTotals {
+            requests: 100,
+            listing_sessions: 2,
+            listing_tokens: Tokens::estimated(12_000),
+            ..PeriodTotals::default()
+        };
+        let a = analyze(&r);
+        for kind in [FindingKind::UnusedSkills, FindingKind::CostlyDescriptions] {
+            let note = find(&a, kind)
+                .notes
+                .iter()
+                .find(|n| n.contains("skill listings"))
+                .unwrap_or_else(|| panic!("{kind:?} has no listing note"));
+            assert!(note.contains("~6,000 tokens per session"), "{note}");
+            assert!(note.contains("(2 sessions)"), "{note}");
+            assert!(
+                note.contains("1 installed skills AgentLens found cost 200 tokens per request"),
+                "{note}"
+            );
+        }
+        // Reported by the client: no tilde; no listing: no note.
+        r.totals.listing_tokens.measured = true;
+        let a = analyze(&r);
+        let notes = &find(&a, FindingKind::UnusedSkills).notes;
+        assert!(notes.iter().any(|n| n.contains("listings of 6,000 tokens")));
+        r.totals.listing_sessions = 0;
+        assert!(
+            find(&analyze(&r), FindingKind::UnusedSkills)
+                .notes
+                .iter()
+                .all(|n| !n.contains("skill listings"))
+        );
     }
 }

@@ -40,7 +40,8 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         ],
         "notes": [
           "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API.",
-          "A skill that is only needed now and then, or by a tool outside the sessions that were read, can still be worth keeping."
+          "A skill that is only needed now and then, or by a tool outside the sessions that were read, can still be worth keeping.",
+          "The client reported skill listings of ~200 tokens per session on average (1 sessions); the 3 installed skills AgentLens found cost 22 tokens per request. The listing also holds skills AgentLens has no file for (built into the client, supplied by plugins or the account); the files may also have changed since the session. So the two do not add up. Use the context view for what the client sent."
         ]
       },
       {

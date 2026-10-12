@@ -56,6 +56,10 @@ agentlens context --kind tools      # tools, instructions, agents, skills or all
 
 What the clients put into the context besides the conversation. Columns: `kind` (tool listing, tool definition, MCP instructions, agent listing, skill listing, instruction file), `owner` (an MCP server, `built-in`, or a file path), `items` (distinct items, once per session), `tokens` (the estimated size of those items), `requests` (main-agent requests that followed them) and `overhead` (tokens times requests, estimated). The measured size of the first request of a session bounds everything static. Only Claude Code reports these items today; other sources are listed as not available.
 
+### Why the skill listing is larger than the skill baseline
+
+`context --kind skills` shows what the client reported it sent as the skill listing (Claude Code); **Skills** and **Advice** compute a *baseline* from the skill files AgentLens finds. The listing is several times larger, and that is mostly a matter of what is in it, not of a wrong estimate. In one set of about 80 sessions the initial listing held a median of 71 skills and about 24 KB (roughly 6,000 estimated tokens), while the installed skills AgentLens had files for were only around a quarter of those bytes. The rest were skills that no file in the folders AgentLens reads describes: the client's built-in skills (the same eleven in every listing), skills supplied by plugins (long descriptions, about 850 bytes each) or by the account, and skills from places outside the scanned folders. The advice findings that rest on the baseline say this next to their numbers when the client reported a listing. For the exact size of the descriptions of the skills you do have, use `--exact`; the part of the listing without a file cannot be shrunk from AgentLens, only by disabling those skills in the client.
+
 ## Unused
 
 ```sh
