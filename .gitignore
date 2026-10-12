@@ -13,3 +13,8 @@
 # VitePress
 site/.vitepress/dist
 site/.vitepress/cache
+
+# APM (apm install)
+/apm_modules/
+/.claude/skills/
+/.agents/skills/
