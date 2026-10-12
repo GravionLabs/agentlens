@@ -29,6 +29,10 @@ The guide is a website at <https://gravionlabs.github.io/agentlens/> (with the a
 
 Download the archive for your platform (and the installer of the application) from the [latest release](https://github.com/GravionLabs/agentlens/releases/latest), unpack it and put `agentlens` and `agentlens-mcp` on your `PATH`. The [Download](docs/guide/download.md) page has direct links, how to verify them and what to do about the unsigned installers. To build from source: `cargo install --path crates/agentlens-cli` (and `--path crates/agentlens-mcp`).
 
+## Agent skills
+
+Run `apm install` before working in the repository to install the stack skills declared in `apm.yml`. The skill folders (`.claude/skills`, `.agents/skills`) are git-ignored, so a fresh clone has none. This needs [apm](https://github.com/microsoft/apm).
+
 ## Usage
 
 ```sh
