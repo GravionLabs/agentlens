@@ -397,7 +397,10 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
             .iter()
             .map(|c| Item {
                 name: c.id.clone(),
-                tokens: Tokens::measured(c.average_context),
+                tokens: Tokens {
+                    count: c.average_context,
+                    measured: totals.measured,
+                },
                 requests: c.requests,
                 detail: format!(
                     "{} tokens per request on average over {} requests",
@@ -408,7 +411,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
             .collect();
         let mut f = finding(
             FindingKind::ContextSize,
-            items.len(),
+            report.sessions as usize,
             items,
             Some(Tokens {
                 count: totals.context_tokens,
@@ -636,6 +639,7 @@ mod tests {
         assert_eq!(c.share_of_total_tokens, Some(0.9));
         assert_eq!(c.items[0].name, "s1");
         assert!(c.items[0].tokens.measured);
+        assert_eq!(c.count, 3, "the sessions analyzed, not the ones listed");
         assert!(c.notes[0].contains("9,000 tokens"), "{:?}", c.notes);
         assert!(c.notes[0].contains("25.0%"), "{:?}", c.notes);
         assert!(c.notes[0].contains("10.0%"), "{:?}", c.notes);
@@ -651,5 +655,57 @@ mod tests {
                 .all(|f| f.kind != FindingKind::ContextSize)
         );
         assert_eq!(a.findings[0].share_of_total_tokens, None);
+    }
+
+    #[test]
+    fn estimated_requests_are_marked_and_the_carry_gets_a_share() {
+        use crate::analyzers::skills::{PeriodTotals, SessionContext};
+        let mut big = skill("big", true, 1, 0, (10, 1_000));
+        big.carry.tokens = Tokens::estimated(5_000);
+        big.carry.requests = 40;
+        let mut r = report(vec![big]);
+        r.totals = PeriodTotals {
+            requests: 10,
+            tokens: 100_000,
+            context_tokens: 90_000,
+            measured: false,
+            largest_sessions: vec![SessionContext {
+                id: "s1".into(),
+                project: None,
+                requests: 10,
+                average_context: 9_000,
+            }],
+            ..PeriodTotals::default()
+        };
+        let a = analyze(&r);
+        let bodies = find(&a, FindingKind::LargeBodies);
+        assert_eq!(bodies.total, Some(Tokens::estimated(5_000)));
+        assert_eq!(bodies.share_of_total_tokens, Some(0.05));
+        let costly = find(&a, FindingKind::CostlyDescriptions);
+        assert!(costly.share_of_total_tokens.is_some());
+        let c = find(&a, FindingKind::ContextSize);
+        assert!(!c.total.unwrap().measured);
+        assert!(!c.items[0].tokens.measured);
+        assert!(c.notes.iter().any(|n| n.contains("estimated")));
+        assert_eq!(a.findings.last().unwrap().kind, FindingKind::ContextSize);
+    }
+
+    #[test]
+    fn zero_tokens_give_no_share() {
+        use crate::analyzers::skills::PeriodTotals;
+        let mut r = report(vec![skill("idle", true, 0, 0, (10, 100))]);
+        r.totals = PeriodTotals {
+            requests: 1,
+            ..PeriodTotals::default()
+        };
+        let a = analyze(&r);
+        assert_eq!(
+            find(&a, FindingKind::UnusedSkills).share_of_total_tokens,
+            None
+        );
+        assert_eq!(
+            find(&a, FindingKind::ContextSize).share_of_total_tokens,
+            None
+        );
     }
 }

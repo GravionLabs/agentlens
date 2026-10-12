@@ -205,8 +205,8 @@ pub fn analyze(
                 let totals = &mut report.totals;
                 totals.requests += 1;
                 totals.subagent_requests += u64::from(u.subagent);
-                totals.tokens += u.total_input() + u.output;
-                totals.context_tokens += u.total_input();
+                totals.tokens = totals.tokens.saturating_add(u.total_input() + u.output);
+                totals.context_tokens = totals.context_tokens.saturating_add(u.total_input());
                 totals.large_context_requests += u64::from(u.total_input() >= LARGE_CONTEXT_TOKENS);
                 all_measured &= u.measured;
                 session_requests += 1;
@@ -848,6 +848,111 @@ mod tests {
         );
         assert_eq!(find(&r, "demo").invocations, 1);
         assert!(r.skills.iter().all(|s| s.name != "my-command"));
+    }
+
+    #[test]
+    fn period_totals_count_requests_subagents_and_large_contexts() {
+        let a = session(
+            "a",
+            Source::ClaudeCode,
+            "/work/demo",
+            vec![
+                usage(100, 10, 199_000, 0, false),
+                usage(100, 10, 100_000, 99_900, false),
+                usage(50, 5, 0, 0, true),
+                EventKind::UserTurn,
+            ],
+        );
+        let r = analyze(&inventory(vec![]), std::slice::from_ref(&a), &CharsPerToken);
+        let t = &r.totals;
+        assert_eq!(t.requests, 3);
+        assert_eq!(t.subagent_requests, 1);
+        assert_eq!(t.context_tokens, 199_100 + 200_000 + 50);
+        assert_eq!(t.tokens, t.context_tokens + 25);
+        assert_eq!(
+            t.large_context_requests, 1,
+            "199,100 is below, 200,000 is at the limit"
+        );
+        assert_eq!(t.largest_sessions.len(), 1);
+        assert_eq!(t.largest_sessions[0].requests, 3);
+        assert_eq!(t.largest_sessions[0].average_context, 399_150 / 3);
+
+        // No requests: not measured, no sessions listed.
+        let empty = session(
+            "e",
+            Source::ClaudeCode,
+            "/work/demo",
+            vec![EventKind::UserTurn],
+        );
+        let r = analyze(&inventory(vec![]), &[empty], &CharsPerToken);
+        assert_eq!(r.totals.requests, 0);
+        assert!(!r.totals.measured);
+        assert!(r.totals.largest_sessions.is_empty());
+    }
+
+    #[test]
+    fn period_totals_are_measured_only_if_every_request_was() {
+        let estimated = Usage {
+            measured: false,
+            ..Usage::default()
+        };
+        let measured = Usage {
+            measured: true,
+            ..Usage::default()
+        };
+        let one = |u: Usage| {
+            session(
+                "m",
+                Source::ClaudeCode,
+                "/work/demo",
+                vec![EventKind::Usage(u)],
+            )
+        };
+        let r = analyze(&inventory(vec![]), &[one(measured.clone())], &CharsPerToken);
+        assert!(r.totals.measured);
+        let r = analyze(
+            &inventory(vec![]),
+            &[one(measured), one(estimated)],
+            &CharsPerToken,
+        );
+        assert!(!r.totals.measured);
+    }
+
+    #[test]
+    fn largest_sessions_are_sorted_by_average_context_and_cut() {
+        let sessions: Vec<SessionEvents> = (0..7u64)
+            .map(|i| {
+                session(
+                    &format!("s{i}"),
+                    Source::ClaudeCode,
+                    "/work/demo",
+                    vec![usage(1_000 * (i + 1), 0, 0, 0, false)],
+                )
+            })
+            .collect();
+        let r = analyze(&inventory(vec![]), &sessions, &CharsPerToken);
+        let ids: Vec<&str> = r
+            .totals
+            .largest_sessions
+            .iter()
+            .map(|c| c.id.as_str())
+            .collect();
+        assert_eq!(ids, ["s6", "s5", "s4", "s3", "s2"]);
+
+        // Equal averages: by id.
+        let tie: Vec<SessionEvents> = ["b", "a"]
+            .iter()
+            .map(|id| {
+                session(
+                    id,
+                    Source::ClaudeCode,
+                    "/work/demo",
+                    vec![usage(5, 0, 0, 0, false)],
+                )
+            })
+            .collect();
+        let r = analyze(&inventory(vec![]), &tie, &CharsPerToken);
+        assert_eq!(r.totals.largest_sessions[0].id, "a");
     }
 
     #[test]

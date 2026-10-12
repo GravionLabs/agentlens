@@ -31,7 +31,7 @@ export function findingTotal(f: Finding): string | null {
   const overall =
     f.share_of_total_tokens === null
       ? ""
-      : `, ${(f.share_of_total_tokens * 100).toFixed(2)}% of all tokens`;
+      : `, ${f.total.measured ? "" : "~"}${(f.share_of_total_tokens * 100).toFixed(2)}% of all tokens`;
   return `Together they ${what} ${tokens(f.total.count, !f.total.measured)} tokens${share}${overall}.`;
 }
 

@@ -48,7 +48,10 @@ fn print(report: &AdviceReport) {
                 .unwrap_or_default();
             let overall = f
                 .share_of_total_tokens
-                .map(|s| format!(", {:.2}% of all tokens", s * 100.0))
+                .map(|s| {
+                    let tilde = if total.measured { "" } else { "~" };
+                    format!(", {tilde}{:.2}% of all tokens", s * 100.0)
+                })
                 .unwrap_or_default();
             let share = format!("{baseline}{overall}");
             let what = if f.kind == FindingKind::CostlyDescriptions {

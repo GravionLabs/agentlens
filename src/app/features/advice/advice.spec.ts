@@ -33,8 +33,17 @@ describe("findings", () => {
       findingTotal(finding({ total: { count: 5, measured: true }, share_of_baseline: null })),
     ).toBe("Together they cost 5 tokens.");
     expect(findingTotal(finding({ share_of_total_tokens: 0.0035 }))).toBe(
-      "Together they cost ~12,235,734 tokens, 30% of the baseline, 0.35% of all tokens.",
+      "Together they cost ~12,235,734 tokens, 30% of the baseline, ~0.35% of all tokens.",
     );
+    expect(
+      findingTotal(
+        finding({
+          total: { count: 9, measured: true },
+          share_of_baseline: null,
+          share_of_total_tokens: 0,
+        }),
+      ),
+    ).toBe("Together they cost 9 tokens, 0.00% of all tokens.");
     expect(findingTotal(finding({ total: null }))).toBeNull();
   });
 });
