@@ -18,6 +18,7 @@ use crate::env::Env;
 use crate::instructions;
 use crate::inventory::{self, Inventory};
 use crate::model::{SessionEvents, Source};
+use crate::references;
 use crate::tokens::TokenEstimator;
 
 /// What one source holds on this machine.
@@ -73,6 +74,8 @@ pub fn scan_sources(
 pub struct SkillRun {
     pub report: SkillReport,
     pub inventory: Inventory,
+    /// The projects the sessions ran in.
+    pub projects: Vec<PathBuf>,
     pub warnings: u64,
     pub errors: Vec<String>,
 }
@@ -92,11 +95,29 @@ pub fn advice_run(
     estimator: &dyn TokenEstimator,
 ) -> AdviceRun {
     let run = skill_run(registry, env, filter, only, estimator);
+    let catalog = catalog::scan(env, &run.projects, estimator);
+    let references = references::scan(
+        env,
+        &run.projects,
+        &idle_skills(&run.report),
+        &run.inventory,
+        &catalog,
+    );
     AdviceRun {
-        report: advice::analyze(&run.report),
+        report: advice::analyze_with(&run.report, &references),
         warnings: run.warnings,
         errors: run.errors,
     }
+}
+
+/// The installed skills that were neither loaded nor used through their files.
+fn idle_skills(report: &SkillReport) -> Vec<&str> {
+    report
+        .skills
+        .iter()
+        .filter(|s| s.in_inventory && s.invocations == 0 && s.file_uses == 0)
+        .map(|s| s.name.as_str())
+        .collect()
 }
 
 /// Reads the sessions, inventories the skills (user level plus the projects the
@@ -127,6 +148,7 @@ pub fn skill_run(
     SkillRun {
         report,
         inventory,
+        projects,
         warnings,
         errors,
     }
@@ -211,8 +233,21 @@ pub fn unused_run(
         .sum::<u64>()
         + inventory.warnings.len() as u64
         + catalog.warnings.len() as u64;
+    let references = references::scan(
+        env,
+        &projects,
+        &idle_skills(&skill_report),
+        &inventory,
+        &catalog,
+    );
     UnusedRun {
-        report: unused::analyze(&skill_report, &catalog, &context_report, &sessions),
+        report: unused::analyze(
+            &skill_report,
+            &catalog,
+            &context_report,
+            &sessions,
+            &references,
+        ),
         warnings,
         errors,
     }

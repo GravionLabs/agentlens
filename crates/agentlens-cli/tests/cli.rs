@@ -292,6 +292,64 @@ fn unused_lists_idle_agents_and_mcp_servers_with_their_cost() {
 }
 
 #[test]
+fn unused_and_advise_say_which_agents_and_commands_name_an_unused_skill() {
+    let home = home();
+    let agents = home.path().join(".claude/agents");
+    fs::create_dir_all(&agents).unwrap();
+    fs::write(
+        agents.join("flow.md"),
+        "---\nname: flow\ndescription: Flow\n---\nRuns the unused skill and my-orch-helper.",
+    )
+    .unwrap();
+    let commands = home.path().join(".claude/commands");
+    fs::create_dir_all(&commands).unwrap();
+    fs::write(commands.join("ship.md"), "Run unused first.").unwrap();
+
+    let v = json(agentlens(&home).args(["unused", "--since", "2026-01-01", "--format", "json"]));
+    let idle = v["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["kind"] == "skill" && i["name"] == "unused")
+        .unwrap();
+    assert_eq!(
+        idle["referenced_by"],
+        serde_json::json!([
+            {"kind": "agent", "name": "flow"},
+            {"kind": "command", "name": "ship"}
+        ])
+    );
+    // Items that nothing names have no `referenced_by` at all.
+    assert!(
+        v["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["name"] != "unused")
+            .all(|i| i.get("referenced_by").is_none())
+    );
+    agentlens(&home)
+        .args(["unused", "--since", "2026-01-01"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("agent flow, command ship"));
+
+    let a = json(agentlens(&home).args(["advise", "--since", "2026-01-01", "--format", "json"]));
+    let finding = a["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["kind"] == "unused-skills")
+        .unwrap();
+    assert!(
+        finding["items"][0]["detail"]
+            .as_str()
+            .unwrap()
+            .contains("referenced by agent flow, command ship")
+    );
+}
+
+#[test]
 fn unused_hides_used_items_unless_all_is_given() {
     let home = home();
     let csv = |args: &[&str]| {
