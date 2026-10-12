@@ -36,10 +36,15 @@ What to change to save tokens, made from the skill numbers above. No model is in
 | Finding                    | What it lists                                                                                                               |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Unused skills**          | installed skills that were neither loaded nor used through their files, what their listing cost, and its share of all listings |
+| **Listed but loaded by hand** | installed skills that were never loaded but whose files were read or run (a stack skill that another skill opens), what their listing cost per request and in total, and how often their files were used; that it was another skill who asked is inferred |
 | **Costly descriptions**    | the descriptions that take the most tokens per request, and what shortening them to about 40 tokens would have saved        |
 | **Used but not installed** | skills that were loaded but are not installed now (renamed, removed, built into the client or supplied by a plugin)         |
 | **Large skill bodies**     | loaded bodies that stay in the context and are sent again with every later request                                          |
 | **Work on a large context** | the skills after which the work ran on the largest context per request                                                     |
+| **Costly MCP servers** | per MCP server, its static context (instructions, tool listing and tool definitions) per request and in total next to the number of its tool calls, ranked by tokens per call; heavily used servers are listed too, the point is the ratio. Only servers whose context the client reports (Claude Code) |
+| **Context size**           | the average context of a request, the share of requests above 200,000 tokens, the share of requests that subagents made, and the sessions with the largest context (all measured where the client reports it) |
+
+Every sum is also given as a share of all tokens of the period (`share_of_total_tokens`, input, output and cache together), so that a small share is not read as the main lever (the carry of **Large skill bodies** now has a sum and a share too; the skill report's `totals` holds the period's request, subagent and context numbers): the descriptions of all installed skills are often well under 1% of the tokens, while the size of the context decides the rest. The **Context size** finding is that scale: it ends with the fixed advice to start new work in a fresh session, to clear the context between tasks and to delegate exploration and review to subagents, whose context stays separate.
 
 A finding says what it cannot know: a skill that is needed only now and then may be worth keeping although it shows up as unused, and the work after a skill is activity, not cost the skill caused. The CLI prints the findings as a table (`--format json` and `--format csv` have all of them), the application has an **Advice** view, and the [MCP server](mcp-server.md) has an `advice` tool, so an agent gets the findings and only has to explain and act on them.
 
@@ -51,6 +56,10 @@ agentlens context --kind tools      # tools, instructions, agents, skills or all
 
 What the clients put into the context besides the conversation. Columns: `kind` (tool listing, tool definition, MCP instructions, agent listing, skill listing, instruction file), `owner` (an MCP server, `built-in`, or a file path), `items` (distinct items, once per session), `tokens` (the estimated size of those items), `requests` (main-agent requests that followed them) and `overhead` (tokens times requests, estimated). The measured size of the first request of a session bounds everything static. Only Claude Code reports these items today; other sources are listed as not available.
 
+### Why the skill listing is larger than the skill baseline
+
+`context --kind skills` shows what the client reported it sent as the skill listing (Claude Code); **Skills** and **Advice** compute a *baseline* from the skill files AgentLens finds. The listing is several times larger, and that is mostly a matter of what is in it, not of a wrong estimate. In one set of about 80 sessions the initial listing held a median of 71 skills and about 24 KB (roughly 6,000 estimated tokens), while the installed skills AgentLens had files for were only around a quarter of those bytes. The rest were skills that no file in the folders AgentLens reads describes: the client's built-in skills (the same eleven in every listing), skills supplied by plugins (long descriptions, about 850 bytes each) or by the account, and skills from places outside the scanned folders. The advice findings that rest on the baseline say this next to their numbers when the client reported a listing. For the exact size of the descriptions of the skills you do have, use `--exact`; the part of the listing without a file cannot be shrunk from AgentLens, only by disabling those skills in the client.
+
 ## Unused
 
 ```sh
@@ -58,6 +67,8 @@ agentlens unused --days 30          # --all also lists items that were used
 ```
 
 Installed skills (loaded or used through their files), agents (`.claude/agents`, `.github/agents`, `.opencode/agents`) and configured MCP servers that were not used in the period, with what they cost while idle. The idle cost is the estimated baseline tokens times the requests that carried the item; for MCP servers it comes from the context items the client reports, so servers of other clients show `unknown`. MCP configuration files are read for server names only.
+
+**Referenced by.** For an unused skill, the table lists the installed agents, commands (`.claude/commands`, `.opencode/commands`, `.github/prompts`) and other skills whose own files contain its exact name, for example the phases of a workflow agent. Such skills are ranked after the others, and **Advice** marks them the same way. The files are only searched for the name; nothing else is read or stored. A mention does not prove that the skill is used, only that something is meant to use it, and a short, common word as a skill name can be mentioned in ordinary text. Commands shipped by plugins are not searched.
 
 ## Flow
 

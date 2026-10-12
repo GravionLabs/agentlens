@@ -13,10 +13,13 @@ use crate::output;
 fn title(f: &Finding) -> String {
     match f.kind {
         FindingKind::UnusedSkills => format!("Unused skills ({})", f.count),
+        FindingKind::ListedButLoadedByHand => format!("Listed but loaded by hand ({})", f.count),
         FindingKind::CostlyDescriptions => format!("Costly descriptions ({})", f.count),
         FindingKind::UsedButNotInstalled => format!("Used but not installed ({})", f.count),
         FindingKind::LargeBodies => format!("Large skill bodies ({})", f.count),
         FindingKind::LargeContext => format!("Work on a large context ({})", f.count),
+        FindingKind::CostlyMcpServers => format!("Costly MCP servers ({})", f.count),
+        FindingKind::ContextSize => format!("Context size ({})", f.count),
     }
 }
 
@@ -27,6 +30,12 @@ fn print(report: &AdviceReport) {
         report.installed_skills,
         output::tokens(report.baseline_total)
     );
+    if report.total_tokens.count > 0 {
+        println!(
+            "All requests of the period together carried {} tokens.",
+            output::tokens(report.total_tokens)
+        );
+    }
     if report.findings.is_empty() {
         println!("\nNothing to suggest for these sessions.");
         return;
@@ -35,10 +44,18 @@ fn print(report: &AdviceReport) {
         println!("\n{}", title(f));
         println!("{}", f.explanation);
         if let Some(total) = f.total {
-            let share = f
+            let baseline = f
                 .share_of_baseline
                 .map(|s| format!(", {:.0}% of the baseline", s * 100.0))
                 .unwrap_or_default();
+            let overall = f
+                .share_of_total_tokens
+                .map(|s| {
+                    let tilde = if total.measured { "" } else { "~" };
+                    format!(", {tilde}{:.2}% of all tokens", s * 100.0)
+                })
+                .unwrap_or_default();
+            let share = format!("{baseline}{overall}");
             let what = if f.kind == FindingKind::CostlyDescriptions {
                 "could save"
             } else {

@@ -3,6 +3,33 @@ source: crates/agentlens-core/tests/skills_report.rs
 expression: report
 ---
 {
+  "totals": {
+    "requests": 3,
+    "subagent_requests": 0,
+    "tokens": 648,
+    "context_tokens": 621,
+    "large_context_requests": 0,
+    "measured": true,
+    "largest_sessions": [
+      {
+        "id": "skills",
+        "project": "/work/demo",
+        "requests": 1,
+        "average_context": 310
+      },
+      {
+        "id": "basic",
+        "project": "/work/demo",
+        "requests": 2,
+        "average_context": 155
+      }
+    ],
+    "listing_sessions": 0,
+    "listing_tokens": {
+      "count": 0,
+      "measured": false
+    }
+  },
   "sessions": 2,
   "first_event": "2026-10-01T10:00:00Z",
   "last_event": "2026-10-01T11:06:00Z",

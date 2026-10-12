@@ -72,7 +72,28 @@ export interface SkillStats {
   baseline: { requests: number; tokens: Tokens };
 }
 
+export interface SessionContext {
+  id: string;
+  project: string | null;
+  requests: number;
+  average_context: number;
+}
+
+export interface PeriodTotals {
+  requests: number;
+  subagent_requests: number;
+  tokens: number;
+  context_tokens: number;
+  large_context_requests: number;
+  measured: boolean;
+  largest_sessions: SessionContext[];
+  /** Sessions in which the client reported its skill listing, and the listing tokens added up. */
+  listing_sessions: number;
+  listing_tokens: Tokens;
+}
+
 export interface SkillReport {
+  totals: PeriodTotals;
   sessions: number;
   first_event: string | null;
   last_event: string | null;
@@ -83,12 +104,22 @@ export interface SkillReport {
 
 export type FindingKind =
   | "unused-skills"
+  | "listed-but-loaded-by-hand"
   | "costly-descriptions"
   | "used-but-not-installed"
   | "large-bodies"
-  | "large-context";
+  | "large-context"
+  | "costly-mcp-servers"
+  | "context-size";
+
+export interface Reference {
+  kind: "agent" | "command" | "skill";
+  name: string;
+}
 
 export interface AdviceItem {
+  /** Unused skills only: the agents, commands and skills whose files name it. */
+  referenced_by?: Reference[];
   name: string;
   tokens: Tokens;
   requests: number;
@@ -102,6 +133,7 @@ export interface Finding {
   count: number;
   total: Tokens | null;
   share_of_baseline: number | null;
+  share_of_total_tokens: number | null;
   items: AdviceItem[];
   notes: string[];
 }
@@ -110,6 +142,7 @@ export interface AdviceReport {
   sessions: number;
   installed_skills: number;
   baseline_total: Tokens;
+  total_tokens: Tokens;
   findings: Finding[];
 }
 
@@ -159,6 +192,8 @@ export interface UnusedItem {
   uses: number;
   requests: number;
   overhead_tokens: Tokens | null;
+  /** Unused skills only: the agents, commands and skills whose files name it. */
+  referenced_by?: Reference[];
 }
 
 export interface UnusedReport {

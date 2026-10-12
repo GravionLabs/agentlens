@@ -5,6 +5,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.10.0] — 2026-10-12
+
+### Features
+- Put every finding in proportion: share of all tokens and a context-size finding (#283)
+- A finding for skills that are listed but only loaded through their files (#284)
+- Say when an agent, command or skill names a skill that looks unused (#286)
+- A finding for MCP servers whose static context is large and that are rarely called (#287)
+- Copilot CLI reads session.usage_record when the session store has no rows (#280)
+- Explain why the client's skill listing exceeds the computed baseline (#285)
+
+
 ## [0.9.1] — 2026-10-12
 
 ### Bug Fixes

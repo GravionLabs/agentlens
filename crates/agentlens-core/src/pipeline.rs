@@ -18,6 +18,7 @@ use crate::env::Env;
 use crate::instructions;
 use crate::inventory::{self, Inventory};
 use crate::model::{SessionEvents, Source};
+use crate::references;
 use crate::tokens::TokenEstimator;
 
 /// What one source holds on this machine.
@@ -73,6 +74,8 @@ pub fn scan_sources(
 pub struct SkillRun {
     pub report: SkillReport,
     pub inventory: Inventory,
+    /// The projects the sessions ran in.
+    pub projects: Vec<PathBuf>,
     pub warnings: u64,
     pub errors: Vec<String>,
 }
@@ -91,12 +94,34 @@ pub fn advice_run(
     only: &[Source],
     estimator: &dyn TokenEstimator,
 ) -> AdviceRun {
-    let run = skill_run(registry, env, filter, only, estimator);
+    let (sessions, errors) = read_sessions(registry, env, filter, only);
+    let run = skill_run_from(env, &sessions, errors, estimator);
+    let catalog = catalog::scan(env, &run.projects, estimator);
+    let references = references::scan(
+        env,
+        &run.projects,
+        &idle_skills(&run.report),
+        &run.inventory,
+        &catalog,
+    );
+    let instructions = instructions::scan(env, &run.projects, estimator);
+    let context_report = context::analyze(&sessions, &instructions.files, estimator);
+    let mcp = advice::mcp_servers(&context_report, &sessions);
     AdviceRun {
-        report: advice::analyze(&run.report),
-        warnings: run.warnings,
+        report: advice::analyze_with(&run.report, &references, &mcp),
+        warnings: run.warnings + catalog.warnings.len() as u64 + instructions.warnings.len() as u64,
         errors: run.errors,
     }
+}
+
+/// The installed skills that were neither loaded nor used through their files.
+fn idle_skills(report: &SkillReport) -> Vec<&str> {
+    report
+        .skills
+        .iter()
+        .filter(|s| s.in_inventory && s.invocations == 0 && s.file_uses == 0)
+        .map(|s| s.name.as_str())
+        .collect()
 }
 
 /// Reads the sessions, inventories the skills (user level plus the projects the
@@ -108,6 +133,16 @@ pub fn skill_run(
     only: &[Source],
     estimator: &dyn TokenEstimator,
 ) -> SkillRun {
+    let (sessions, errors) = read_sessions(registry, env, filter, only);
+    skill_run_from(env, &sessions, errors, estimator)
+}
+
+fn read_sessions(
+    registry: &Registry,
+    env: &Env,
+    filter: &SessionFilter,
+    only: &[Source],
+) -> (Vec<SessionEvents>, Vec<String>) {
     let mut sessions: Vec<SessionEvents> = Vec::new();
     let mut errors = Vec::new();
     for r in registry.sessions(env, filter, only) {
@@ -116,6 +151,15 @@ pub fn skill_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    (sessions, errors)
+}
+
+fn skill_run_from(
+    env: &Env,
+    sessions: &[SessionEvents],
+    errors: Vec<String>,
+    estimator: &dyn TokenEstimator,
+) -> SkillRun {
     let warnings = sessions.iter().map(|s| s.warnings.len() as u64).sum();
     let projects: BTreeSet<PathBuf> = sessions
         .iter()
@@ -123,10 +167,11 @@ pub fn skill_run(
         .collect();
     let projects: Vec<PathBuf> = projects.into_iter().collect();
     let inventory = inventory::scan(&inventory::locations(env, &projects), estimator);
-    let report = skills::analyze(&inventory, &sessions, estimator);
+    let report = skills::analyze(&inventory, sessions, estimator);
     SkillRun {
         report,
         inventory,
+        projects,
         warnings,
         errors,
     }
@@ -211,8 +256,21 @@ pub fn unused_run(
         .sum::<u64>()
         + inventory.warnings.len() as u64
         + catalog.warnings.len() as u64;
+    let references = references::scan(
+        env,
+        &projects,
+        &idle_skills(&skill_report),
+        &inventory,
+        &catalog,
+    );
     UnusedRun {
-        report: unused::analyze(&skill_report, &catalog, &context_report, &sessions),
+        report: unused::analyze(
+            &skill_report,
+            &catalog,
+            &context_report,
+            &sessions,
+            &references,
+        ),
         warnings,
         errors,
     }

@@ -11,6 +11,10 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       "count": 242,
       "measured": false
     },
+    "total_tokens": {
+      "count": 113708,
+      "measured": true
+    },
     "findings": [
       {
         "kind": "unused-skills",
@@ -22,6 +26,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "measured": false
         },
         "share_of_baseline": 0.2727272727272727,
+        "share_of_total_tokens": 0.0005804340943469237,
         "items": [
           {
             "name": "idle",
@@ -35,7 +40,35 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         ],
         "notes": [
           "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API.",
-          "A skill that is only needed now and then, or by a tool outside the sessions that were read, can still be worth keeping."
+          "A skill that is only needed now and then, or by a tool outside the sessions that were read, can still be worth keeping.",
+          "The client reported skill listings of ~200 tokens per session on average (1 sessions); the 3 installed skills AgentLens found cost 22 tokens per request. The listing also holds skills AgentLens has no file for (built into the client, supplied by plugins or the account); the files may also have changed since the session. So the two do not add up. Use the context view for what the client sent."
+        ]
+      },
+      {
+        "kind": "listed-but-loaded-by-hand",
+        "explanation": "Installed skills that were never loaded but whose files were read or run, for example a stack skill that another skill opens on instruction. Their name and description are in the context of every request, although the model never picks them from the listing.",
+        "action": "Put such a skill below the skill that opens it (as a file in its folder) instead of listing it on its own, or mark it as not automatically invoked in its front matter if the client supports it.",
+        "count": 1,
+        "total": {
+          "count": 66,
+          "measured": false
+        },
+        "share_of_baseline": 0.2727272727272727,
+        "share_of_total_tokens": 0.0005804340943469237,
+        "items": [
+          {
+            "name": "demo",
+            "tokens": {
+              "count": 66,
+              "measured": false
+            },
+            "requests": 11,
+            "detail": "6 tokens per request, 66 in total; files used 2 times"
+          }
+        ],
+        "notes": [
+          "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API.",
+          "That the files were read on instruction of another skill is inferred: a file use does not prove who asked for it, and a skill that is also useful on its own can stay listed."
         ]
       },
       {
@@ -45,6 +78,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "count": 1,
         "total": null,
         "share_of_baseline": null,
+        "share_of_total_tokens": null,
         "items": [
           {
             "name": "demo-skill",
@@ -58,6 +92,87 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         ],
         "notes": [
           "Skills built into the client or supplied by a plugin are not in the folders AgentLens inventories and show up here too."
+        ]
+      },
+      {
+        "kind": "costly-mcp-servers",
+        "explanation": "MCP servers put their instructions, tool listing and tool definitions into every request, whether or not a tool is called. Ranked by the static context per tool call; a server that is called a lot is listed as such, the point is the ratio.",
+        "action": "Enable the server only in the projects that need it, or switch it off when it is not in use.",
+        "count": 1,
+        "total": {
+          "count": 363,
+          "measured": false
+        },
+        "share_of_baseline": null,
+        "share_of_total_tokens": 0.0031923875189080802,
+        "items": [
+          {
+            "name": "srv",
+            "tokens": {
+              "count": 363,
+              "measured": false
+            },
+            "requests": 6,
+            "detail": "60 tokens per request, 363 in total; 0 tool calls, 363 tokens per call"
+          }
+        ],
+        "notes": [
+          "The sizes are estimates where the client did not report them.",
+          "Only servers whose context the client reports are listed (Claude Code today). A server that is called a lot can be worth its context; the tokens per call show the ratio."
+        ]
+      },
+      {
+        "kind": "context-size",
+        "explanation": "Every request sends the whole context again, so its size drives the cost far more than the skills do. This is how large the context of a request was on average, how many requests ran on a large context, and which sessions had the largest.",
+        "action": "Start new work in a fresh session, clear the context between tasks, and delegate exploration and review to subagents, whose context stays separate.",
+        "count": 4,
+        "total": {
+          "count": 103659,
+          "measured": true
+        },
+        "share_of_baseline": null,
+        "share_of_total_tokens": 0.9116245119076933,
+        "items": [
+          {
+            "name": "cp-1",
+            "tokens": {
+              "count": 99999,
+              "measured": true
+            },
+            "requests": 1,
+            "detail": "99,999 tokens per request on average over 1 requests"
+          },
+          {
+            "name": "context",
+            "tokens": {
+              "count": 963,
+              "measured": true
+            },
+            "requests": 3,
+            "detail": "963 tokens per request on average over 3 requests"
+          },
+          {
+            "name": "skill_files",
+            "tokens": {
+              "count": 110,
+              "measured": true
+            },
+            "requests": 6,
+            "detail": "110 tokens per request on average over 6 requests"
+          },
+          {
+            "name": "typed_skill",
+            "tokens": {
+              "count": 110,
+              "measured": true
+            },
+            "requests": 1,
+            "detail": "110 tokens per request on average over 1 requests"
+          }
+        ],
+        "notes": [
+          "The average request carried 9,423 tokens of context. 0.0% of the 11 requests had at least 200,000 tokens; subagents made 0.0% of the requests.",
+          "`total` is the input size of all requests added up (most of it served from the cache); the listed sessions are those with the largest average context."
         ]
       }
     ]

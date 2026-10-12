@@ -14,6 +14,7 @@ use crate::analyzers::context::{ContextReport, mcp_server};
 use crate::analyzers::skills::SkillReport;
 use crate::catalog::Catalog;
 use crate::model::{ContextKind, EventKind, SessionEvents, Source};
+use crate::references::{Reference, References};
 use crate::tokens::Tokens;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -37,17 +38,22 @@ pub struct UnusedItem {
     pub requests: u64,
     /// Baseline tokens over the period (estimated unless the client reported the sizes); `None` if unknown.
     pub overhead_tokens: Option<Tokens>,
+    /// For an unused skill: the installed agents, commands and skills whose files name it. A mention
+    /// does not prove that it is used.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub referenced_by: Vec<Reference>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnusedReport {
     pub sessions: u32,
-    /// Sorted by overhead (largest first); unknown costs last.
+    /// Sorted by overhead (largest first); unknown costs last. Unused skills that something refers to
+    /// come after everything else.
     pub items: Vec<UnusedItem>,
 }
 
 /// `claude.ai Claude Docs` and `claude_ai_Claude_Docs` name the same server.
-fn norm(name: &str) -> String {
+pub(crate) fn norm(name: &str) -> String {
     name.chars()
         .map(|c| {
             if c.is_alphanumeric() {
@@ -59,7 +65,7 @@ fn norm(name: &str) -> String {
         .collect()
 }
 
-fn calls_server(tool: &str, server: &str) -> bool {
+pub(crate) fn calls_server(tool: &str, server: &str) -> bool {
     mcp_server(tool).is_some_and(|s| norm(s) == server)
         || norm(tool).starts_with(&format!("{server}_"))
 }
@@ -86,6 +92,7 @@ pub fn analyze(
     catalog: &Catalog,
     context: &ContextReport,
     sessions: &[SessionEvents],
+    references: &References,
 ) -> UnusedReport {
     let mut items = Vec::new();
 
@@ -98,6 +105,11 @@ pub fn analyze(
             uses: s.invocations + s.file_uses,
             requests: s.baseline.requests,
             overhead_tokens: Some(s.baseline.tokens),
+            referenced_by: if s.invocations + s.file_uses == 0 {
+                references.get(&s.name).cloned().unwrap_or_default()
+            } else {
+                Vec::new()
+            },
         });
     }
 
@@ -126,6 +138,7 @@ pub fn analyze(
                 count: a.listing_tokens.count * requests,
                 measured: a.listing_tokens.measured,
             }),
+            referenced_by: Vec::new(),
         });
     }
 
@@ -168,13 +181,16 @@ pub fn analyze(
                 count: rows.iter().map(|r| r.overhead_tokens.count).sum(),
                 measured: rows.iter().all(|r| r.overhead_tokens.measured),
             }),
+            referenced_by: Vec::new(),
         });
     }
 
     items.sort_by(|a, b| {
         let count = |i: &UnusedItem| i.overhead_tokens.map(|t| t.count);
-        count(b)
-            .cmp(&count(a))
+        // Skills that something names come last.
+        (!a.referenced_by.is_empty())
+            .cmp(&!b.referenced_by.is_empty())
+            .then_with(|| count(b).cmp(&count(a)))
             .then_with(|| a.kind.cmp(&b.kind))
             .then_with(|| a.name.cmp(&b.name))
     });
@@ -327,7 +343,7 @@ mod tests {
                 request(),
             ],
         )];
-        let r = analyze(&skills, &catalog, &context, &sessions);
+        let r = analyze(&skills, &catalog, &context, &sessions, &References::new());
         let find = |kind, name: &str| {
             r.items
                 .iter()
@@ -388,5 +404,49 @@ mod tests {
         assert!(calls_server("docs_search", "docs"));
         assert!(!calls_server("docsearch", "docs"));
         assert!(calls_server("mcp__Docs__x", "docs"));
+    }
+
+    #[test]
+    fn a_referenced_unused_skill_is_marked_and_ranked_after_the_others() {
+        use crate::references::ReferenceKind;
+        let mut refs = References::new();
+        let reference = Reference {
+            kind: ReferenceKind::Agent,
+            name: "flow".into(),
+        };
+        refs.insert("idle".into(), vec![reference.clone()]);
+        // A used skill is never marked, even if something names it.
+        refs.insert("used".into(), vec![reference.clone()]);
+        let skills = SkillReport {
+            skills: vec![
+                skill("used", 2, 100),
+                skill("idle", 0, 900),
+                skill("other", 0, 50),
+            ],
+            ..SkillReport::default()
+        };
+        let r = analyze(
+            &skills,
+            &Catalog::default(),
+            &ContextReport::default(),
+            &[],
+            &refs,
+        );
+        let names: Vec<&str> = r.items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["used", "other", "idle"]);
+
+        // Several referenced skills keep the order by cost and name among themselves.
+        refs.insert("other".into(), vec![reference.clone()]);
+        let r = analyze(
+            &skills,
+            &Catalog::default(),
+            &ContextReport::default(),
+            &[],
+            &refs,
+        );
+        let names: Vec<&str> = r.items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["used", "idle", "other"]);
+        assert_eq!(r.items[2].referenced_by, [reference]);
+        assert!(r.items[0].referenced_by.is_empty());
     }
 }

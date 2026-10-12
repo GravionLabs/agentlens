@@ -9,10 +9,13 @@ import { Status } from "../../ui/status";
 
 const TITLES: Record<FindingKind, string> = {
   "unused-skills": "Unused skills",
+  "listed-but-loaded-by-hand": "Listed but loaded by hand",
   "costly-descriptions": "Costly descriptions",
   "used-but-not-installed": "Used but not installed",
   "large-bodies": "Large skill bodies",
   "large-context": "Work on a large context",
+  "costly-mcp-servers": "Costly MCP servers",
+  "context-size": "Context size",
 };
 
 export function findingTitle(kind: FindingKind): string {
@@ -27,7 +30,11 @@ export function findingTotal(f: Finding): string | null {
     f.share_of_baseline === null
       ? ""
       : `, ${Math.round(f.share_of_baseline * 100)}% of the baseline`;
-  return `Together they ${what} ${tokens(f.total.count, !f.total.measured)} tokens${share}.`;
+  const overall =
+    f.share_of_total_tokens === null
+      ? ""
+      : `, ${f.total.measured ? "" : "~"}${(f.share_of_total_tokens * 100).toFixed(2)}% of all tokens`;
+  return `Together they ${what} ${tokens(f.total.count, !f.total.measured)} tokens${share}${overall}.`;
 }
 
 @Component({

@@ -7,6 +7,11 @@ import type { UnusedItem, UnusedReport } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
 
+/** “agent dev-workflow, command ship”, empty if nothing names the skill. */
+export function referencedBy(i: UnusedItem): string {
+  return (i.referenced_by ?? []).map((r) => `${r.kind} ${r.name}`).join(", ");
+}
+
 @Component({
   selector: "app-unused",
   imports: [PageHeader, Term, Status, DataTable],
@@ -104,6 +109,13 @@ export class Unused {
       estimated: (i) => i.overhead_tokens !== null && !i.overhead_tokens.measured,
       numeric: true,
       title: "Baseline tokens × the requests that carried the item",
+    },
+    {
+      key: "referenced",
+      label: "Referenced by",
+      value: (i) => referencedBy(i),
+      title:
+        "Installed agents, commands and skills that name this skill. A mention does not prove use.",
     },
   ];
 }
