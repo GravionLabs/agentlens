@@ -44,6 +44,8 @@ impl Reference {
 pub type References = BTreeMap<String, Vec<Reference>>;
 
 const MAX_DEPTH: usize = 3;
+/// A larger file is not an agent, command or skill; it is not read.
+const MAX_FILE_BYTES: u64 = 1 << 20;
 
 /// Command and prompt files below `dir`; a file in a subfolder is named `folder:file`.
 fn command_files(
@@ -54,13 +56,20 @@ fn command_files(
     out: &mut Vec<(String, PathBuf)>,
 ) {
     let Ok(rd) = fs::read_dir(dir) else { return };
-    let mut paths: Vec<PathBuf> = rd.filter_map(Result::ok).map(|e| e.path()).collect();
-    paths.sort();
-    for path in paths {
+    let mut entries: Vec<(PathBuf, bool)> = rd
+        .filter_map(Result::ok)
+        .map(|e| {
+            // A symlinked folder is not followed: it could loop or lead out of the client's folders.
+            let folder = e.file_type().is_ok_and(|t| t.is_dir());
+            (e.path(), folder)
+        })
+        .collect();
+    entries.sort();
+    for (path, folder) in entries {
         let Some(file) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        if path.is_dir() {
+        if folder {
             if depth < MAX_DEPTH {
                 command_files(&path, suffix, &format!("{prefix}{file}:"), depth + 1, out);
             }
@@ -76,11 +85,12 @@ fn is_name_char(c: char) -> bool {
 
 /// `name` occurs in `text` as a whole word: not as a part of a longer name such as `my-name`.
 fn mentions(text: &str, name: &str) -> bool {
-    text.match_indices(name).any(|(at, _)| {
-        let before = text[..at].chars().next_back();
-        let after = text[at + name.len()..].chars().next();
-        !before.is_some_and(is_name_char) && !after.is_some_and(is_name_char)
-    })
+    !name.is_empty()
+        && text.match_indices(name).any(|(at, _)| {
+            let before = text[..at].chars().next_back();
+            let after = text[at + name.len()..].chars().next();
+            !before.is_some_and(is_name_char) && !after.is_some_and(is_name_char)
+        })
 }
 
 /// Searches the files of the installed agents, commands and skills for the given skill names.
@@ -92,6 +102,7 @@ pub fn scan(
     catalog: &Catalog,
 ) -> References {
     let mut out = References::new();
+    let names: Vec<&str> = names.iter().copied().filter(|n| !n.is_empty()).collect();
     if names.is_empty() {
         return out;
     }
@@ -179,10 +190,14 @@ pub fn scan(
         if !seen.insert((reference.clone(), path)) {
             continue;
         }
+        // Regular files of a sane size only: a FIFO or a device would block the scan.
+        if !fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() <= MAX_FILE_BYTES) {
+            continue;
+        }
         let Ok(text) = fs::read_to_string(path) else {
             continue;
         };
-        for name in names {
+        for name in &names {
             let itself = reference.kind == ReferenceKind::Skill && reference.name == *name;
             if !itself && mentions(&text, name) {
                 let refs = out.entry((*name).to_owned()).or_default();
@@ -289,6 +304,81 @@ mod tests {
             ["agent flow", "command team:audit"]
         );
         assert!(!refs.contains_key("lonely"));
+    }
+
+    #[test]
+    fn every_command_location_is_searched() {
+        let home = tempfile::tempdir().unwrap();
+        let h = home.path();
+        for (i, rel) in [
+            ".config/opencode/commands/a.md",
+            ".config/opencode/command/b.md",
+            ".copilot/prompts/c.prompt.md",
+            "repo/.claude/commands/d.md",
+            "repo/.opencode/commands/e.md",
+            "repo/.opencode/command/f.md",
+            "repo/.github/prompts/g.prompt.md",
+        ]
+        .iter()
+        .enumerate()
+        {
+            write(h, rel, &format!("Use target-skill ({i})."));
+        }
+        let refs = run(h, &["target-skill"]);
+        let names: Vec<&str> = refs["target-skill"]
+            .iter()
+            .map(|r| r.name.as_str())
+            .collect();
+        assert_eq!(names, ["a", "b", "c", "d", "e", "f", "g"]);
+    }
+
+    #[test]
+    fn deep_folders_symlinks_big_files_and_empty_names_are_left_out() {
+        let home = tempfile::tempdir().unwrap();
+        let h = home.path();
+        write(h, ".claude/commands/a/b/c/ok.md", "target-skill");
+        write(h, ".claude/commands/a/b/c/d/too-deep.md", "target-skill");
+        write(
+            h,
+            ".claude/commands/big.md",
+            &format!("target-skill{}", " ".repeat(2 << 20)),
+        );
+        write(h, ".claude/commands/binary.md", "");
+        fs::write(h.join(".claude/commands/binary.md"), [0xff, 0xfe, 0x00]).unwrap();
+        #[cfg(unix)]
+        {
+            write(h, "elsewhere/linked.md", "target-skill");
+            std::os::unix::fs::symlink(h.join("elsewhere"), h.join(".claude/commands/link"))
+                .unwrap();
+            std::os::unix::fs::symlink(h.join(".claude/commands"), h.join(".claude/commands/loop"))
+                .unwrap();
+        }
+        let refs = run(h, &["target-skill", ""]);
+        let names: Vec<&str> = refs["target-skill"]
+            .iter()
+            .map(|r| r.name.as_str())
+            .collect();
+        assert_eq!(names, ["a:b:c:ok"]);
+        assert!(!refs.contains_key(""));
+    }
+
+    #[test]
+    fn an_agent_or_command_with_the_name_of_the_skill_still_counts() {
+        let home = tempfile::tempdir().unwrap();
+        let h = home.path();
+        write(
+            h,
+            ".claude/agents/same.md",
+            "---\nname: same\ndescription: d\n---\nsame is the skill.",
+        );
+        write(
+            h,
+            ".claude/skills/same/SKILL.md",
+            "---\nname: same\ndescription: d\n---\nsame",
+        );
+        let refs = run(h, &["same"]);
+        assert_eq!(refs["same"].len(), 1);
+        assert_eq!(refs["same"][0].label(), "agent same");
     }
 
     #[test]

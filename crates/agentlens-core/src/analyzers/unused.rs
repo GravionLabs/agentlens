@@ -187,10 +187,9 @@ pub fn analyze(
 
     items.sort_by(|a, b| {
         let count = |i: &UnusedItem| i.overhead_tokens.map(|t| t.count);
-        a.referenced_by
-            .is_empty()
-            .cmp(&b.referenced_by.is_empty())
-            .reverse()
+        // Skills that something names come last.
+        (!a.referenced_by.is_empty())
+            .cmp(&!b.referenced_by.is_empty())
             .then_with(|| count(b).cmp(&count(a)))
             .then_with(|| a.kind.cmp(&b.kind))
             .then_with(|| a.name.cmp(&b.name))
@@ -435,6 +434,18 @@ mod tests {
         );
         let names: Vec<&str> = r.items.iter().map(|i| i.name.as_str()).collect();
         assert_eq!(names, ["used", "other", "idle"]);
+
+        // Several referenced skills keep the order by cost and name among themselves.
+        refs.insert("other".into(), vec![reference.clone()]);
+        let r = analyze(
+            &skills,
+            &Catalog::default(),
+            &ContextReport::default(),
+            &[],
+            &refs,
+        );
+        let names: Vec<&str> = r.items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["used", "idle", "other"]);
         assert_eq!(r.items[2].referenced_by, [reference]);
         assert!(r.items[0].referenced_by.is_empty());
     }

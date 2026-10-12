@@ -105,7 +105,7 @@ pub fn advice_run(
     );
     AdviceRun {
         report: advice::analyze_with(&run.report, &references),
-        warnings: run.warnings,
+        warnings: run.warnings + catalog.warnings.len() as u64,
         errors: run.errors,
     }
 }

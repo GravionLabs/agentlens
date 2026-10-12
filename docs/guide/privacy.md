@@ -4,7 +4,7 @@ AgentLens works on files that already exist on your machine and is built so that
 
 ## What it reads
 
-- The session files of the [sources](sources.md), the installed skills and agents, the instruction files and the names of configured MCP servers. MCP configuration files are read for server names only. The files of agents, commands and skills are searched for the names of unused skills; only the name of the file that mentions one is kept.
+- The session files of the [sources](sources.md), the installed skills and agents, the instruction files and the names of configured MCP servers. MCP configuration files are read for server names only. The files of agents, commands and skills are searched for the names of unused skills; only the kind and name of the agent, command or skill that mentions one is kept (files over 1 MiB and symlinked folders are skipped).
 - It reads the content of prompts and responses only as far as the analyses need their size or their metadata (token usage, tool names, outcomes, timestamps), and **no report contains a prompt, a response, a tool argument, a tool result or the content of a file**. A test of the MCP server runs a session full of marker texts through every tool and checks that none of them comes out.
 - Paths of projects and instruction files, names of skills, tools and models do appear in reports.
 
