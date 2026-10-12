@@ -413,3 +413,30 @@ fn a_record_without_tokens_and_a_session_with_records_and_shutdown_count_once() 
     );
     assert_eq!(u[0].input, 100);
 }
+
+#[test]
+fn malformed_usage_records_are_skipped_and_missing_fields_stay_unknown() {
+    let home = TempHome::new();
+    let events = [
+        r#"{"type":"session.start","data":{"sessionId":"cp-5","context":{"cwd":"/work/x"}},"id":"a","timestamp":"2026-10-05T08:00:00.000Z","parentId":null}"#,
+        // Later in the file but earlier in time.
+        r#"{"type":"session.usage_record","data":{"usage":{"model":"late","inputTokens":50,"outputTokens":5}},"id":"b","timestamp":"2026-10-05T08:00:09.000Z","parentId":null}"#,
+        r#"{"type":"session.usage_record","data":{"usage":{"model":"early","inputTokens":100,"outputTokens":10,"cacheReadTokens":100}},"id":"c","timestamp":"2026-10-05T08:00:02.000Z","parentId":null}"#,
+        r#"{"type":"session.usage_record","data":{},"id":"d","timestamp":"2026-10-05T08:00:03.000Z","parentId":null}"#,
+        r#"{"type":"session.usage_record","data":{"usage":{"model":"bad","inputTokens":"many","outputTokens":null}},"id":"e","timestamp":"2026-10-05T08:00:04.000Z","parentId":null}"#,
+        r#"{"type":"session.usage_record","data":{"usage":"nope"},"id":"f","timestamp":"2026-10-05T08:00:05.000Z","parentId":null}"#,
+    ];
+    let path = home.path().join(format!("{STATE}/cp-5/events.jsonl"));
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, events.join("\n")).unwrap();
+    let se = read_all(&home).remove(0);
+    assert!(se.warnings.is_empty(), "{:?}", se.warnings);
+    let u = usages(&se);
+    let models: Vec<_> = u.iter().map(|u| u.model.as_deref().unwrap()).collect();
+    assert_eq!(models, ["early", "late"], "in time order");
+    assert_eq!(u[0].input, 0, "all of the prompt was cached");
+    assert_eq!(
+        u[0].premium_requests, None,
+        "no cost recorded: unknown, not zero"
+    );
+}

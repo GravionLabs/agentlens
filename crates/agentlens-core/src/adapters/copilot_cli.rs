@@ -448,6 +448,7 @@ fn parse_session(
 
     // Per-request rows when the store has them, else the usage records of the event log, else the
     // shutdown totals (which the records add up to, so they are not read as well).
+    // All or nothing per session: a store that has only some of the rows of a session is used as it is.
     let rows = if rows.is_empty() { records } else { rows };
     if rows.is_empty() {
         for (at, usages) in shutdowns {
@@ -495,12 +496,12 @@ fn record_usage(u: &Value) -> Option<Usage> {
         u64_of(u, "cacheWriteTokens"),
     );
     let output = u64_of(u, "outputTokens");
-    if input + output == 0 {
+    if input == 0 && output == 0 && cache_read == 0 && cache_write == 0 {
         return None;
     }
     Some(Usage {
         model: str_of(u, "model").map(str::to_owned),
-        input: input.saturating_sub(cache_read + cache_write),
+        input: input.saturating_sub(cache_read.saturating_add(cache_write)),
         output,
         cache_read,
         cache_write,
