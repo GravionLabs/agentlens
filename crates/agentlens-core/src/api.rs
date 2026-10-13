@@ -128,14 +128,22 @@ pub fn cli_tools_status(ctx: &Context, bin_dir: &Path) -> Result<Answer<CliTools
 }
 
 /// Links (or, in an AppImage, copies) the command line tools into `~/.local/bin`, on the user's click.
+/// An error where the action is not offered (Linux packages, Windows): nothing is written there.
 pub fn install_cli_tools(ctx: &Context, bin_dir: &Path) -> Result<Answer<CliTools>, String> {
+    if !cli_tools::offered(&ctx.env) {
+        return Err(cli_tools::not_offered_reason(&ctx.env).to_string());
+    }
     let data = cli_tools::install(&ctx.env, bin_dir);
     let errors = data.errors();
     answer(data, 0, errors)
 }
 
 /// Removes the links (or copies) [`install_cli_tools`] made; anything else in `~/.local/bin` stays.
+/// An error where the action is not offered, like [`install_cli_tools`].
 pub fn remove_cli_tools(ctx: &Context, bin_dir: &Path) -> Result<Answer<CliTools>, String> {
+    if !cli_tools::offered(&ctx.env) {
+        return Err(cli_tools::not_offered_reason(&ctx.env).to_string());
+    }
     let data = cli_tools::remove(&ctx.env, bin_dir);
     let errors = data.errors();
     answer(data, 0, errors)

@@ -38,7 +38,8 @@
       }
     ],
     "foreign": [],
-    "note": null
+    "note": null,
+    "error": null
   },
   "warnings": 0,
   "errors": []

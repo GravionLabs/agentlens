@@ -411,9 +411,12 @@ export interface CliTools {
   method: CliToolMethod;
   dir: string;
   created_dir: boolean;
+  /** Whether dir is on the PATH of the application process (a shell's PATH can differ). */
   on_path: boolean;
   profile_lines: ProfileLine[];
   tools: CliTool[];
   foreign: string[];
   note: string | null;
+  /** Why the whole call did nothing (for example a temporary location of the application). */
+  error: string | null;
 }

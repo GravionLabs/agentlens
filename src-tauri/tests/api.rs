@@ -250,12 +250,10 @@ fn json_samples_for_the_frontend_are_up_to_date() {
             )
             .unwrap(),
         ),
-        ("cli_tools", {
-            // Samples never offer the action: the page outside Tauri has no binaries to link.
-            let mut answer = json(&api::cli_tools_status(&ctx, &dir.path().join("app")).unwrap());
-            answer["data"]["offered"] = Value::Bool(false);
-            serde_json::to_string_pretty(&answer).unwrap()
-        }),
+        (
+            "cli_tools",
+            serde_json::to_string_pretty(&cli_tools_sample()).unwrap(),
+        ),
     ];
     let home = dir.path().display().to_string().replace('\\', "\\\\");
     let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/app/core/samples");
@@ -408,6 +406,65 @@ fn unused_csv_follows_the_all_toggle_and_overview_has_no_csv() {
     assert!(err.contains("unknown section"), "{err}");
 }
 
+/// The status of the command line tools as the sample shows it, set field by field so that it is the
+/// same on every platform (the real status depends on the platform and its PATH). Samples never offer
+/// the action: the page outside Tauri has no binaries to link.
+fn cli_tools_sample() -> api::Answer<api::CliTools> {
+    use agentlens_core::cli_tools::{Method, ProfileLine, State, Tool};
+    use std::path::PathBuf;
+    let line = r#"export PATH="$HOME/.local/bin:$PATH""#.to_string();
+    let tool = |name: &str| Tool {
+        name: name.to_string(),
+        path: PathBuf::from(format!("/home/user/.local/bin/{name}")),
+        target: PathBuf::from(format!("/home/user/app/{name}")),
+        state: State::Missing,
+        action: None,
+        error: None,
+    };
+    api::Answer {
+        schema_version: agentlens_core::report::SCHEMA_VERSION,
+        data: api::CliTools {
+            supported: true,
+            offered: false,
+            method: Method::Symlink,
+            dir: PathBuf::from("/home/user/.local/bin"),
+            created_dir: false,
+            on_path: false,
+            profile_lines: vec![
+                ProfileLine {
+                    shell: "zsh".to_string(),
+                    file: "~/.zshrc".to_string(),
+                    line: line.clone(),
+                },
+                ProfileLine {
+                    shell: "bash".to_string(),
+                    file: "~/.bashrc".to_string(),
+                    line,
+                },
+            ],
+            tools: vec![tool("agentlens"), tool("agentlens-mcp")],
+            foreign: Vec::new(),
+            note: None,
+            error: None,
+        },
+        warnings: 0,
+        errors: Vec::new(),
+    }
+}
+
+#[test]
+fn the_cli_tools_sample_has_the_shape_of_a_real_status() {
+    let (dir, ctx) = setup();
+    let real = json(&api::cli_tools_status(&ctx, &dir.path().join("app")).unwrap());
+    let sample = json(&cli_tools_sample());
+    assert_eq!(keys(&real), keys(&sample));
+    assert_eq!(keys(&real["data"]), keys(&sample["data"]));
+    assert_eq!(
+        keys(&real["data"]["tools"][0]),
+        keys(&sample["data"]["tools"][0])
+    );
+}
+
 #[test]
 fn cli_tools_answers_have_the_shape_of_the_typescript_types() {
     let (dir, ctx) = setup();
@@ -419,6 +476,7 @@ fn cli_tools_answers_have_the_shape_of_the_typescript_types() {
         [
             "created_dir",
             "dir",
+            "error",
             "foreign",
             "method",
             "note",
