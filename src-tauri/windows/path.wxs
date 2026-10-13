@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Adds the install directory (agentlens.exe and agentlens-mcp.exe) to the user PATH. -->
+<!--
+  Adds the install directory (agentlens.exe and agentlens-mcp.exe) to the user PATH.
+  The bundler's MSI is per machine (InstallScope="perMachine", Program Files), but this
+  component is per user: Windows Installer writes HKCU of the user who runs the
+  installation, so only that user gets the PATH entry, and only an uninstall by that
+  user removes it. Other users of the machine run the programs by their full path.
+-->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Fragment>
     <DirectoryRef Id="INSTALLDIR">

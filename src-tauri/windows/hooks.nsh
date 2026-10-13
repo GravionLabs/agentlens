@@ -2,20 +2,31 @@
 ; `agentlens` and `agentlens-mcp` are found in a new terminal.
 ;
 ; Per-user install: HKCU\Environment\Path (no admin rights needed).
-; Per-machine install: the machine PATH, only when the installer is elevated.
+; Per-machine install: the machine PATH, only when the installer is elevated
+; and the install directory is under Program Files (writable by admins only).
 ; The value is kept as REG_EXPAND_SZ; other entries are never changed.
 ;
 ; Tauri's NSIS build (stock NSIS 3.11 plus nsis_tauri_utils, no EnVar plugin, no
 ; large-strings build) caps strings at 1024 characters, and ReadRegStr truncates
 ; silently. Writing a truncated PATH back would destroy entries, so PATH is left
 ; untouched when the old value is near the cap or the new one would exceed it.
+;
+; Every case that leaves PATH untouched says why in the details log.
 
 !include "LogicLib.nsh"
+!include "WinMessages.nsh" ; HWND_BROADCAST, WM_SETTINGCHANGE
 
+!define AGENTLENS_MACHINE_ENV "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+
+; Defines ${un}AgentLensEditPath, once for the installer ("") and once for the
+; uninstaller ("un."): NSIS only lets uninstaller sections call un. functions.
+;
 ; Edits the PATH entry list of one registry root.
 ;   Push mode ("add" or "remove"), push root ("HKCU" or "HKLM"), Call.
 ; Entries are compared exactly (case-insensitive, as Windows does).
-Function AgentLensEditPath
+; All registers it uses are restored.
+!macro AgentLensDefineEditPath un
+Function ${un}AgentLensEditPath
   Exch $R9 ; root
   Exch
   Exch $R8 ; mode
@@ -28,8 +39,51 @@ Function AgentLensEditPath
   Push $6
   Push $7
 
+  ; an entry with ";" would split into two, "%" would be expanded
+  StrCpy $5 0
+  ${Do}
+    StrCpy $6 $INSTDIR 1 $5
+    ${If} $6 == ""
+      ${Break}
+    ${EndIf}
+    ${If} $6 == ";"
+    ${OrIf} $6 == "%"
+      DetailPrint "AgentLens: PATH not changed, the install directory contains ';' or '%': $INSTDIR"
+      Goto done
+    ${EndIf}
+    IntOp $5 $5 + 1
+  ${Loop}
+
   ${If} $R9 == "HKLM"
-    ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path"
+    UserInfo::GetAccountType
+    Pop $0
+    ${If} $0 != "Admin"
+      DetailPrint "AgentLens: machine PATH not changed, the installer is not elevated"
+      Goto done
+    ${EndIf}
+    ; a directory outside Program Files may be writable by other users, who
+    ; could then plant programs on every user's PATH
+    StrCpy $3 0
+    ${ForEach} $1 0 1 + 1
+      ${If} $1 == 0
+        StrCpy $2 $PROGRAMFILES
+      ${Else}
+        StrCpy $2 $PROGRAMFILES64
+      ${EndIf}
+      StrLen $5 $2
+      StrCpy $6 $INSTDIR $5
+      StrCpy $7 $INSTDIR 1 $5
+      ${If} $2 != ""
+      ${AndIf} $6 == $2
+      ${AndIf} $7 == "\"
+        StrCpy $3 1
+      ${EndIf}
+    ${Next}
+    ${If} $3 == 0
+      DetailPrint "AgentLens: machine PATH not changed, the install directory is not under Program Files: $INSTDIR"
+      Goto done
+    ${EndIf}
+    ReadRegStr $0 HKLM "${AGENTLENS_MACHINE_ENV}" "Path"
   ${Else}
     ReadRegStr $0 HKCU "Environment" "Path"
   ${EndIf}
@@ -37,6 +91,7 @@ Function AgentLensEditPath
   ; 1023 is the longest string NSIS holds; a value this long may be cut off
   StrLen $7 $0
   ${If} $7 >= 1023
+    DetailPrint "AgentLens: PATH not changed, it is too long to edit safely ($7 characters)"
     Goto done
   ${EndIf}
 
@@ -90,6 +145,7 @@ Function AgentLensEditPath
       IntOp $7 $7 + $5
       IntOp $7 $7 + 1
       ${If} $7 > 1023
+        DetailPrint "AgentLens: PATH not changed, the new value would be too long ($7 characters)"
         Goto done
       ${EndIf}
       StrCpy $2 "$2;$INSTDIR"
@@ -102,7 +158,7 @@ Function AgentLensEditPath
 
   ${If} $3 == 2
     ${If} $R9 == "HKLM"
-      WriteRegExpandStr HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path" $2
+      WriteRegExpandStr HKLM "${AGENTLENS_MACHINE_ENV}" "Path" $2
     ${Else}
       WriteRegExpandStr HKCU "Environment" "Path" $2
     ${EndIf}
@@ -120,48 +176,43 @@ Function AgentLensEditPath
   Pop $R8
   Pop $R9
 FunctionEnd
+!macroend
 
-; Per-user install touches HKCU; per-machine install touches HKLM, and only
-; when elevated.
+!insertmacro AgentLensDefineEditPath ""
+!insertmacro AgentLensDefineEditPath "un."
+
+!macro AgentLensEditPathCall un mode root
+  Push "${mode}"
+  Push "${root}"
+  Call ${un}AgentLensEditPath
+!macroend
+
+; Per-user install touches HKCU; per-machine install touches HKLM.
 ; $MultiUser.InstallMode exists only in the template's "both" install mode
 ; (MultiUser.nsh is not included otherwise), so the mode of the bundle
 ; (${INSTALLMODE}: currentUser, perMachine or both) decides at compile time.
-!macro AgentLensPathMachine mode
-  UserInfo::GetAccountType
-  Pop $0
-  ${If} $0 == "Admin"
-    Push "${mode}"
-    Push "HKLM"
-    Call AgentLensEditPath
-  ${EndIf}
-!macroend
-
-!macro AgentLensPathUser mode
-  Push "${mode}"
-  Push "HKCU"
-  Call AgentLensEditPath
-!macroend
-
-!macro AgentLensPath mode
+; The template defines INSTALLMODE after it includes this file, which is fine:
+; a macro body is expanded where it is inserted.
+!macro AgentLensPath un mode
   !if "${INSTALLMODE}" == "perMachine"
-    !insertmacro AgentLensPathMachine "${mode}"
+    !insertmacro AgentLensEditPathCall "${un}" "${mode}" "HKLM"
   !else if "${INSTALLMODE}" == "both"
     ${If} $MultiUser.InstallMode == "AllUsers"
-      !insertmacro AgentLensPathMachine "${mode}"
+      !insertmacro AgentLensEditPathCall "${un}" "${mode}" "HKLM"
     ${Else}
-      !insertmacro AgentLensPathUser "${mode}"
+      !insertmacro AgentLensEditPathCall "${un}" "${mode}" "HKCU"
     ${EndIf}
   !else
-    !insertmacro AgentLensPathUser "${mode}"
+    !insertmacro AgentLensEditPathCall "${un}" "${mode}" "HKCU"
   !endif
   ; tell running programs (Explorer, new terminals) that the environment changed
   SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-  !insertmacro AgentLensPath "add"
+  !insertmacro AgentLensPath "" "add"
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
-  !insertmacro AgentLensPath "remove"
+  !insertmacro AgentLensPath "un." "remove"
 !macroend

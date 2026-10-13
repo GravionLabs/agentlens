@@ -22,6 +22,7 @@ csv = "1"
 insta = { version = "1", features = ["json"] }
 jiff = { version = "0.2", features = ["serde"] }
 predicates = "3"
+roxmltree = "0.21"
 rusqlite = { version = "0.37", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
