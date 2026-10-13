@@ -4,6 +4,11 @@
 ; Per-user install: HKCU\Environment\Path (no admin rights needed).
 ; Per-machine install: the machine PATH, only when the installer is elevated.
 ; The value is kept as REG_EXPAND_SZ; other entries are never changed.
+;
+; Tauri's NSIS build (stock NSIS 3.11 plus nsis_tauri_utils, no EnVar plugin, no
+; large-strings build) caps strings at 1024 characters, and ReadRegStr truncates
+; silently. Writing a truncated PATH back would destroy entries, so PATH is left
+; untouched when the old value is near the cap or the new one would exceed it.
 
 !include "LogicLib.nsh"
 
@@ -21,11 +26,18 @@ Function AgentLensEditPath
   Push $4
   Push $5
   Push $6
+  Push $7
 
   ${If} $R9 == "HKLM"
     ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" "Path"
   ${Else}
     ReadRegStr $0 HKCU "Environment" "Path"
+  ${EndIf}
+
+  ; 1023 is the longest string NSIS holds; a value this long may be cut off
+  StrLen $7 $0
+  ${If} $7 >= 1023
+    Goto done
   ${EndIf}
 
   ; $0 = old value, $1 = remaining text, $2 = rebuilt value, $3 = found flag
@@ -50,8 +62,8 @@ Function AgentLensEditPath
     ${If} $4 == ""
       ; skip empty segments
     ${ElseIf} $4 == $INSTDIR
+      StrCpy $3 1
       ${If} $R8 != "remove"
-      ${AndIf} $R8 != "remove"
         ${If} $2 == ""
           StrCpy $2 $4
         ${Else}
@@ -72,6 +84,14 @@ Function AgentLensEditPath
     ${If} $2 == ""
       StrCpy $2 $INSTDIR
     ${Else}
+      ; the new value must still fit into one NSIS string
+      StrLen $7 $2
+      StrLen $5 $INSTDIR
+      IntOp $7 $7 + $5
+      IntOp $7 $7 + 1
+      ${If} $7 > 1023
+        Goto done
+      ${EndIf}
       StrCpy $2 "$2;$INSTDIR"
     ${EndIf}
     StrCpy $3 2 ; changed
@@ -88,6 +108,8 @@ Function AgentLensEditPath
     ${EndIf}
   ${EndIf}
 
+  done:
+  Pop $7
   Pop $6
   Pop $5
   Pop $4
@@ -101,20 +123,37 @@ FunctionEnd
 
 ; Per-user install touches HKCU; per-machine install touches HKLM, and only
 ; when elevated.
-!macro AgentLensPath mode
-  ${If} $MultiUser.InstallMode == "AllUsers"
-    UserInfo::GetAccountType
-    Pop $0
-    ${If} $0 == "Admin"
-      Push "${mode}"
-      Push "HKLM"
-      Call AgentLensEditPath
-    ${EndIf}
-  ${Else}
+; $MultiUser.InstallMode exists only in the template's "both" install mode
+; (MultiUser.nsh is not included otherwise), so the mode of the bundle
+; (${INSTALLMODE}: currentUser, perMachine or both) decides at compile time.
+!macro AgentLensPathMachine mode
+  UserInfo::GetAccountType
+  Pop $0
+  ${If} $0 == "Admin"
     Push "${mode}"
-    Push "HKCU"
+    Push "HKLM"
     Call AgentLensEditPath
   ${EndIf}
+!macroend
+
+!macro AgentLensPathUser mode
+  Push "${mode}"
+  Push "HKCU"
+  Call AgentLensEditPath
+!macroend
+
+!macro AgentLensPath mode
+  !if "${INSTALLMODE}" == "perMachine"
+    !insertmacro AgentLensPathMachine "${mode}"
+  !else if "${INSTALLMODE}" == "both"
+    ${If} $MultiUser.InstallMode == "AllUsers"
+      !insertmacro AgentLensPathMachine "${mode}"
+    ${Else}
+      !insertmacro AgentLensPathUser "${mode}"
+    ${EndIf}
+  !else
+    !insertmacro AgentLensPathUser "${mode}"
+  !endif
   ; tell running programs (Explorer, new terminals) that the environment changed
   SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 !macroend
