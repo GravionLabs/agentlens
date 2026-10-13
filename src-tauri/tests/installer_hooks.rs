@@ -69,3 +69,60 @@ fn existing_bundle_settings_are_kept() {
     assert_eq!(bundle["externalBin"].as_array().map(Vec::len), Some(2));
     assert_eq!(bundle["active"], true);
 }
+
+fn wix_text() -> String {
+    std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("windows/path.wxs"))
+        .expect("WiX fragment exists")
+}
+
+#[test]
+fn wix_fragment_is_included_and_its_component_referenced() {
+    let wix = &config()["bundle"]["windows"]["wix"];
+    assert_eq!(
+        wix["fragmentPaths"],
+        serde_json::json!(["windows/path.wxs"])
+    );
+    assert_eq!(
+        wix["componentRefs"],
+        serde_json::json!(["AgentLensUserPath"])
+    );
+    assert!(wix_text().contains("Component Id=\"AgentLensUserPath\""));
+}
+
+#[test]
+fn wix_fragment_sets_the_user_path_and_removes_it_on_uninstall() {
+    let text = wix_text();
+    for attr in [
+        "Name=\"PATH\"",
+        "Action=\"set\"",
+        "Part=\"last\"",
+        "System=\"no\"",
+        "Permanent=\"no\"",
+        "Value=\"[INSTALLDIR]\"",
+    ] {
+        assert!(text.contains(attr), "missing {attr}");
+    }
+    assert!(text.contains("<DirectoryRef Id=\"INSTALLDIR\">"));
+    assert!(text.contains("KeyPath=\"yes\""));
+}
+
+#[test]
+fn wix_fragment_has_a_fixed_guid_and_balanced_tags() {
+    let text = wix_text();
+    let guid = text
+        .split("Guid=\"")
+        .nth(1)
+        .expect("guid")
+        .split('"')
+        .next()
+        .unwrap();
+    assert_eq!(guid.len(), 36);
+    assert!(guid.chars().all(|c| c.is_ascii_hexdigit() || c == '-'));
+    for tag in ["Wix", "Fragment", "DirectoryRef", "Component"] {
+        assert_eq!(
+            text.matches(&format!("<{tag}")).count(),
+            text.matches(&format!("</{tag}>")).count(),
+            "{tag}"
+        );
+    }
+}
