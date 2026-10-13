@@ -664,17 +664,23 @@ mod tests {
         assert!(!bin_home(&env).exists());
     }
 
+    /// An environment whose `PATH` uses the separator of the platform.
+    fn with_path(entries: &[&str]) -> Env {
+        let path = std::env::join_paths(entries).unwrap();
+        Env::for_home("/home/user").with_var("PATH", path.to_str().unwrap())
+    }
+
     #[test]
     fn path_check_finds_local_bin() {
-        let env = Env::for_home("/home/user").with_var("PATH", "/usr/bin:/home/user/.local/bin/");
+        let env = with_path(&["/usr/bin", "/home/user/.local/bin/"]);
         assert!(on_path(&env, &bin_home(&env)));
-        let env = Env::for_home("/home/user").with_var("PATH", "/usr/bin:~/.local/bin");
+        let env = with_path(&["/usr/bin", "~/.local/bin"]);
         assert!(on_path(&env, &bin_home(&env)));
     }
 
     #[test]
     fn path_check_misses_local_bin() {
-        let env = Env::for_home("/home/user").with_var("PATH", "/usr/bin:/home/other/.local/bin");
+        let env = with_path(&["/usr/bin", "/home/other/.local/bin"]);
         assert!(!on_path(&env, &bin_home(&env)));
         assert!(!on_path(
             &Env::for_home("/home/user"),
