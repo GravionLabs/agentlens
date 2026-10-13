@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "data": {
+    "supported": true,
+    "offered": false,
+    "method": "symlink",
+    "dir": "/home/user/.local/bin",
+    "created_dir": false,
+    "on_path": false,
+    "profile_lines": [
+      {
+        "shell": "zsh",
+        "file": "~/.zshrc",
+        "line": "export PATH=\"$HOME/.local/bin:$PATH\""
+      },
+      {
+        "shell": "bash",
+        "file": "~/.bashrc",
+        "line": "export PATH=\"$HOME/.local/bin:$PATH\""
+      }
+    ],
+    "tools": [
+      {
+        "name": "agentlens",
+        "path": "/home/user/.local/bin/agentlens",
+        "target": "/home/user/app/agentlens",
+        "state": "missing",
+        "action": null,
+        "error": null
+      },
+      {
+        "name": "agentlens-mcp",
+        "path": "/home/user/.local/bin/agentlens-mcp",
+        "target": "/home/user/app/agentlens-mcp",
+        "state": "missing",
+        "action": null,
+        "error": null
+      }
+    ],
+    "foreign": [],
+    "note": null,
+    "error": null
+  },
+  "warnings": 0,
+  "errors": []
+}

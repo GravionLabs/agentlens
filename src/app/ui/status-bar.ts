@@ -3,15 +3,16 @@ import { SAMPLE_MODE } from "../core/ipc";
 import { TokenFormatService } from "../core/token-format.service";
 import { UpdateService } from "../core/update.service";
 import { ZoomService } from "../core/zoom.service";
+import { CliTools } from "./cli-tools";
 import { UpdateStatus } from "./update-status";
 
 /**
- * The bar at the bottom: the running version, the sample badge, the update check, the token
- * format switch (full or rounded counts) and the interface size controls.
+ * The bar at the bottom: the running version, the sample badge, the token format switch (full or
+ * rounded counts), the interface size controls, the command line tools and the update check.
  */
 @Component({
   selector: "app-status-bar",
-  imports: [UpdateStatus],
+  imports: [CliTools, UpdateStatus],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <span class="version">
@@ -103,6 +104,7 @@ import { UpdateStatus } from "./update-status";
         </button>
       </span>
       @if (!sampleMode) {
+        <app-cli-tools />
         <app-update-status />
       }
     </span>

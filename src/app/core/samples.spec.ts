@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   AdviceReport,
   Answer,
+  CliTools,
   CompareReport,
   ContextReport,
   CostData,
@@ -14,6 +15,7 @@ import type {
   UnusedReport,
 } from "./types";
 import advice from "./samples/advice.json";
+import cliTools from "./samples/cli_tools.json";
 import compare from "./samples/compare.json";
 import context from "./samples/context.json";
 import cost from "./samples/cost.json";
@@ -38,6 +40,7 @@ describe("samples from the backend", () => {
       flow as unknown as Answer<FlowData>,
       cost as unknown as Answer<CostData>,
       efficiency as unknown as Answer<EfficiencyReport>,
+      cliTools as unknown as Answer<CliTools>,
       compare as unknown as Answer<CompareReport>,
       sessions as unknown as Answer<SessionSummary[]>,
       timeline as unknown as Answer<Timeline>,
@@ -64,5 +67,11 @@ describe("samples from the backend", () => {
     expect(c.what_if?.target).toBe("claude-haiku-4-5");
     const o = (overview as unknown as Answer<SourceOverview[]>).data;
     expect(o.some((x) => !x.found)).toBe(true);
+  });
+});
+
+describe("cli tools sample", () => {
+  it("never offers the action", () => {
+    expect((cliTools as unknown as Answer<CliTools>).data.offered).toBe(false);
   });
 });

@@ -37,13 +37,26 @@ sha256sum -c --ignore-missing SHA256SUMS
 
 Unpack the archive and put `agentlens` and `agentlens-mcp` (the [MCP server](mcp-server.md)) on your `PATH`. The desktop installers contain both programs as well, so with an installer you do not need the archive:
 
-| Installer                       | Where `agentlens` and `agentlens-mcp` are                                           |
-| ------------------------------- | ----------------------------------------------------------------------------------- |
-| Windows `.msi` or setup `.exe`  | the install directory of the application                                            |
-| Linux `.deb` or `.rpm`          | `/usr/bin`, which is on your `PATH` already                                         |
-| macOS `.dmg` and Linux AppImage | inside the application bundle; making them available on the command line is planned |
+| Installer                       | Where `agentlens` and `agentlens-mcp` are                                       |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| Windows `.msi` or setup `.exe`  | the install directory of the application                                        |
+| Linux `.deb` or `.rpm`          | `/usr/bin`, which is on your `PATH` already                                     |
+| macOS `.dmg` and Linux AppImage | inside the application; the action *Install command line tools* makes them available (see below) |
 
-The Linux and macOS installers do not change your `PATH`. The Windows installers do, as described next.
+The Windows installers add their install directory to your `PATH` (next section). The Linux and macOS installers do not.
+
+### Install command line tools (macOS and AppImage)
+
+On macOS and in an AppImage, click **Install command line tools** in the status bar of the application. It creates `agentlens` and `agentlens-mcp` in `~/.local/bin` (and the folder, if it is missing), and only when you click:
+
+- **macOS:** two symbolic links to the programs inside the application, so they follow every update of the application. Move `AgentLens.app` to `/Applications` first: started from the disk image (`/Volumes/...`) or from where it was downloaded (macOS then runs it from a temporary App Translocation path), the application refuses to install, because the links would break.
+- **AppImage:** two copies of the programs, because the path inside a mounted AppImage changes on every run and a link would break. A copy does not follow an update: after you update the AppImage, click **Install command line tools** again and it replaces the old copies. AgentLens recognizes its own copies by a marker in the programs (it reads the file and never runs it), so an old copy is replaced, not reported as foreign.
+- **Foreign files:** the action never overwrites or removes a file it did not create (your own script, or a link of yours to somewhere else). It names the file and skips it.
+- **Safe replacement:** a new link or copy is written under a temporary name and then renamed over the old one, so a failed install leaves the working one in place.
+- **Remove:** **Remove command line tools** removes only those links and copies (old ones too) and nothing else.
+- **`PATH`:** if `~/.local/bin` is not on your `PATH`, the application shows the line to add for zsh and bash (`export PATH="$HOME/.local/bin:$PATH"`). It never edits a shell profile; you add the line yourself. The check uses the `PATH` the application was started with, which can differ from your shell's: an application started from the macOS Finder or Dock does not read your shell profile, so it may report the folder as missing although your terminal has it. Check with `echo $PATH` in a terminal.
+
+The action is not offered for the `.deb` and `.rpm` packages, which install into `/usr/bin` already, and not on Windows, where the installer adds the program folder to `PATH`. The demo in the browser does not have it.
 
 ### Windows: the `PATH` entry
 

@@ -221,6 +221,35 @@ async fn update_install(app: AppHandle, pending: State<'_, PendingUpdate>) -> Re
     app.restart()
 }
 
+/// The directory that holds the running application's binaries (the CLI and the MCP server sit next to it).
+fn bin_dir() -> Result<std::path::PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|e| format!("cannot find the application: {e}"))?;
+    exe.parent()
+        .map(std::path::Path::to_path_buf)
+        .ok_or_else(|| "cannot find the folder of the application".to_string())
+}
+
+/// The state of the command line tool links; writes nothing.
+#[tauri::command]
+async fn cli_tools_status(ctx: Shared<'_>) -> Result<Answer<api::CliTools>, String> {
+    let dir = bin_dir()?;
+    blocking(&ctx, move |c| api::cli_tools_status(c, &dir)).await
+}
+
+/// Links (or copies) the CLI and the MCP server into `~/.local/bin`.
+#[tauri::command]
+async fn cli_tools_install(ctx: Shared<'_>) -> Result<Answer<api::CliTools>, String> {
+    let dir = bin_dir()?;
+    blocking(&ctx, move |c| api::install_cli_tools(c, &dir)).await
+}
+
+/// Removes the links (or copies) that `cli_tools_install` made.
+#[tauri::command]
+async fn cli_tools_remove(ctx: Shared<'_>) -> Result<Answer<api::CliTools>, String> {
+    let dir = bin_dir()?;
+    blocking(&ctx, move |c| api::remove_cli_tools(c, &dir)).await
+}
+
 /// Starts the application.
 pub fn run() {
     let shared = Context::system().expect("cannot determine the home directory");
@@ -246,7 +275,10 @@ pub fn run() {
             sessions,
             timeline,
             update_check,
-            update_install
+            update_install,
+            cli_tools_status,
+            cli_tools_install,
+            cli_tools_remove
         ])
         .run(tauri::generate_context!())
         .expect("error while running AgentLens");

@@ -1547,3 +1547,10 @@ fn rounded_applies_to_compare_flow_advise_and_context_text_only() {
         assert_eq!(plain, with_flag, "{command}: JSON must not change");
     }
 }
+
+#[test]
+fn the_binary_carries_the_marker_of_the_command_line_tools() {
+    // The desktop application recognizes an old copy in ~/.local/bin by it (without running it).
+    let bin = std::path::Path::new(env!("CARGO_BIN_EXE_agentlens"));
+    assert!(agentlens_core::cli_tools::has_marker(bin));
+}
