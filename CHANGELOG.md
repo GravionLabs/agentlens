@@ -5,7 +5,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [0.10.3] — 2026-10-13
 
 ### Bug Fixes
 - Build PATH with the platform separator in the cli_tools tests
