@@ -18,7 +18,7 @@ client files ─► Adapter ─► normalized events ─► Analyzer ─► repo
 - **Measured vs. estimated:** every token or cost value carries a `measured` flag. Values read from client data are measured; anything computed from file sizes or heuristics is estimated and must be shown as such.
 - **Stable output:** what the analyses print (the JSON of the CLI, the results of the MCP tools, the commands of the application) is a contract. `crates/agentlens-core/tests/output_contract.rs` has a snapshot of every analysis. A change of one is a decision: review the diff, say in the pull request whether it is compatible (a field was added) or breaking (renamed, removed, retyped), and for a breaking change raise `report::SCHEMA_VERSION`, name it in the changelog and update `src/app/core/types.ts` and the samples (`UPDATE_SAMPLES=1 cargo test -p agentlens-app`).
 - **Fail soft:** the client formats are partly undocumented. A malformed or unknown record produces a warning and is skipped; it never aborts a scan or panics.
-- **Read-only:** adapters never write to client data. SQLite files are opened read-only. The only exception is `agentlens mcp-setup --write` (ADR 0004): it registers the MCP server in a client's configuration, is opt-in, makes a backup and can be undone.
+- **Read-only:** adapters never write to client data. SQLite files are opened read-only. There are two exceptions, both opt-in and undoable: `agentlens mcp-setup --write` (ADR 0004) registers the MCP server in a client's configuration and makes a backup; the application's *Install command line tools* action (ADR 0006) writes only `~/.local/bin/agentlens` and `~/.local/bin/agentlens-mcp`, never overwrites a file it did not create, and *Remove command line tools* undoes it.
 - **Timestamps** are `jiff::Timestamp` (UTC instants) everywhere in the model.
 - **Privacy:** tests and fixtures use synthetic data only (no real prompts, file contents, paths of real projects or secrets).
 
@@ -41,7 +41,7 @@ cargo clippy --workspace --exclude agentlens-app --all-targets -- -D warnings
 cargo test --workspace --exclude agentlens-app
 ```
 
-For the application: `pnpm lint && pnpm format:check && pnpm test && pnpm build` and `cargo test -p agentlens-app`.
+For the application: `pnpm lint && pnpm format:check && pnpm test && pnpm build` and `cargo test -p agentlens-app`. Run `scripts/stage-sidecars.sh` (`.ps1` on Windows) once before `cargo test -p agentlens-app` or `pnpm tauri build`: tauri-build needs the staged `externalBin` files in `src-tauri/binaries`.
 
 ## Issue and PR conventions
 

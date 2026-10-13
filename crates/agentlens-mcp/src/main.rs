@@ -14,6 +14,8 @@ stdin and stdout. `agentlens mcp-setup` prints how to register it in a client.";
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Lets the desktop application recognize an old copy of this binary in ~/.local/bin.
+    agentlens_core::cli_tools::embed_marker();
     match std::env::args().nth(1).as_deref() {
         Some("--version" | "-V") => {
             println!("agentlens-mcp {}", env!("CARGO_PKG_VERSION"));

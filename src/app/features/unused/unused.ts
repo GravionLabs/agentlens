@@ -107,6 +107,7 @@ export class Unused {
           ? "unknown"
           : tokens(i.overhead_tokens.count, !i.overhead_tokens.measured),
       estimated: (i) => i.overhead_tokens !== null && !i.overhead_tokens.measured,
+      tokens: true,
       numeric: true,
       title: "Baseline tokens × the requests that carried the item",
     },

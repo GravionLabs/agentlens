@@ -2,7 +2,7 @@ import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, tokens } from "../../core/format";
+import { exactTokens, number, tokens } from "../../core/format";
 import type { AdviceItem, AdviceReport, Finding, FindingKind } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
@@ -66,9 +66,11 @@ export function findingTotal(f: Finding): string | null {
         <p class="lead">
           {{ r.sessions }} sessions, {{ r.installed_skills }} installed skills; their names and
           descriptions cost
-          <strong [class.est]="!r.baseline_total.measured">{{
-            tokens(r.baseline_total.count, !r.baseline_total.measured)
-          }}</strong>
+          <strong
+            [class.est]="!r.baseline_total.measured"
+            [attr.title]="exact(r.baseline_total.count)"
+            >{{ tokens(r.baseline_total.count, !r.baseline_total.measured) }}</strong
+          >
           tokens in the period.
         </p>
         @for (f of r.findings; track f.kind) {
@@ -76,7 +78,7 @@ export function findingTotal(f: Finding): string | null {
             <h3>{{ title(f.kind) }} ({{ f.count }})</h3>
             <p class="muted">{{ f.explanation }}</p>
             @if (total(f); as t) {
-              <p class="total">{{ t }}</p>
+              <p class="total" [attr.title]="exact(f.total?.count)">{{ t }}</p>
             }
             <app-data-table [columns]="columns" [data]="f.items" empty="Nothing to show." />
             @if (f.items.length < f.count) {
@@ -122,6 +124,7 @@ export class Advice {
   protected readonly res = analysis<AdviceReport>("advice");
   protected readonly report = computed(() => this.res.value()?.data ?? null);
   protected readonly tokens = tokens;
+  protected readonly exact = exactTokens;
   protected readonly title = findingTitle;
   protected readonly total = findingTotal;
 
@@ -133,6 +136,7 @@ export class Advice {
       term: "token",
       value: (i) => i.tokens.count,
       text: (i) => tokens(i.tokens.count, !i.tokens.measured),
+      tokens: true,
       estimated: (i) => !i.tokens.measured,
       numeric: true,
     },

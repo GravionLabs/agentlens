@@ -21,7 +21,7 @@ pub fn run(
     filter: &SessionFilter,
     only: &[Source],
     estimator: &dyn TokenEstimator,
-    format: Format,
+    display: output::Display,
 ) -> Result<()> {
     let run = skill_run(registry, env, filter, only, estimator);
     let mut skills: Vec<&SkillStats> = run.report.skills.iter().collect();
@@ -31,7 +31,7 @@ pub fn run(
             .then_with(|| a.name.cmp(&b.name))
     });
 
-    match format {
+    match display.format {
         Format::Json => println!("{}", serde_json::to_string_pretty(&run.report)?),
         Format::Csv => print!("{}", export::csv::skills(&skills)?),
         Format::Table => {
@@ -46,17 +46,17 @@ pub fn run(
                         s.name.clone(),
                         s.invocations.to_string(),
                         s.sessions.to_string(),
-                        output::tokens(s.load),
-                        output::tokens(s.carry.tokens),
-                        output::tokens(s.baseline.tokens),
-                        output::tokens(Tokens::estimated(s.overhead_tokens())),
+                        display.tokens(s.load),
+                        display.tokens(s.carry.tokens),
+                        display.tokens(s.baseline.tokens),
+                        display.tokens(Tokens::estimated(s.overhead_tokens())),
                     ];
                     if with_files {
                         row.insert(2, s.file_uses.to_string());
                     }
                     if with_attribution {
                         row.push(if s.attributed.requests > 0 {
-                            output::tokens(Tokens::measured(attributed_tokens(s)))
+                            display.tokens(Tokens::measured(attributed_tokens(s)))
                         } else {
                             "-".into()
                         });

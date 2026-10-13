@@ -1,7 +1,7 @@
 import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { minutes, number, percent, sourceLabel, tokens } from "../../core/format";
+import { exactTokens, minutes, number, percent, sourceLabel, tokens } from "../../core/format";
 import type { CompareReport, SourceStats } from "../../core/types";
 import { Status } from "../../ui/status";
 
@@ -9,14 +9,24 @@ export interface Metric {
   label: string;
   value: (s: SourceStats) => string;
   estimated?: boolean;
+  /** The exact token count behind `value`, shown as tooltip while counts are rounded. */
+  exact?: (s: SourceStats) => number | null;
 }
 
 /** One metric per row, one source per column. Missing values are `n/a`, never 0. */
 export const METRICS: Metric[] = [
   { label: "Sessions", value: (s) => number(s.sessions) },
   { label: "Requests", value: (s) => number(s.requests) },
-  { label: "Input tokens", value: (s) => number(s.input_tokens) },
-  { label: "Output tokens", value: (s) => number(s.output_tokens) },
+  {
+    label: "Input tokens",
+    value: (s) => tokens(s.input_tokens),
+    exact: (s) => s.input_tokens,
+  },
+  {
+    label: "Output tokens",
+    value: (s) => tokens(s.output_tokens),
+    exact: (s) => s.output_tokens,
+  },
   { label: "Cache hit rate", value: (s) => percent(s.cache_hit_rate) },
   { label: "Tool calls", value: (s) => number(s.tool_calls) },
   { label: "Tool error rate", value: (s) => percent(s.tool_error_rate) },
@@ -28,6 +38,7 @@ export const METRICS: Metric[] = [
         ? tokens(s.skill_overhead_tokens.count, !s.skill_overhead_tokens.measured)
         : "n/a",
     estimated: true,
+    exact: (s) => s.skill_overhead_tokens?.count ?? null,
   },
   { label: "Mean session (min)", value: (s) => minutes(s.mean_session_ms) },
   { label: "Total time (min)", value: (s) => minutes(s.total_duration_ms) },
@@ -72,7 +83,11 @@ export const METRICS: Metric[] = [
                 <tr>
                   <th scope="row">{{ m.label }}</th>
                   @for (s of sources(); track s.source) {
-                    <td class="num" [class.est]="m.estimated && !m.value(s).startsWith('n/a')">
+                    <td
+                      class="num"
+                      [class.est]="m.estimated && !m.value(s).startsWith('n/a')"
+                      [attr.title]="exact(m, s)"
+                    >
                       {{ m.value(s) }}
                     </td>
                   }
@@ -122,6 +137,10 @@ export const METRICS: Metric[] = [
   `,
 })
 export class Compare {
+  protected exact(m: Metric, s: SourceStats): string | null {
+    return exactTokens(m.exact?.(s));
+  }
+
   protected readonly res = analysis<CompareReport>("compare");
   protected readonly sources = computed(() => this.res.value()?.data.sources ?? []);
   protected readonly metrics = METRICS;

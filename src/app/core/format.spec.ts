@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   compact,
   day,
+  exactTokens,
   timeOfDay,
   minutes,
   number,
@@ -13,6 +14,7 @@ import {
   tokens,
   usd,
 } from "./format";
+import { tokenFormat } from "./token-format.service";
 
 describe("format", () => {
   it("groups thousands and marks missing values as n/a", () => {
@@ -55,5 +57,52 @@ describe("format", () => {
     expect(pathLabel("/home/u/a/b")).toBe("a/b");
     expect(pathLabel("claude-sonnet-5-5")).toBe("claude-sonnet-5-5");
     expect(pathLabel("#327")).toBe("#327");
+  });
+});
+
+describe("tokens in rounded mode", () => {
+  afterEach(() => tokenFormat.set("full"));
+
+  it("rounds to two decimals with a unit", () => {
+    tokenFormat.set("rounded");
+    expect(tokens(999)).toBe("999");
+    expect(tokens(1000)).toBe("1.00 k");
+    expect(tokens(2114)).toBe("2.11 k");
+    expect(tokens(999_999)).toBe("1.00 M");
+    expect(tokens(1_000_000)).toBe("1.00 M");
+    expect(tokens(1_549_999)).toBe("1.55 M");
+    expect(tokens(3_200_000_000)).toBe("3.20 B");
+    expect(tokens(999_999_999)).toBe("1.00 B");
+  });
+
+  it("rounds exact ties up and carries into the next unit", () => {
+    tokenFormat.set("rounded");
+    expect(tokens(1125)).toBe("1.13 k");
+    expect(tokens(1005)).toBe("1.00 k");
+    expect(tokens(-999_999)).toBe("-1.00 M");
+  });
+
+  it("gives the exact count for a tooltip only while rounded and at 1,000 or more", () => {
+    expect(exactTokens(2_114_305)).toBeNull();
+    tokenFormat.set("rounded");
+    expect(exactTokens(2_114_305)).toBe("2,114,305");
+    expect(exactTokens(-1500)).toBe("-1,500");
+    expect(exactTokens(999)).toBeNull();
+    expect(exactTokens(null)).toBeNull();
+    expect(exactTokens(undefined)).toBeNull();
+  });
+
+  it("keeps sign, zero, estimates and missing values", () => {
+    tokenFormat.set("rounded");
+    expect(tokens(0)).toBe("0");
+    expect(tokens(-1_550_000)).toBe("-1.55 M");
+    expect(tokens(-5)).toBe("-5");
+    expect(tokens(1_550_000, true)).toBe("~1.55 M");
+    expect(tokens(null)).toBe("n/a");
+    expect(tokens(undefined, true)).toBe("n/a");
+  });
+
+  it("leaves full mode unchanged", () => {
+    expect(tokens(1_550_000)).toBe("1,550,000");
   });
 });

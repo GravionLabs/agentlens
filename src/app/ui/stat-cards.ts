@@ -3,6 +3,8 @@ import { ChangeDetectionStrategy, Component, input } from "@angular/core";
 export interface Stat {
   value: string;
   label: string;
+  /** A tooltip, e.g. the exact count behind a rounded one. */
+  title?: string;
 }
 
 @Component({
@@ -11,7 +13,7 @@ export interface Stat {
   template: `
     <div class="cards">
       @for (s of stats(); track s.label) {
-        <div class="card">
+        <div class="card" [attr.title]="s.title ?? null">
           <div class="v">{{ s.value }}</div>
           <div class="l">{{ s.label }}</div>
         </div>

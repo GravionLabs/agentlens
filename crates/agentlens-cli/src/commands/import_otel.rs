@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::args::Format;
 use crate::output;
 
-pub fn run(env: &Env, file: &Path, format: Format) -> Result<()> {
+pub fn run(env: &Env, file: &Path, display: output::Display) -> Result<()> {
     if !file.is_file() {
         bail!("{} is not a file", file.display());
     }
@@ -51,7 +51,7 @@ pub fn run(env: &Env, file: &Path, format: Format) -> Result<()> {
         .filter(|s| ids.contains(&s.session.id))
         .count();
 
-    match format {
+    match display.format {
         Format::Json => println!(
             "{}",
             serde_json::to_string_pretty(&json!({

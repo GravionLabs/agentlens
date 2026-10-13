@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { tokenFormat } from "../../core/token-format.service";
 import type { ContextKind } from "../../core/types";
 import type { ContextRow } from "../../core/types";
-import { byOwner, inView } from "./context";
+import { byOwner, firstRequestNote, inView } from "./context";
 
 describe("context views", () => {
   const kinds: ContextKind[] = [
@@ -64,5 +65,23 @@ describe("context grouping", () => {
     expect(both[0].tokens).toEqual({ count: 20, measured: true });
     const mixed = byOwner([measured, row("/b", 5, 4)]);
     expect(mixed[0].tokens).toEqual({ count: 15, measured: false });
+  });
+});
+
+describe("first request note", () => {
+  const f = { sessions: 2, total_tokens: 4_228_610, max_tokens: 2_500_000 };
+  afterEach(() => tokenFormat.set("full"));
+
+  it("shows full counts without a title by default", () => {
+    const n = firstRequestNote("claude-code", f);
+    expect(n.text).toContain("holds 2,114,305 tokens on average, at most 2,500,000 (");
+    expect(n.title).toBeNull();
+  });
+
+  it("rounds the counts and keeps the exact ones in the title", () => {
+    tokenFormat.set("rounded");
+    const n = firstRequestNote("claude-code", f);
+    expect(n.text).toContain("holds 2.11 M tokens on average, at most 2.50 M (");
+    expect(n.title).toBe("Average 2,114,305 tokens, at most 2,500,000");
   });
 });

@@ -20,13 +20,14 @@ agentlens report --html report.html  # one self-contained page that works offlin
 
 Every command takes the same filters:
 
-| Flag               | Meaning                                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `--since <WHEN>`   | Only sessions active since a point in time: a duration (`12h`, `30d`, `4w`) or a date (`2026-10-01`).        |
-| `--source <ID>`    | Only this source (repeatable): `claude-code`, `opencode`, `copilot-cli`, `vscode-copilot`.                   |
-| `--project <DIR>`  | Only sessions that ran in this project directory or below it.                                                |
-| `--format <FORMAT>` | `table` (default), `json` or `csv`; see [Reports and export](reports-and-export.md).                        |
-| `--otel <FILE>`    | Add an [OpenTelemetry export](../telemetry.md) to the analysis (repeatable).                                 |
+| Flag                | Meaning                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `--since <WHEN>`    | Only sessions active since a point in time: a duration (`12h`, `30d`, `4w`) or a date (`2026-10-01`).              |
+| `--source <ID>`     | Only this source (repeatable): `claude-code`, `opencode`, `copilot-cli`, `vscode-copilot`.                         |
+| `--project <DIR>`   | Only sessions that ran in this project directory or below it.                                                      |
+| `--format <FORMAT>` | `table` (default), `json` or `csv`; see [Reports and export](reports-and-export.md).                               |
+| `--otel <FILE>`     | Add an [OpenTelemetry export](../telemetry.md) to the analysis (repeatable).                                       |
+| `--rounded`         | Token counts in text tables as `1.55 M`, `2.11 k` or `3.20 B` instead of the full number; JSON and CSV stay exact. |
 
 ## Reading the numbers
 

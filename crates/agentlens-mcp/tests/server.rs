@@ -251,6 +251,13 @@ fn the_binary_answers_version_and_help() {
 }
 
 #[test]
+fn the_binary_carries_the_marker_of_the_command_line_tools() {
+    // The desktop application recognizes an old copy in ~/.local/bin by it (without running it).
+    let bin = Path::new(env!("CARGO_BIN_EXE_agentlens-mcp"));
+    assert!(agentlens_core::cli_tools::has_marker(bin));
+}
+
+#[test]
 fn announces_tools_prompts_and_resources() {
     let home = home();
     let mut client = Client::start(home.path());

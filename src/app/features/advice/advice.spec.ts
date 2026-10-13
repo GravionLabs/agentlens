@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { tokenFormat } from "../../core/token-format.service";
 import type { Finding } from "../../core/types";
 import { findingTitle, findingTotal } from "./advice";
 
@@ -47,5 +48,16 @@ describe("findings", () => {
       ),
     ).toBe("Together they cost 9 tokens, 0.00% of all tokens.");
     expect(findingTotal(finding({ total: null }))).toBeNull();
+  });
+});
+
+describe("advice totals in rounded mode", () => {
+  afterEach(() => tokenFormat.set("full"));
+
+  it("rounds the sentence", () => {
+    tokenFormat.set("rounded");
+    expect(findingTotal(finding({ share_of_baseline: null }))).toBe(
+      "Together they cost ~12.24 M tokens.",
+    );
   });
 });

@@ -15,3 +15,4 @@ LICENSE
 src/app/core/samples
 site/.vitepress/dist
 site/.vitepress/cache
+src-tauri/windows
