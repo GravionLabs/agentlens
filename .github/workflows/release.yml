@@ -32,5 +32,8 @@ jobs:
       cli-binary: agentlens agentlens-mcp
       tauri: true
       installer-args: --config src-tauri/tauri.bundle.conf.json
+      # The installers also carry the CLI and the MCP server as sidecars (bundle.externalBin in tauri.conf.json);
+      # dir must match those paths. The CLI archives are not affected.
+      installer-sidecars: '{"package":"agentlens-cli agentlens-mcp","binary":"agentlens agentlens-mcp","dir":"src-tauri/binaries"}'
     # TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) sign the update packages the in-app updater verifies (docs/updater.md).
     secrets: inherit
