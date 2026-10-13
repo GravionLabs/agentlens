@@ -5,6 +5,55 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Bug Fixes
+- Build PATH with the platform separator in the cli_tools tests
+
+
+## [0.10.2] — 2026-10-13
+
+### Bug Fixes
+- Tell a failed update installation from a failed check (#300) (#308)
+- Tell a failed update installation from a failed check (#300)
+- Harden the update failure states (#300)
+- Address review findings for rounded token counts (#301)
+- Address review findings for installer sidecars (#304)
+- NSIS PATH hook skips near-limit values and works in every install mode (#315)
+- Compile the PATH hooks for the uninstaller and guard machine PATH edits (#305)
+- Recognize old copies and write the command line tools atomically (#306)
+- **app**: Show each command line tools error once and label old copies (#306)
+- **docs**: Describe the update of AppImage copies and propose ADR 0006 (#306)
+
+
+### Documentation
+- The installers include the CLI and the MCP server (#314)
+- Describe the Windows installer PATH entry (#317)
+- Describe the install command line tools action (#321)
+- Accept ADR 0006 and name the second write exception in AGENTS.md (#306) (#327)
+
+
+### Features
+- Magnifier icons instead of A+ and A- for the zoom buttons (#302)
+- Show token counts rounded on request (#301) (#323)
+- Rounded token format and persisted setting (#309)
+- Token format switch in the status bar (#311)
+- **cli**: --rounded shows token counts as 1.55 M in text tables (#322)
+- Ship the CLI and MCP server in every installer (#304) (#324)
+- List the CLI and MCP server in bundle.externalBin (#312)
+- Windows installer puts the install directory on the user PATH (#305) (#325)
+- NSIS installer adds the install directory to PATH (#315)
+- MSI WiX fragment adds the install directory to the user PATH (#316)
+- Install the command line tools from the application (#306) (#326)
+- **core**: Install and remove the command line tool links (#318)
+- **app**: Commands and types for the command line tools (#319)
+- **app**: Install command line tools action in the status bar (#320)
+
+
+### Refactoring
+- Route all token values through tokens() (#310)
+
+
 ## [0.10.0] — 2026-10-12
 
 ### Documentation
