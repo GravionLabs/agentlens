@@ -43,6 +43,8 @@ Unpack the archive and put `agentlens` and `agentlens-mcp` (the [MCP server](mcp
 | Linux `.deb` or `.rpm`          | `/usr/bin`, which is on your `PATH` already                                     |
 | macOS `.dmg` and Linux AppImage | inside the application; the action *Install command line tools* makes them available (see below) |
 
+The Windows installers add their install directory to your `PATH` (next section). The Linux and macOS installers do not.
+
 ### Install command line tools (macOS and AppImage)
 
 On macOS and in an AppImage, click **Install command line tools** in the status bar of the application. It creates `agentlens` and `agentlens-mcp` in `~/.local/bin` (and the folder, if it is missing), and only when you click:
@@ -56,7 +58,34 @@ On macOS and in an AppImage, click **Install command line tools** in the status 
 
 The action is not offered for the `.deb` and `.rpm` packages, which install into `/usr/bin` already, and not on Windows, where the installer adds the program folder to `PATH`. The demo in the browser does not have it.
 
-Otherwise the installers do not change your `PATH`.
+### Windows: the `PATH` entry
+
+Both Windows installers (setup `.exe` and `.msi`) add their install directory to your user `PATH`, so `agentlens` and `agentlens-mcp` work without any further step:
+
+- **Setup `.exe`:** it installs for your account only and adds the directory to your user `PATH`. A setup `.exe` built for a per-machine installation adds it to the machine `PATH` instead, but only when it runs elevated and the install directory is under `Program Files` (a directory that only administrators can write to); with any other directory it leaves the machine `PATH` untouched.
+- **`.msi`:** it installs for all users into `Program Files`, but adds the directory to the user `PATH` of the account that runs the installation only. Other users of the machine find the programs in the install directory and run them by their full path or add the directory to their own `PATH`. The entry is removed when that same account uninstalls the application.
+
+Programs that are already running keep the old `PATH`: open a **new** terminal (or restart your editor) before you use the commands.
+
+The uninstaller removes exactly that entry and leaves every other entry as it is. To remove it by hand (for example after deleting the files without the uninstaller):
+
+- Open **Edit environment variables for your account** from the Start menu, select `Path` under **User variables**, click **Edit**, select the AgentLens install directory, click **Delete** and confirm with **OK**.
+- Or run this in PowerShell, replacing the directory with your install directory (it edits the user `PATH` only, and a new terminal sees the change):
+
+```powershell
+$dir = 'C:\Path\To\AgentLens'
+$key = Get-Item 'HKCU:\Environment'
+$old = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+$new = ($old -split ';' | Where-Object { $_ -and $_ -ne $dir }) -join ';'
+Set-ItemProperty 'HKCU:\Environment' -Name Path -Value $new -Type ExpandString
+```
+
+The setup `.exe` leaves `PATH` untouched in these cases and says why in the details of the installation:
+
+- your existing `PATH` is very long (1023 characters or more), because the installer cannot read and write such a value safely without cutting off entries, or the new entry would not fit;
+- the install directory contains `;` or `%`, which `PATH` would split or expand.
+
+The installation still succeeds, but you must add the install directory by hand, with the dialog above (choose **New** instead of **Delete**). The uninstaller then has nothing to remove.
 
 ## From source
 

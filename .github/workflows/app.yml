@@ -67,5 +67,9 @@ jobs:
       - run: pnpm build
       # bundle.externalBin: the app crate needs the staged CLI and MCP server at build time.
       - run: scripts/stage-sidecars.sh
+      # tests/installer_hooks.rs compiles the NSIS installer hooks with makensis.
+      - run: sudo apt-get update && sudo apt-get install -y nsis
       - run: cargo clippy -p agentlens-app --all-targets -- -D warnings
       - run: cargo test -p agentlens-app
+        env:
+          AGENTLENS_REQUIRE_MAKENSIS: '1'
