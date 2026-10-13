@@ -1,3 +1,5 @@
+import { tokenFormat } from "./token-format.service";
+
 /** `1,234`; `n/a` for a value a client does not record. */
 export function number(n: number | null | undefined): string {
   if (n === null || n === undefined) return "n/a";
@@ -7,7 +9,28 @@ export function number(n: number | null | undefined): string {
 /** Token counts: `~` marks an estimate, like the CLI. */
 export function tokens(n: number | null | undefined, estimated = false): string {
   if (n === null || n === undefined) return "n/a";
-  return (estimated ? "~" : "") + number(n);
+  const text = tokenFormat() === "rounded" ? rounded(n) : number(n);
+  return (estimated ? "~" : "") + text;
+}
+
+const UNITS: [number, string][] = [
+  [1e3, "k"],
+  [1e6, "M"],
+  [1e9, "B"],
+];
+
+/** `2.11 k`, `1.55 M`, `3.20 B`; below 1,000 the number as it is. */
+function rounded(n: number): string {
+  const abs = Math.abs(n);
+  if (abs < 1e3) return number(n);
+  let i = UNITS.length - 1;
+  while (i > 0 && abs < UNITS[i][0]) i--;
+  let value = (abs / UNITS[i][0]).toFixed(2);
+  if (Number(value) >= 1000 && i < UNITS.length - 1) {
+    i++;
+    value = (abs / UNITS[i][0]).toFixed(2);
+  }
+  return `${n < 0 ? "-" : ""}${value} ${UNITS[i][1]}`;
 }
 
 /** `12.3M`, `4.5k` for chart labels. */
