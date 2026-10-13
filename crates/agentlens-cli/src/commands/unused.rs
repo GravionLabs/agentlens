@@ -41,7 +41,7 @@ pub fn run(
     only: &[Source],
     estimator: &dyn TokenEstimator,
     all: bool,
-    format: Format,
+    display: output::Display,
 ) -> Result<()> {
     let run = unused_run(registry, env, filter, only, estimator);
     let items: Vec<&UnusedItem> = run
@@ -51,7 +51,7 @@ pub fn run(
         .filter(|i| all || i.uses == 0)
         .collect();
 
-    match format {
+    match display.format {
         Format::Json => {
             let mut report = run.report.clone();
             report.items.retain(|i| all || i.uses == 0);
@@ -70,7 +70,7 @@ pub fn run(
                         i.uses.to_string(),
                         output::number(i.requests),
                         i.overhead_tokens
-                            .map(output::tokens)
+                            .map(|t| display.tokens(t))
                             .unwrap_or_else(|| "unknown".into()),
                         i.referenced_by
                             .iter()

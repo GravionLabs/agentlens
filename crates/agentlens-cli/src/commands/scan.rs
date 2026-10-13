@@ -13,7 +13,7 @@ pub fn run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
-    format: Format,
+    display: output::Display,
 ) -> Result<()> {
     let scans = scan_sources(registry, env, filter, only);
     let header = [
@@ -39,7 +39,7 @@ pub fn run(
             ]
         })
         .collect();
-    match format {
+    match display.format {
         Format::Table => {
             let shown: Vec<Vec<String>> = rows.iter().map(|r| r[..7].to_vec()).collect();
             println!("{}", output::table(&header[..7], shown, 2));

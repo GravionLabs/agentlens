@@ -23,17 +23,17 @@ fn title(f: &Finding) -> String {
     }
 }
 
-fn print(report: &AdviceReport) {
+fn print(report: &AdviceReport, display: output::Display) {
     println!(
         "{} sessions, {} installed skills; their names and descriptions cost {} tokens in the period.",
         report.sessions,
         report.installed_skills,
-        output::tokens(report.baseline_total)
+        display.tokens(report.baseline_total)
     );
     if report.total_tokens.count > 0 {
         println!(
             "All requests of the period together carried {} tokens.",
-            output::tokens(report.total_tokens)
+            display.tokens(report.total_tokens)
         );
     }
     if report.findings.is_empty() {
@@ -63,7 +63,7 @@ fn print(report: &AdviceReport) {
             };
             println!(
                 "Together they {what} {} tokens{share}.",
-                output::tokens(total)
+                display.tokens(total)
             );
         }
         let rows = f
@@ -72,7 +72,7 @@ fn print(report: &AdviceReport) {
             .map(|i| {
                 vec![
                     i.name.clone(),
-                    output::tokens(i.tokens),
+                    display.tokens(i.tokens),
                     output::number(i.requests),
                     i.detail.clone(),
                 ]
@@ -102,13 +102,13 @@ pub fn run(
     filter: &SessionFilter,
     only: &[Source],
     estimator: &dyn TokenEstimator,
-    format: Format,
+    display: output::Display,
 ) -> Result<()> {
     let run = advice_run(registry, env, filter, only, estimator);
-    match format {
+    match display.format {
         Format::Json => println!("{}", serde_json::to_string_pretty(&run.report)?),
         Format::Csv => print!("{}", export::csv::advice(&run.report)?),
-        Format::Table => print(&run.report),
+        Format::Table => print(&run.report, display),
     }
     Ok(())
 }

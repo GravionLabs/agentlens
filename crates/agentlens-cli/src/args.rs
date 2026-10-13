@@ -41,6 +41,10 @@ pub struct Cli {
     #[arg(long, global = true, value_enum, default_value_t = Format::Table)]
     pub format: Format,
 
+    /// Show token counts in text tables as 1.55 M, 2.11 k or 3.20 B; JSON and CSV stay exact
+    #[arg(long, global = true)]
+    pub rounded: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }

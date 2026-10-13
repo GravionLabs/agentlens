@@ -42,7 +42,7 @@ pub fn run(
     only: &[Source],
     estimator: &dyn TokenEstimator,
     view: ContextView,
-    format: Format,
+    display: output::Display,
 ) -> Result<()> {
     let run = context_run(registry, env, filter, only, estimator);
     let rows: Vec<&ContextRow> = run
@@ -52,7 +52,7 @@ pub fn run(
         .filter(|r| in_view(r.kind, view))
         .collect();
 
-    match format {
+    match display.format {
         Format::Json => {
             let mut report = run.report.clone();
             report.rows.retain(|r| in_view(r.kind, view));
@@ -69,9 +69,9 @@ pub fn run(
                         kind_id(r.kind),
                         r.owner.clone(),
                         r.items.to_string(),
-                        output::tokens(r.tokens),
+                        display.tokens(r.tokens),
                         output::number(r.requests),
-                        output::tokens(r.overhead_tokens),
+                        display.tokens(r.overhead_tokens),
                     ]
                 })
                 .collect();
@@ -93,8 +93,8 @@ pub fn run(
                 println!(
                     "{}: first request of a session holds {} tokens on average, at most {} (measured; upper bound of all static context).",
                     source.id(),
-                    output::number(f.total_tokens / u64::from(f.sessions.max(1))),
-                    output::number(f.max_tokens)
+                    display.count(f.total_tokens / u64::from(f.sessions.max(1))),
+                    display.count(f.max_tokens)
                 );
             }
             for (source, n) in &run.report.unavailable {

@@ -1473,3 +1473,33 @@ fn a_skill_the_user_typed_counts_as_a_user_trigger() {
     // Built-in commands such as /statusline and /clear are neither skills nor ignored commands.
     assert!(v["ignored_commands"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn rounded_shows_token_counts_in_text_tables_and_keeps_json_exact() {
+    let home = home_with_context();
+    let file = price_file(&home);
+    agentlens(&home)
+        .args(["cost", "--rounded", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("2.89 k").and(predicate::str::contains("2,890").not()));
+    agentlens(&home)
+        .args(["cost", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("2,890").and(predicate::str::contains("2.89 k").not()));
+    let v = json(
+        agentlens(&home)
+            .args(["cost", "--rounded", "--format", "json", "--prices"])
+            .arg(&file),
+    );
+    assert_eq!(v["rows"][0]["cache_write"], 1850);
+    agentlens(&home)
+        .args(["cost", "--rounded", "--format", "csv", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1850").and(predicate::str::contains(" k").not()));
+}

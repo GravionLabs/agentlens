@@ -27,6 +27,7 @@ Every command takes the same filters:
 | `--project <DIR>`  | Only sessions that ran in this project directory or below it.                                                |
 | `--format <FORMAT>` | `table` (default), `json` or `csv`; see [Reports and export](reports-and-export.md).                        |
 | `--otel <FILE>`    | Add an [OpenTelemetry export](../telemetry.md) to the analysis (repeatable).                                 |
+| `--rounded`        | Token counts in text tables as `1.55 M`, `2.11 k` or `3.20 B` instead of the full number; JSON and CSV stay exact. |
 
 ## Reading the numbers
 

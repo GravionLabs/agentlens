@@ -53,7 +53,7 @@ pub fn run(
     filter: &SessionFilter,
     only: &[Source],
     params: Params,
-    format: Format,
+    display: output::Display,
 ) -> Result<()> {
     let Params {
         price_file,
@@ -69,7 +69,7 @@ pub fn run(
     let run = efficiency_run(registry, env, filter, only, &table, cache_by);
     let r = &run.report;
 
-    match format {
+    match display.format {
         Format::Json => println!("{}", serde_json::to_string_pretty(&json!(r))?),
         Format::Csv => print!("{}", export::csv::cache(&r.cache)?),
         Format::Table => {
@@ -87,9 +87,9 @@ pub fn run(
                         c.key.clone(),
                         c.source.id().to_owned(),
                         output::number(c.requests),
-                        output::number(c.input),
-                        output::number(c.cache_read),
-                        output::number(c.cache_write),
+                        display.count(c.input),
+                        display.count(c.cache_read),
+                        display.count(c.cache_write),
                         hit_rate(c),
                     ]
                 })

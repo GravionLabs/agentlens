@@ -40,7 +40,7 @@ fn rate(t: &ToolErrors) -> String {
     format!("{:.1}%", t.errors as f64 * 100.0 / t.calls as f64)
 }
 
-fn growth_table(growth: &[SessionGrowth], top: usize) {
+fn growth_table(growth: &[SessionGrowth], top: usize, display: output::Display) {
     let rows = growth
         .iter()
         .take(shown(top, growth.len()))
@@ -51,12 +51,12 @@ fn growth_table(growth: &[SessionGrowth], top: usize) {
                 project(&g.project),
                 g.model.clone().unwrap_or_else(|| "-".into()),
                 g.requests.to_string(),
-                output::number(g.first_tokens),
-                output::number(g.last_tokens),
-                output::number(g.peak_tokens),
+                display.count(g.first_tokens),
+                display.count(g.last_tokens),
+                display.count(g.peak_tokens),
                 g.compactions
                     .iter()
-                    .map(|c| output::number(*c))
+                    .map(|c| display.count(*c))
                     .collect::<Vec<_>>()
                     .join(" "),
                 if g.near_limit { "yes" } else { "" }.to_owned(),
@@ -233,15 +233,15 @@ pub fn run(
     only: &[Source],
     section: FlowSection,
     top: usize,
-    format: Format,
+    display: output::Display,
 ) -> Result<()> {
-    if format == Format::Csv && section == FlowSection::All {
+    if display.format == Format::Csv && section == FlowSection::All {
         bail!("--format csv holds one table; choose it with --section growth|errors|hooks");
     }
     let run: FlowRun = flow_run(registry, env, filter, only);
     let want = |s: FlowSection| section == FlowSection::All || section == s;
 
-    match format {
+    match display.format {
         Format::Json => {
             let mut v = serde_json::Map::new();
             if want(FlowSection::Growth) {
@@ -262,7 +262,7 @@ pub fn run(
         },
         Format::Table => {
             if want(FlowSection::Growth) {
-                growth_table(&run.growth.sessions, top);
+                growth_table(&run.growth.sessions, top, display);
             }
             if want(FlowSection::All) {
                 println!();
