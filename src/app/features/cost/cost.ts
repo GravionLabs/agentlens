@@ -2,7 +2,7 @@ import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, pathLabel, usd } from "../../core/format";
+import { number, pathLabel, tokens, usd } from "../../core/format";
 import type { CostData, CostRow, WhatIfRow } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
@@ -203,16 +203,18 @@ export class Cost {
       key: "input",
       label: "Input",
       value: (r) => r.input + r.cache_read + r.cache_write,
-      text: (r) => number(r.input + r.cache_read + r.cache_write),
+      text: (r) => tokens(r.input + r.cache_read + r.cache_write),
       numeric: true,
+      tokens: true,
       title: "Uncached input plus cache reads and writes",
     },
     {
       key: "output",
       label: "Output",
       value: (r) => r.output,
-      text: (r) => number(r.output),
+      text: (r) => tokens(r.output),
       numeric: true,
+      tokens: true,
     },
     {
       key: "cost",

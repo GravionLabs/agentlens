@@ -23,10 +23,14 @@ pub fn run(cli: Cli) -> Result<()> {
         Env::from_system().context("cannot determine the home directory (HOME or USERPROFILE)")?;
     let registry = registry_with_otel(cli.otel.clone());
     let filter = cli.filter()?;
+    let display = crate::output::Display {
+        format: cli.format,
+        rounded: cli.rounded,
+    };
     let counter = counter::Counter::new(&env, cli.exact, cli.exact_model.as_deref())?;
     let est = counter.estimator();
     let result = match cli.command {
-        Command::ImportOtel { file } => import_otel::run(&env, &file, cli.format),
+        Command::ImportOtel { file } => import_otel::run(&env, &file, display),
         Command::McpSetup {
             clients,
             write,
@@ -43,12 +47,12 @@ pub fn run(cli: Cli) -> Result<()> {
                 yes,
             },
         ),
-        Command::Scan => scan::run(&registry, &env, &filter, &cli.source, cli.format),
-        Command::Skills => skills::run(&registry, &env, &filter, &cli.source, est, cli.format),
-        Command::Advise => advise::run(&registry, &env, &filter, &cli.source, est, cli.format),
-        Command::Compare => compare::run(&registry, &env, &filter, &cli.source, est, cli.format),
+        Command::Scan => scan::run(&registry, &env, &filter, &cli.source, display),
+        Command::Skills => skills::run(&registry, &env, &filter, &cli.source, est, display),
+        Command::Advise => advise::run(&registry, &env, &filter, &cli.source, est, display),
+        Command::Compare => compare::run(&registry, &env, &filter, &cli.source, est, display),
         Command::Context { kind } => {
-            context::run(&registry, &env, &filter, &cli.source, est, kind, cli.format)
+            context::run(&registry, &env, &filter, &cli.source, est, kind, display)
         }
         Command::Cost {
             by,
@@ -64,7 +68,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 by,
                 what_if: what_if.as_deref(),
             },
-            cli.format,
+            display,
         ),
         Command::Efficiency { by, top, prices } => efficiency::run(
             &registry,
@@ -76,23 +80,17 @@ pub fn run(cli: Cli) -> Result<()> {
                 by,
                 top,
             },
-            cli.format,
+            display,
         ),
-        Command::Flow { section, top } => flow::run(
-            &registry,
-            &env,
-            &filter,
-            &cli.source,
-            section,
-            top,
-            cli.format,
-        ),
+        Command::Flow { section, top } => {
+            flow::run(&registry, &env, &filter, &cli.source, section, top, display)
+        }
         Command::Unused { days, all } => {
             let mut filter = filter;
             if cli.since.is_none() {
                 filter.since = Some(crate::args::days_ago(days, jiff::Timestamp::now())?);
             }
-            unused::run(&registry, &env, &filter, &cli.source, est, all, cli.format)
+            unused::run(&registry, &env, &filter, &cli.source, est, all, display)
         }
         Command::Report { html } => report::run(&registry, &env, &filter, &cli.source, est, &html),
     };

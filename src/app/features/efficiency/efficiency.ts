@@ -2,7 +2,7 @@ import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, pathLabel, percent, shortId, sourceLabel } from "../../core/format";
+import { number, pathLabel, percent, shortId, sourceLabel, tokens } from "../../core/format";
 import type { CacheRow, EfficiencyReport, SubagentShare } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
@@ -113,24 +113,27 @@ export class Efficiency {
       key: "input",
       label: "Input",
       value: (r) => r.input,
-      text: (r) => number(r.input),
+      text: (r) => tokens(r.input),
       numeric: true,
+      tokens: true,
     },
     {
       key: "read",
       label: "Cache read",
       term: "cache-read",
       value: (r) => r.cache_read,
-      text: (r) => number(r.cache_read),
+      text: (r) => tokens(r.cache_read),
       numeric: true,
+      tokens: true,
     },
     {
       key: "write",
       label: "Cache write",
       term: "cache-write",
       value: (r) => r.cache_write,
-      text: (r) => number(r.cache_write),
+      text: (r) => tokens(r.cache_write),
       numeric: true,
+      tokens: true,
     },
     {
       key: "rate",

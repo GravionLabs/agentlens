@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { tokenFormat } from "../../core/token-format.service";
 import type { Answer, CompareReport } from "../../core/types";
 import samples from "../../core/samples/compare.json";
 import { METRICS } from "./compare";
@@ -25,5 +26,19 @@ describe("compare metrics", () => {
     expect(m.value({ ...sources[0], skill_overhead_tokens: { count: 5, measured: true } })).toBe(
       "5",
     );
+  });
+});
+
+describe("compare token metrics", () => {
+  const s = (samples as unknown as Answer<CompareReport>).data.sources[0];
+  afterEach(() => tokenFormat.set("full"));
+
+  it("round with the setting and expose the exact count", () => {
+    const m = METRICS.find((x) => x.label === "Input tokens")!;
+    expect(m.value({ ...s, input_tokens: 2_114_305 })).toBe("2,114,305");
+    tokenFormat.set("rounded");
+    expect(m.value({ ...s, input_tokens: 2_114_305 })).toBe("2.11 M");
+    expect(m.exact?.({ ...s, input_tokens: 2_114_305 })).toBe(2_114_305);
+    expect(m.value({ ...s, input_tokens: null })).toBe("n/a");
   });
 });

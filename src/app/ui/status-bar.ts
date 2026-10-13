@@ -1,10 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
 import { SAMPLE_MODE } from "../core/ipc";
+import { TokenFormatService } from "../core/token-format.service";
 import { UpdateService } from "../core/update.service";
 import { ZoomService } from "../core/zoom.service";
 import { UpdateStatus } from "./update-status";
 
-/** The bar at the bottom: the running version, the sample badge and the update check. */
+/**
+ * The bar at the bottom: the running version, the sample badge, the update check, the token
+ * format switch (full or rounded counts) and the interface size controls.
+ */
 @Component({
   selector: "app-status-bar",
   imports: [UpdateStatus],
@@ -29,6 +33,20 @@ import { UpdateStatus } from "./update-status";
       }
     </span>
     <span class="right">
+      <button
+        type="button"
+        class="btn btn-text btn-sm"
+        [title]="
+          rounded()
+            ? 'Token counts are rounded (2.11 M). Click to show them in full.'
+            : 'Token counts are shown in full (2,114,305). Click to round them.'
+        "
+        aria-label="Round token counts"
+        [attr.aria-pressed]="rounded()"
+        (click)="toggleRounded()"
+      >
+        {{ rounded() ? "2.11 M" : "2,114,305" }}
+      </button>
       <span class="zoom" role="group" aria-label="Interface size">
         <button
           type="button"
@@ -139,6 +157,13 @@ export class StatusBar {
   protected readonly sampleMode = inject(SAMPLE_MODE);
   protected readonly zoom = inject(ZoomService);
   protected readonly percent = computed(() => Math.round(this.zoom.factor() * 100));
+
+  private readonly tokenFormat = inject(TokenFormatService);
+  protected readonly rounded = computed(() => this.tokenFormat.mode() === "rounded");
+
+  protected toggleRounded(): void {
+    this.tokenFormat.set(this.rounded() ? "full" : "rounded");
+  }
 
   constructor() {
     void this.updates.loadVersion();

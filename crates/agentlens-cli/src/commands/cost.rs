@@ -80,7 +80,7 @@ pub fn run(
     filter: &SessionFilter,
     only: &[Source],
     params: Params,
-    format: Format,
+    display: output::Display,
 ) -> Result<()> {
     let Params {
         price_file,
@@ -102,7 +102,7 @@ pub fn run(
     let run = cost_run(registry, env, filter, only, &table, group, what_if);
     let r = &run.report;
 
-    match format {
+    match display.format {
         Format::Json => {
             let mut v = serde_json::to_value(r)?;
             if let (Some(w), Some(obj)) = (&run.what_if, v.as_object_mut()) {
@@ -124,8 +124,8 @@ pub fn run(
                     vec![
                         x.key.clone(),
                         output::number(x.requests),
-                        output::number(x.input + x.cache_read + x.cache_write),
-                        output::number(x.output),
+                        display.count(x.input + x.cache_read + x.cache_write),
+                        display.count(x.output),
                         money(x),
                         share(x, total),
                         if x.premium_requests > 0.0 {
@@ -139,8 +139,8 @@ pub fn run(
             rows.push(vec![
                 "total".into(),
                 output::number(r.total.requests),
-                output::number(r.total.input + r.total.cache_read + r.total.cache_write),
-                output::number(r.total.output),
+                display.count(r.total.input + r.total.cache_read + r.total.cache_write),
+                display.count(r.total.output),
                 money(&r.total),
                 String::new(),
                 if r.total.premium_requests > 0.0 {

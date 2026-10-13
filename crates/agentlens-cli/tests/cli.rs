@@ -1473,3 +1473,77 @@ fn a_skill_the_user_typed_counts_as_a_user_trigger() {
     // Built-in commands such as /statusline and /clear are neither skills nor ignored commands.
     assert!(v["ignored_commands"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn rounded_shows_token_counts_in_text_tables_and_keeps_json_exact() {
+    let home = home_with_context();
+    let file = price_file(&home);
+    agentlens(&home)
+        .args(["cost", "--rounded", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("2.89 k").and(predicate::str::contains("2,890").not()));
+    agentlens(&home)
+        .args(["cost", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("2,890").and(predicate::str::contains("2.89 k").not()));
+    let v = json(
+        agentlens(&home)
+            .args(["cost", "--rounded", "--format", "json", "--prices"])
+            .arg(&file),
+    );
+    assert_eq!(v["rows"][0]["cache_write"], 1850);
+    agentlens(&home)
+        .args(["cost", "--rounded", "--format", "csv", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1850").and(predicate::str::contains(" k").not()));
+}
+
+/// A home with the context, skills, basic and subagent fixtures: counts above 1,000 in several analyses.
+fn home_with_busy_sessions() -> TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let projects = dir.path().join(".claude/projects/-work-demo");
+    fs::create_dir_all(&projects).unwrap();
+    for f in [
+        "context.jsonl",
+        "skills.jsonl",
+        "basic.jsonl",
+        "main_with_subagent.jsonl",
+        "subagent.jsonl",
+    ] {
+        fs::copy(fixtures().join(f), projects.join(f)).unwrap();
+    }
+    dir
+}
+
+#[test]
+fn rounded_applies_to_compare_flow_advise_and_context_text_only() {
+    let home = home_with_busy_sessions();
+    // (command, exact text, rounded text)
+    let cases = [
+        ("compare", "4,441", "4.44 k"),
+        ("flow", "1,010", "1.01 k"),
+        ("advise", "4,504", "4.50 k"),
+        ("context", "1,010", "1.01 k"),
+    ];
+    for (command, exact, rounded) in cases {
+        agentlens(&home)
+            .arg(command)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(exact));
+        agentlens(&home)
+            .args([command, "--rounded"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(rounded).and(predicate::str::contains(exact).not()));
+        let plain = json(agentlens(&home).args([command, "--format", "json"]));
+        let with_flag = json(agentlens(&home).args([command, "--rounded", "--format", "json"]));
+        assert_eq!(plain, with_flag, "{command}: JSON must not change");
+    }
+}

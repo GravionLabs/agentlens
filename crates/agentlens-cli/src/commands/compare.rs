@@ -18,8 +18,12 @@ fn percent(v: Option<f64>) -> String {
         .unwrap_or_else(|| NA.into())
 }
 
-fn count(v: Option<u64>) -> String {
+fn number_or_na(v: Option<u64>) -> String {
     v.map(output::number).unwrap_or_else(|| NA.into())
+}
+
+fn count(v: Option<u64>, display: output::Display) -> String {
+    v.map(|n| display.count(n)).unwrap_or_else(|| NA.into())
 }
 
 fn minutes(ms: Option<u64>) -> String {
@@ -28,12 +32,12 @@ fn minutes(ms: Option<u64>) -> String {
 }
 
 /// One metric per row, one source per column.
-fn metrics(s: &SourceStats) -> Vec<(&'static str, String)> {
+fn metrics(s: &SourceStats, display: output::Display) -> Vec<(&'static str, String)> {
     vec![
         ("sessions", output::number(s.sessions)),
-        ("requests", count(s.requests)),
-        ("input tokens", count(s.input_tokens)),
-        ("output tokens", count(s.output_tokens)),
+        ("requests", number_or_na(s.requests)),
+        ("input tokens", count(s.input_tokens, display)),
+        ("output tokens", count(s.output_tokens, display)),
         ("cache hit rate", percent(s.cache_hit_rate)),
         ("tool calls", output::number(s.tool_calls)),
         ("tool error rate", percent(s.tool_error_rate)),
@@ -41,7 +45,7 @@ fn metrics(s: &SourceStats) -> Vec<(&'static str, String)> {
         (
             "skill overhead (est.)",
             s.skill_overhead_tokens
-                .map(output::tokens)
+                .map(|t| display.tokens(t))
                 .unwrap_or_else(|| NA.into()),
         ),
         ("mean session (min)", minutes(s.mean_session_ms)),
@@ -55,16 +59,17 @@ pub fn run(
     filter: &SessionFilter,
     only: &[Source],
     estimator: &dyn TokenEstimator,
-    format: Format,
+    display: output::Display,
 ) -> Result<()> {
     let run = compare_run(registry, env, filter, only, estimator);
     let sources = &run.report.sources;
 
-    match format {
+    match display.format {
         Format::Json => println!("{}", serde_json::to_string_pretty(&run.report)?),
         Format::Csv => print!("{}", export::csv::compare(sources)?),
         Format::Table => {
-            let per_source: Vec<Vec<(&str, String)>> = sources.iter().map(metrics).collect();
+            let per_source: Vec<Vec<(&str, String)>> =
+                sources.iter().map(|s| metrics(s, display)).collect();
             let names: Vec<&str> = per_source
                 .first()
                 .map(|m| m.iter().map(|(n, _)| *n).collect())

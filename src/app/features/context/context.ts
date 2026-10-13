@@ -2,10 +2,33 @@ import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, pathLabel, shortPath, sourceLabel, tokens } from "../../core/format";
+import { exactTokens, number, pathLabel, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { ContextKind, ContextReport, ContextRow, Tokens } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
+
+export interface Note {
+  text: string;
+  /** The exact counts while token counts are rounded. */
+  title: string | null;
+}
+
+/** The sentence about the first request of a session; the exact counts are its tooltip. */
+export function firstRequestNote(
+  source: string,
+  f: { sessions: number; total_tokens: number; max_tokens: number },
+): Note {
+  const average = Math.round(f.total_tokens / Math.max(1, f.sessions));
+  const exactAverage = exactTokens(average);
+  const exactMax = exactTokens(f.max_tokens);
+  return {
+    text: `${sourceLabel(source)}: the first request of a session holds ${tokens(average)} tokens on average, at most ${tokens(f.max_tokens)} (measured; an upper bound of all static context).`,
+    title:
+      exactAverage || exactMax
+        ? `Average ${number(average)} tokens, at most ${number(f.max_tokens)}`
+        : null,
+  };
+}
 
 type View = "all" | "tools" | "instructions" | "agents" | "skills";
 
@@ -110,8 +133,8 @@ export function inView(kind: ContextKind, view: View): boolean {
         placeholder="Filter by source"
         empty="No context items found."
       />
-      @for (n of notes(); track n) {
-        <p class="muted">{{ n }}</p>
+      @for (n of notes(); track n.text) {
+        <p class="muted" [attr.title]="n.title">{{ n.text }}</p>
       }
     </section>
   `,
@@ -156,18 +179,15 @@ export class Context {
   protected readonly notes = computed(() => {
     const d = this.res.value()?.data;
     if (!d) return [];
-    const out: string[] = [];
+    const out: Note[] = [];
     for (const [source, f] of Object.entries(d.first_request)) {
-      out.push(
-        `${sourceLabel(source)}: the first request of a session holds ${number(
-          Math.round(f.total_tokens / Math.max(1, f.sessions)),
-        )} tokens on average, at most ${number(f.max_tokens)} (measured; an upper bound of all static context).`,
-      );
+      out.push(firstRequestNote(source, f));
     }
     for (const [source, n] of Object.entries(d.unavailable)) {
-      out.push(
-        `${sourceLabel(source)}: not available, the client reports no context items (${n} sessions).`,
-      );
+      out.push({
+        text: `${sourceLabel(source)}: not available, the client reports no context items (${n} sessions).`,
+        title: null,
+      });
     }
     return out;
   });
@@ -214,6 +234,7 @@ export class Context {
       term: "token",
       value: (r) => r.tokens.count,
       text: (r) => tokens(r.tokens.count, !r.tokens.measured),
+      tokens: true,
       estimated: (r) => !r.tokens.measured,
       numeric: true,
     },
@@ -231,6 +252,7 @@ export class Context {
       term: "overhead",
       value: (r) => r.overhead_tokens.count,
       text: (r) => tokens(r.overhead_tokens.count, !r.overhead_tokens.measured),
+      tokens: true,
       estimated: (r) => !r.overhead_tokens.measured,
       numeric: true,
     },

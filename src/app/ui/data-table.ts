@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
+import { exactTokens } from "../core/format";
 import { glossaryEntry } from "../core/glossary";
 
 export interface Column<T> {
@@ -17,6 +18,8 @@ export interface Column<T> {
   term?: string;
   /** A tooltip for the cell, e.g. the full path behind a shortened one. */
   hover?: (row: T) => string | null;
+  /** The value is a token count: while counts are rounded, the cell's tooltip has the exact one. */
+  tokens?: boolean;
 }
 
 /** A sortable table with an optional text filter on the first column. */
@@ -66,7 +69,7 @@ export interface Column<T> {
                 <td
                   [class.num]="c.numeric"
                   [class.est]="c.estimated?.(row)"
-                  [attr.title]="c.hover?.(row) ?? null"
+                  [attr.title]="tip(c, row)"
                 >
                   {{ cell(c, row) }}
                 </td>
@@ -253,6 +256,14 @@ export class DataTable<T> {
 
   protected header(c: Column<T>): string {
     return c.title ?? (c.term ? (glossaryEntry(c.term)?.short ?? "") : "");
+  }
+
+  protected tip(c: Column<T>, row: T): string | null {
+    const hover = c.hover?.(row);
+    if (hover) return hover;
+    if (!c.tokens) return null;
+    const v = c.value(row);
+    return typeof v === "number" ? exactTokens(v) : null;
   }
 
   protected cell(c: Column<T>, row: T): string {
