@@ -6,7 +6,7 @@
 //! numbers the CLI prints. The functions do not depend on Tauri and are tested
 //! against fixture homes.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::adapter::{Registry, SessionFilter};
@@ -20,6 +20,7 @@ use crate::analyzers::flow::{ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::SkillReport;
 use crate::analyzers::timeline::{SessionSummary, Timeline};
 use crate::analyzers::unused::UnusedReport;
+use crate::cli_tools::{self, CliTools};
 use crate::env::Env;
 use crate::export::{self, csv as csv_export};
 use crate::inventory::Duplicate;
@@ -116,6 +117,28 @@ fn answer<T>(data: T, warnings: u64, errors: Vec<String>) -> Result<Answer<T>, S
 pub fn refresh(ctx: &Context) -> Result<Answer<()>, String> {
     ctx.registry.clear_cache();
     answer((), 0, Vec::new())
+}
+
+/// Whether the command line tools are in `~/.local/bin` (writes nothing). `bin_dir` is the directory of
+/// the binaries shipped with the application (the directory of its executable).
+pub fn cli_tools_status(ctx: &Context, bin_dir: &Path) -> Result<Answer<CliTools>, String> {
+    let data = cli_tools::status(&ctx.env, bin_dir);
+    let errors = data.errors();
+    answer(data, 0, errors)
+}
+
+/// Links (or, in an AppImage, copies) the command line tools into `~/.local/bin`, on the user's click.
+pub fn install_cli_tools(ctx: &Context, bin_dir: &Path) -> Result<Answer<CliTools>, String> {
+    let data = cli_tools::install(&ctx.env, bin_dir);
+    let errors = data.errors();
+    answer(data, 0, errors)
+}
+
+/// Removes the links (or copies) [`install_cli_tools`] made; anything else in `~/.local/bin` stays.
+pub fn remove_cli_tools(ctx: &Context, bin_dir: &Path) -> Result<Answer<CliTools>, String> {
+    let data = cli_tools::remove(&ctx.env, bin_dir);
+    let errors = data.errors();
+    answer(data, 0, errors)
 }
 
 #[derive(Debug, Serialize)]

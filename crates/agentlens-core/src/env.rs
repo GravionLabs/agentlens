@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-/// Environment variables the adapters care about.
+/// Environment variables the adapters (and `cli_tools`) care about.
 const KNOWN_VARS: &[&str] = &[
     "CLAUDE_CONFIG_DIR",
     "COPILOT_HOME",
@@ -12,6 +12,10 @@ const KNOWN_VARS: &[&str] = &[
     "XDG_DATA_HOME",
     "APPDATA",
     "LOCALAPPDATA",
+    // The AppImage file while the application runs from one (`cli_tools`).
+    "APPIMAGE",
+    // Whether `~/.local/bin` is on the search path (`cli_tools`).
+    "PATH",
 ];
 
 /// Home directory plus the relevant environment variables.
