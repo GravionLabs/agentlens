@@ -41,9 +41,21 @@ Unpack the archive and put `agentlens` and `agentlens-mcp` (the [MCP server](mcp
 | ------------------------------- | ------------------------------------------------------------------------------- |
 | Windows `.msi` or setup `.exe`  | the install directory of the application                                        |
 | Linux `.deb` or `.rpm`          | `/usr/bin`, which is on your `PATH` already                                     |
-| macOS `.dmg` and Linux AppImage | inside the application bundle; making them available on the command line is planned |
+| macOS `.dmg` and Linux AppImage | inside the application; the action *Install command line tools* makes them available (see below) |
 
-The installers do not change your `PATH`.
+### Install command line tools (macOS and AppImage)
+
+On macOS and in an AppImage, click **Install command line tools** in the status bar of the application. It creates `agentlens` and `agentlens-mcp` in `~/.local/bin` (and the folder, if it is missing):
+
+- **macOS:** two symbolic links to the programs inside the application.
+- **AppImage:** two copies of the programs, because the path inside a mounted AppImage changes on every run and a link would break. After you update the AppImage, click **Remove command line tools** and then **Install command line tools** again. A copy that is no longer the current one is reported as a foreign file and never overwritten, so delete a stale old copy in `~/.local/bin` by hand if the action reports one.
+- **Foreign files:** the action never overwrites a file it did not create. It names the file and skips it.
+- **Remove:** **Remove command line tools** removes only those links (or copies) and nothing else.
+- **`PATH`:** if `~/.local/bin` is not on your `PATH`, the application shows the line to add for zsh and bash (`export PATH="$HOME/.local/bin:$PATH"`). It never edits a shell profile; you add the line yourself.
+
+The action is not offered for the `.deb` and `.rpm` packages, which install into `/usr/bin` already, and not on Windows, where the installer adds the program folder to `PATH`. The demo in the browser does not have it.
+
+Otherwise the installers do not change your `PATH`.
 
 ## From source
 
