@@ -9,6 +9,7 @@
 
 # Tauri
 /src-tauri/gen
+/src-tauri/binaries
 
 # VitePress
 site/.vitepress/dist
