@@ -1,7 +1,15 @@
 import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, percent, seconds, shortId, shortPath, sourceLabel } from "../../core/format";
+import {
+  number,
+  percent,
+  seconds,
+  shortId,
+  shortPath,
+  sourceLabel,
+  tokens,
+} from "../../core/format";
 import type {
   FlowData,
   HookStats,
@@ -188,23 +196,26 @@ export class Flow {
       key: "first",
       label: "First",
       value: (g) => g.first_tokens,
-      text: (g) => number(g.first_tokens),
+      text: (g) => tokens(g.first_tokens),
       numeric: true,
+      tokens: true,
     },
     {
       key: "last",
       label: "Last",
       value: (g) => g.last_tokens,
-      text: (g) => number(g.last_tokens),
+      text: (g) => tokens(g.last_tokens),
       numeric: true,
+      tokens: true,
     },
     {
       key: "peak",
       label: "Peak",
       term: "peak",
       value: (g) => g.peak_tokens,
-      text: (g) => number(g.peak_tokens),
+      text: (g) => tokens(g.peak_tokens),
       numeric: true,
+      tokens: true,
     },
     {
       key: "compactions",

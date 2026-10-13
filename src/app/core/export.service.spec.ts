@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ExportService, SAVE_DIALOG, type SaveDialog } from "./export.service";
 import { FiltersService } from "./filters.service";
 import { Ipc } from "./ipc";
+import { tokenFormat } from "./token-format.service";
 
 function create(
   invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>,
@@ -63,5 +64,28 @@ describe("ExportService", () => {
       kind: "error",
       message: "cannot write /root/x: permission denied",
     });
+  });
+});
+
+describe("ExportService with rounded token counts", () => {
+  it("sends no display setting: exports are written by the core and stay exact", async () => {
+    tokenFormat.set("rounded");
+    try {
+      const invoke = vi.fn(async (command: string) =>
+        command === "export_name"
+          ? "agentlens-cost.csv"
+          : { path: "/tmp/out.csv", bytes: 1, warnings: 0, errors: [] },
+      );
+      await create(invoke, async () => "/tmp/out.csv").export("cost", "csv");
+      expect(invoke).toHaveBeenLastCalledWith("export_view", {
+        view: "cost",
+        format: "csv",
+        filters: { since: "30d", sources: [], project: null },
+        options: null,
+        path: "/tmp/out.csv",
+      });
+    } finally {
+      tokenFormat.set("full");
+    }
   });
 });

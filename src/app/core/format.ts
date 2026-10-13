@@ -33,6 +33,12 @@ function rounded(n: number): string {
   return `${n < 0 ? "-" : ""}${value} ${UNITS[i][1]}`;
 }
 
+/** The exact count for a tooltip while token counts are rounded; `null` when nothing is hidden. */
+export function exactTokens(n: number | null | undefined): string | null {
+  if (n === null || n === undefined) return null;
+  return tokenFormat() === "rounded" && Math.abs(n) >= 1e3 ? number(n) : null;
+}
+
 /** `12.3M`, `4.5k` for chart labels. */
 export function compact(n: number): string {
   const abs = Math.abs(n);

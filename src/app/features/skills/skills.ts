@@ -227,6 +227,7 @@ export class Skills {
         value: (s) => (s.attributed.requests > 0 ? attributedTokens(s) : null),
         text: (s) => (s.attributed.requests > 0 ? tokens(attributedTokens(s)) : "-"),
         numeric: true,
+        tokens: true,
         title: "Tokens of requests the client attributes to the skill (OpenTelemetry); measured",
       });
     }
@@ -238,13 +239,14 @@ export class Skills {
         value: (s) =>
           s.follow_on.input + s.follow_on.output + s.follow_on.cache_read + s.follow_on.cache_write,
         text: (s) =>
-          number(
+          tokens(
             s.follow_on.input +
               s.follow_on.output +
               s.follow_on.cache_read +
               s.follow_on.cache_write,
           ),
         numeric: true,
+        tokens: true,
         title:
           "Tokens used until the next user turn, skill or compaction (attributed by assumption)",
       },
