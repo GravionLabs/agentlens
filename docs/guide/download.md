@@ -45,13 +45,14 @@ Unpack the archive and put `agentlens` and `agentlens-mcp` (the [MCP server](mcp
 
 ### Install command line tools (macOS and AppImage)
 
-On macOS and in an AppImage, click **Install command line tools** in the status bar of the application. It creates `agentlens` and `agentlens-mcp` in `~/.local/bin` (and the folder, if it is missing):
+On macOS and in an AppImage, click **Install command line tools** in the status bar of the application. It creates `agentlens` and `agentlens-mcp` in `~/.local/bin` (and the folder, if it is missing), and only when you click:
 
-- **macOS:** two symbolic links to the programs inside the application.
-- **AppImage:** two copies of the programs, because the path inside a mounted AppImage changes on every run and a link would break. After you update the AppImage, click **Remove command line tools** and then **Install command line tools** again. A copy that is no longer the current one is reported as a foreign file and never overwritten, so delete a stale old copy in `~/.local/bin` by hand if the action reports one.
-- **Foreign files:** the action never overwrites a file it did not create. It names the file and skips it.
-- **Remove:** **Remove command line tools** removes only those links (or copies) and nothing else.
-- **`PATH`:** if `~/.local/bin` is not on your `PATH`, the application shows the line to add for zsh and bash (`export PATH="$HOME/.local/bin:$PATH"`). It never edits a shell profile; you add the line yourself.
+- **macOS:** two symbolic links to the programs inside the application, so they follow every update of the application. Move `AgentLens.app` to `/Applications` first: started from the disk image (`/Volumes/...`) or from where it was downloaded (macOS then runs it from a temporary App Translocation path), the application refuses to install, because the links would break.
+- **AppImage:** two copies of the programs, because the path inside a mounted AppImage changes on every run and a link would break. A copy does not follow an update: after you update the AppImage, click **Install command line tools** again and it replaces the old copies. AgentLens recognizes its own copies by a marker in the programs (it reads the file and never runs it), so an old copy is replaced, not reported as foreign.
+- **Foreign files:** the action never overwrites or removes a file it did not create (your own script, or a link of yours to somewhere else). It names the file and skips it.
+- **Safe replacement:** a new link or copy is written under a temporary name and then renamed over the old one, so a failed install leaves the working one in place.
+- **Remove:** **Remove command line tools** removes only those links and copies (old ones too) and nothing else.
+- **`PATH`:** if `~/.local/bin` is not on your `PATH`, the application shows the line to add for zsh and bash (`export PATH="$HOME/.local/bin:$PATH"`). It never edits a shell profile; you add the line yourself. The check uses the `PATH` the application was started with, which can differ from your shell's: an application started from the macOS Finder or Dock does not read your shell profile, so it may report the folder as missing although your terminal has it. Check with `echo $PATH` in a terminal.
 
 The action is not offered for the `.deb` and `.rpm` packages, which install into `/usr/bin` already, and not on Windows, where the installer adds the program folder to `PATH`. The demo in the browser does not have it.
 
