@@ -25,7 +25,7 @@ impl Display {
 }
 
 /// `1,234` for measured values, `~1,234` for estimated ones; rounded as `1.23 k` on request.
-pub fn tokens(t: Tokens, rounded: bool) -> String {
+fn tokens(t: Tokens, rounded: bool) -> String {
     format!(
         "{}{}",
         if t.measured { "" } else { "~" },
@@ -33,7 +33,7 @@ pub fn tokens(t: Tokens, rounded: bool) -> String {
     )
 }
 
-pub fn token_count(n: u64, rounded: bool) -> String {
+fn token_count(n: u64, rounded: bool) -> String {
     if rounded {
         rounded_number(i128::from(n))
     } else {
@@ -62,7 +62,9 @@ pub fn rounded_number(n: i128) -> String {
     format!("{}{} {}", if n < 0 { "-" } else { "" }, value, UNITS[i].1)
 }
 
-/// Two decimals, exact ties rounded up like JavaScript's `toFixed` (Rust rounds them to even).
+/// Two decimals, exact ties rounded up like JavaScript's `toFixed` (Rust rounds them to even), so
+/// the CLI and the application show the same text. Only ties that are exact in binary (multiples of
+/// 1/8, e.g. `1.125`) matter; other values are not ties and both languages round them alike.
 fn fixed2(v: f64) -> String {
     let eighths = v * 8.0;
     let tie = eighths.fract() == 0.0 && (eighths as u64) % 2 == 1;

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TokenFormatService } from "./token-format.service";
 
 describe("TokenFormatService", () => {
@@ -10,6 +10,8 @@ describe("TokenFormatService", () => {
       setItem: (k: string, v: string) => void store.set(k, v),
     });
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it("defaults to full", () => {
     expect(new TokenFormatService().mode()).toBe("full");

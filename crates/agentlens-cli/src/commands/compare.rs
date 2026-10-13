@@ -18,7 +18,7 @@ fn percent(v: Option<f64>) -> String {
         .unwrap_or_else(|| NA.into())
 }
 
-fn v_or_na(v: Option<u64>) -> String {
+fn number_or_na(v: Option<u64>) -> String {
     v.map(output::number).unwrap_or_else(|| NA.into())
 }
 
@@ -35,7 +35,7 @@ fn minutes(ms: Option<u64>) -> String {
 fn metrics(s: &SourceStats, display: output::Display) -> Vec<(&'static str, String)> {
     vec![
         ("sessions", output::number(s.sessions)),
-        ("requests", v_or_na(s.requests)),
+        ("requests", number_or_na(s.requests)),
         ("input tokens", count(s.input_tokens, display)),
         ("output tokens", count(s.output_tokens, display)),
         ("cache hit rate", percent(s.cache_hit_rate)),

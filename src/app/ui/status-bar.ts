@@ -5,7 +5,10 @@ import { UpdateService } from "../core/update.service";
 import { ZoomService } from "../core/zoom.service";
 import { UpdateStatus } from "./update-status";
 
-/** The bar at the bottom: the running version, the sample badge and the update check. */
+/**
+ * The bar at the bottom: the running version, the sample badge, the update check, the token
+ * format switch (full or rounded counts) and the interface size controls.
+ */
 @Component({
   selector: "app-status-bar",
   imports: [UpdateStatus],

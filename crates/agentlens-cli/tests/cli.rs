@@ -1503,3 +1503,47 @@ fn rounded_shows_token_counts_in_text_tables_and_keeps_json_exact() {
         .success()
         .stdout(predicate::str::contains("1850").and(predicate::str::contains(" k").not()));
 }
+
+/// A home with the context, skills, basic and subagent fixtures: counts above 1,000 in several analyses.
+fn home_with_busy_sessions() -> TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let projects = dir.path().join(".claude/projects/-work-demo");
+    fs::create_dir_all(&projects).unwrap();
+    for f in [
+        "context.jsonl",
+        "skills.jsonl",
+        "basic.jsonl",
+        "main_with_subagent.jsonl",
+        "subagent.jsonl",
+    ] {
+        fs::copy(fixtures().join(f), projects.join(f)).unwrap();
+    }
+    dir
+}
+
+#[test]
+fn rounded_applies_to_compare_flow_advise_and_context_text_only() {
+    let home = home_with_busy_sessions();
+    // (command, exact text, rounded text)
+    let cases = [
+        ("compare", "4,441", "4.44 k"),
+        ("flow", "1,010", "1.01 k"),
+        ("advise", "4,504", "4.50 k"),
+        ("context", "1,010", "1.01 k"),
+    ];
+    for (command, exact, rounded) in cases {
+        agentlens(&home)
+            .arg(command)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(exact));
+        agentlens(&home)
+            .args([command, "--rounded"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(rounded).and(predicate::str::contains(exact).not()));
+        let plain = json(agentlens(&home).args([command, "--format", "json"]));
+        let with_flag = json(agentlens(&home).args([command, "--rounded", "--format", "json"]));
+        assert_eq!(plain, with_flag, "{command}: JSON must not change");
+    }
+}

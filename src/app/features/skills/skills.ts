@@ -2,7 +2,7 @@ import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { day, number, tokens } from "../../core/format";
+import { day, exactTokens, number, tokens } from "../../core/format";
 import type { SkillStats, SkillsData } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
 import { Legend } from "../../ui/legend";
@@ -118,6 +118,7 @@ export class Skills {
     const idleBaseline = skills
       .filter((s) => s.invocations === 0)
       .reduce((a, s) => a + s.baseline.tokens.count, 0);
+    const totalOverhead = skills.reduce((a, s) => a + overhead(s), 0);
     return [
       {
         value: `${used.length} / ${data?.installed_skills ?? 0}`,
@@ -125,13 +126,15 @@ export class Skills {
       },
       { value: number(used.reduce((a, s) => a + s.invocations, 0)), label: "invocations" },
       {
-        value: tokens(
-          skills.reduce((a, s) => a + overhead(s), 0),
-          true,
-        ),
+        value: tokens(totalOverhead, true),
+        title: exactTokens(totalOverhead) ?? undefined,
         label: "total skill overhead (tokens)",
       },
-      { value: tokens(idleBaseline, true), label: "baseline of never-used skills" },
+      {
+        value: tokens(idleBaseline, true),
+        title: exactTokens(idleBaseline) ?? undefined,
+        label: "baseline of never-used skills",
+      },
     ];
   });
 
@@ -181,6 +184,7 @@ export class Skills {
         value: (s) => s.load.count,
         text: (s) => tokens(s.load.count, !s.load.measured && s.load.count > 0),
         estimated: (s) => !s.load.measured && s.load.count > 0,
+        tokens: true,
         numeric: true,
         title: "Tokens the skill content added to the context when loaded",
       },
@@ -192,6 +196,7 @@ export class Skills {
         text: (s) =>
           tokens(s.carry.tokens.count, !s.carry.tokens.measured && s.carry.tokens.count > 0),
         estimated: (s) => !s.carry.tokens.measured && s.carry.tokens.count > 0,
+        tokens: true,
         numeric: true,
         title: "Loaded content sent again with every later request until a compaction",
       },
@@ -206,6 +211,7 @@ export class Skills {
             !s.baseline.tokens.measured && s.baseline.tokens.count > 0,
           ),
         estimated: (s) => !s.baseline.tokens.measured && s.baseline.tokens.count > 0,
+        tokens: true,
         numeric: true,
         title: "Name and description, sent with every request of the clients that list the skill",
       },
@@ -216,6 +222,7 @@ export class Skills {
         value: (s) => overhead(s),
         text: (s) => tokens(overhead(s), overhead(s) > 0),
         estimated: (s) => overhead(s) > 0,
+        tokens: true,
         numeric: true,
       },
     ];

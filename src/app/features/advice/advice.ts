@@ -136,6 +136,7 @@ export class Advice {
       term: "token",
       value: (i) => i.tokens.count,
       text: (i) => tokens(i.tokens.count, !i.tokens.measured),
+      tokens: true,
       estimated: (i) => !i.tokens.measured,
       numeric: true,
     },
