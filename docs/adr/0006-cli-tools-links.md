@@ -1,6 +1,6 @@
 # 0006: Installing the command line tools from the application
 
-- Status: Proposed
+- Status: Accepted
 - Context: Feature "Installers also install the CLI and the MCP server" (#303), PBI #306 and its tasks #318 to #321; follows ADR 0003 (desktop application) and ADR 0004 (`mcp-setup --write`, the first exception to "read-only")
 
 ## Context
@@ -18,14 +18,14 @@ Every installer ships the CLI (`agentlens`) and the MCP server (`agentlens-mcp`)
 
 ## Decision
 
-- **Option 2**, proposed. The status bar of the application has *Install command line tools* and *Remove command line tools*, offered only on macOS and in an AppImage (not for the `.deb` and `.rpm` packages, not on Windows, not in the browser demo). The backend refuses the commands where the action is not offered, so the rule does not rest on the interface.
+- **Option 2**, accepted. The status bar of the application has *Install command line tools* and *Remove command line tools*, offered only on macOS and in an AppImage (not for the `.deb` and `.rpm` packages, not on Windows, not in the browser demo). The backend refuses the commands where the action is not offered, so the rule does not rest on the interface.
 - **What is written:** exactly `~/.local/bin/agentlens` and `~/.local/bin/agentlens-mcp`, and the folder `~/.local/bin` when it is missing. Nothing else, and only on a click; looking at the state writes nothing.
 - **Links on macOS, copies in an AppImage.** On macOS the links point into `AgentLens.app/Contents/MacOS`, which an update keeps, so they follow every update. The application refuses to link from a disk image (`/Volumes/...`) or from an App Translocation path and asks the user to move it to `/Applications` first. An AppImage has no stable path for its programs (the mount point `/tmp/.mount_<random>` changes on every start and disappears on exit, and `$APPIMAGE` starts the application, not the CLI), so the tools are copies with mode 0755. A copy does not follow an update; clicking *Install* again replaces it.
 - **Never overwrite a foreign file.** What counts as ours: a link to the program next to the running application; an old link of ours (a link to a program of the same name in an AgentLens `.app` bundle, in an AppImage mount point or in the program folder of the application, dangling or not); an exact copy; an old copy, recognized by a fixed marker byte string that every `agentlens` and `agentlens-mcp` binary carries (the file is read, never run, and no record file is written). Anything else at those paths (the user's own script, a link of theirs to elsewhere, a directory) is named in the result and left alone, by *Install* and by *Remove*.
 - **Atomic replacement.** A link or copy is written under a temporary name in `~/.local/bin` and renamed over the path, so a failed repair keeps the working tool; the temporary file is removed on failure.
 - **Never edit a shell profile** (option 4 rejected). When `~/.local/bin` is not on the `PATH` of the application, the result shows the line to add for zsh and bash. That `PATH` can differ from a shell's (an application started from the Finder does not read the profile); the documentation says so.
 - **Undo:** *Remove command line tools* deletes our links and copies (old ones too) and nothing else; the programs inside the application stay.
-- **`AGENTS.md`:** the read-only rule names `mcp-setup --write` as the only exception. Whether to name this action there as a second exception is left to the owner with this ADR.
+- **`AGENTS.md`:** the read-only rule names this action as the second exception, next to `mcp-setup --write`.
 
 ## Consequences
 
