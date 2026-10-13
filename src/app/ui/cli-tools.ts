@@ -73,7 +73,8 @@ type Busy = "install" | "remove" | null;
               <p class="note">{{ s.dir }} is on your PATH.</p>
             } @else {
               <p class="note">
-                {{ s.dir }} is not on your PATH. Add this line to your shell profile:
+                {{ s.dir }} is not on the PATH AgentLens was started with. If your shell does not
+                have it either, add this line to your shell profile:
               </p>
               <ul class="lines">
                 @for (p of s.profile_lines; track p.shell) {
@@ -181,8 +182,13 @@ export class CliTools {
     try {
       const answer = await this.ipc.invoke<Answer<CliToolsData>>(`cli_tools_${action}`);
       if (answer?.data) this.state.set(answer.data);
-      // Each tool's error is shown with the tool; the rest stands on its own.
-      const shown = new Set(answer?.data?.tools.map((t) => t.error) ?? []);
+      // Each tool's error is shown with the tool (the answer has it as "<path>: <error>"); the rest
+      // stands on its own.
+      const shown = new Set(
+        (answer?.data?.tools ?? [])
+          .filter((t) => t.error !== null)
+          .map((t) => `${t.path}: ${t.error}`),
+      );
       this.errors.set((answer?.errors ?? []).filter((e) => !shown.has(e)));
     } catch (error) {
       this.errors.set([messageOf(error)]);
@@ -209,14 +215,16 @@ export class CliTools {
       case "failed":
         return "failed";
       case null:
+        if (tool.state === "stale") {
+          return copy ? "an old copy, install replaces it" : "an old link, install repairs it";
+        }
         return STATES[tool.state];
     }
   }
 }
 
-const STATES: Record<CliTool["state"], string> = {
+const STATES: Record<Exclude<CliTool["state"], "stale">, string> = {
   missing: "not installed",
   installed: "installed",
-  stale: "an old link, install repairs it",
   foreign: "a file not created by AgentLens is in the way",
 };

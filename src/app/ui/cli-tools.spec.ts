@@ -36,7 +36,7 @@ async function render(invoke: (command: string) => Promise<unknown>) {
     button(label)?.click();
     await settle();
   };
-  return { el, text, button, click };
+  return { fixture, el, text, button, click, settle };
 }
 
 describe("CliTools", () => {
@@ -81,7 +81,7 @@ describe("CliTools", () => {
     expect(text()).toContain("linked");
     expect(text()).toContain("Created the folder /home/user/.local/bin");
     expect(text()).toContain("Not touched: /home/user/.local/bin/agentlens-mcp");
-    expect(text()).toContain("is not on your PATH");
+    expect(text()).toContain("is not on the PATH AgentLens was started with");
     expect(text()).toContain("~/.zshrc");
     expect(text()).toContain("~/.bashrc");
     expect(text()).toContain('export PATH="$HOME/.local/bin:$PATH"');
@@ -129,7 +129,8 @@ describe("CliTools", () => {
         offered: true,
         tools: [{ ...base.tools[0], action: "failed", error: "permission denied" }, base.tools[1]],
       },
-      ["permission denied", "the folder could not be created"],
+      // The backend names the path in the errors of the answer.
+      [`${base.tools[0].path}: permission denied`, "the folder could not be created"],
     );
     const { el, text, click } = await render(async (command) =>
       command === "cli_tools_install" ? failed : offered,
@@ -151,5 +152,103 @@ describe("CliTools", () => {
     await click("Install command line tools");
     expect(el.querySelector('[role="alert"]')?.textContent).toContain("read-only file system");
     expect(button("Install command line tools")?.disabled).toBe(false);
+  });
+
+  it("disables both buttons and says what runs while a command is busy", async () => {
+    let finish: (value: unknown) => void = () => undefined;
+    const pending = new Promise((resolve) => (finish = resolve));
+    const invoke = vi.fn(async (command: string) =>
+      command === "cli_tools_install" ? pending : offered,
+    );
+    const { fixture, text, button, click, settle } = await render(invoke);
+    await click("Command line tools");
+    button("Install command line tools")?.click();
+    fixture.detectChanges();
+    expect(button("Install command line tools")?.disabled).toBe(true);
+    expect(button("Remove command line tools")?.disabled).toBe(true);
+    expect(text()).toContain("Installing the command line tools…");
+    // A second click while busy sends nothing.
+    button("Remove command line tools")?.click();
+    expect(invoke).not.toHaveBeenCalledWith("cli_tools_remove");
+
+    finish(answer({ offered: true }));
+    await new Promise((resolve) => setTimeout(resolve));
+    await settle();
+    expect(button("Install command line tools")?.disabled).toBe(false);
+    expect(text()).not.toContain("Installing the command line tools…");
+  });
+
+  it("labels the states of the status and the actions of a call", async () => {
+    const st = answer({
+      offered: true,
+      tools: [
+        { ...base.tools[0], state: "stale" },
+        { ...base.tools[1], state: "foreign" },
+      ],
+    });
+    const done = answer({
+      offered: true,
+      tools: [
+        { ...base.tools[0], state: "installed", action: "repaired" },
+        { ...base.tools[1], state: "installed", action: "kept" },
+      ],
+    });
+    const { text, click } = await render(async (command) =>
+      command === "cli_tools_install" ? done : st,
+    );
+    await click("Command line tools");
+    expect(text()).toContain("an old link, install repairs it");
+    expect(text()).toContain("a file not created by AgentLens is in the way");
+    await click("Install command line tools");
+    expect(text()).toContain("link repaired");
+    expect(text()).toContain("already installed");
+  });
+
+  it("labels an installed tool and an old copy of the AppImage", async () => {
+    const st = answer({
+      offered: true,
+      method: "copy",
+      tools: [
+        { ...base.tools[0], state: "installed" },
+        { ...base.tools[1], state: "stale" },
+      ],
+    });
+    const repaired = answer({
+      offered: true,
+      method: "copy",
+      tools: base.tools.map((t) => ({
+        ...t,
+        state: "installed" as const,
+        action: "repaired" as const,
+      })),
+    });
+    const { text, click } = await render(async (command) =>
+      command === "cli_tools_install" ? repaired : st,
+    );
+    await click("Command line tools");
+    expect(text()).toContain("installed");
+    expect(text()).toContain("an old copy, install replaces it");
+    await click("Install command line tools");
+    expect(text()).toContain("copy replaced");
+  });
+
+  it("shows the error of the whole call, for example a temporary location", async () => {
+    const refused = answer(
+      {
+        offered: true,
+        tools: base.tools.map((t) => ({ ...t, action: "failed" as const })),
+        error: "move AgentLens.app to /Applications",
+      },
+      ["move AgentLens.app to /Applications"],
+    );
+    const { el, click } = await render(async (command) =>
+      command === "cli_tools_install" ? refused : offered,
+    );
+    await click("Command line tools");
+    await click("Install command line tools");
+    const alerts = Array.from(el.querySelectorAll('[role="alert"]')).map((a) =>
+      a.textContent?.trim(),
+    );
+    expect(alerts).toEqual(["move AgentLens.app to /Applications"]);
   });
 });
