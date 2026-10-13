@@ -250,6 +250,12 @@ fn json_samples_for_the_frontend_are_up_to_date() {
             )
             .unwrap(),
         ),
+        ("cli_tools", {
+            // Samples never offer the action: the page outside Tauri has no binaries to link.
+            let mut answer = json(&api::cli_tools_status(&ctx, &dir.path().join("app")).unwrap());
+            answer["data"]["offered"] = Value::Bool(false);
+            serde_json::to_string_pretty(&answer).unwrap()
+        }),
     ];
     let home = dir.path().display().to_string().replace('\\', "\\\\");
     let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/app/core/samples");
@@ -400,4 +406,34 @@ fn unused_csv_follows_the_all_toggle_and_overview_has_no_csv() {
     };
     let err = api::export(&ctx, "flow", "csv", &claude(), &bad).unwrap_err();
     assert!(err.contains("unknown section"), "{err}");
+}
+
+#[test]
+fn cli_tools_answers_have_the_shape_of_the_typescript_types() {
+    let (dir, ctx) = setup();
+    let bin = dir.path().join("app");
+    fs::create_dir_all(&bin).unwrap();
+    let status = json(&api::cli_tools_status(&ctx, &bin).unwrap());
+    assert_eq!(
+        keys(&status["data"]),
+        [
+            "created_dir",
+            "dir",
+            "foreign",
+            "method",
+            "note",
+            "offered",
+            "on_path",
+            "profile_lines",
+            "supported",
+            "tools"
+        ]
+    );
+    assert_eq!(
+        keys(&status["data"]["tools"][0]),
+        ["action", "error", "name", "path", "state", "target"]
+    );
+    assert!(status["errors"].as_array().unwrap().is_empty());
+    // Nothing is written by the status.
+    assert!(!dir.path().join(".local/bin").exists());
 }

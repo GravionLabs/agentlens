@@ -379,3 +379,41 @@ export interface UpdateInfo {
   notes: string | null;
   date: string | null;
 }
+
+export type CliToolMethod = "symlink" | "copy" | "unsupported";
+export type CliToolState = "missing" | "installed" | "stale" | "foreign";
+export type CliToolAction =
+  "created" | "repaired" | "kept" | "removed" | "absent" | "skipped_foreign" | "failed";
+
+/** One command line tool: where its link goes and what is there now. */
+export interface CliTool {
+  name: string;
+  path: string;
+  target: string;
+  state: CliToolState;
+  /** What the call did; null for the status. */
+  action: CliToolAction | null;
+  error: string | null;
+}
+
+/** The line to add to a shell profile so that the tools folder is on PATH. */
+export interface ProfileLine {
+  shell: string;
+  file: string;
+  line: string;
+}
+
+/** The state of the command line tools (answer of cli_tools_status, _install and _remove). */
+export interface CliTools {
+  supported: boolean;
+  /** Whether the application should show the action (macOS and AppImage). */
+  offered: boolean;
+  method: CliToolMethod;
+  dir: string;
+  created_dir: boolean;
+  on_path: boolean;
+  profile_lines: ProfileLine[];
+  tools: CliTool[];
+  foreign: string[];
+  note: string | null;
+}
