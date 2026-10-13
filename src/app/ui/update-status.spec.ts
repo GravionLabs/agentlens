@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { TestBed } from "@angular/core/testing";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Ipc } from "../core/ipc";
 import type { UpdateInfo } from "../core/types";
 import { UpdateService } from "../core/update.service";
@@ -37,6 +37,15 @@ describe("UpdateStatus", () => {
     expect(text()).toContain("offline");
   });
 
+  it("offers a new check but no installation after a failed check", async () => {
+    const { fixture, service, buttons } = render(async () => {
+      throw "offline";
+    });
+    await service.check();
+    fixture.detectChanges();
+    expect(buttons()).toEqual(["Check for updates"]);
+  });
+
   it("shows a failed installation with its error and still offers the installation", async () => {
     const { fixture, service, text, buttons } = render(async (command) => {
       if (command === "update_install") throw "Could not install the update: no package";
@@ -49,5 +58,30 @@ describe("UpdateStatus", () => {
     expect(text()).not.toContain("Update check failed");
     expect(text()).toContain("no package");
     expect(buttons()).toContain("Install and restart");
+  });
+
+  it("offers only the installation, not a new check, after a failed installation", async () => {
+    const { fixture, service, buttons } = render(async (command) => {
+      if (command === "update_install") throw "no package";
+      return newer;
+    });
+    await service.check();
+    await service.install();
+    fixture.detectChanges();
+    expect(buttons()).toEqual(["Install and restart"]);
+  });
+
+  it("retries the installation when the button is clicked", async () => {
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "update_install") throw "no package";
+      return newer;
+    });
+    const { fixture, service } = render(invoke);
+    await service.check();
+    await service.install();
+    fixture.detectChanges();
+    const button = (fixture.nativeElement as HTMLElement).querySelector("button");
+    button?.click();
+    expect(invoke.mock.calls.filter(([c]) => c === "update_install")).toHaveLength(2);
   });
 });

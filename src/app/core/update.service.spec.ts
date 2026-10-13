@@ -122,4 +122,30 @@ describe("UpdateService", () => {
     expect(service.state()).toBe("installing");
     expect(service.error()).toBeNull();
   });
+
+  it("reports a new error when the retried installation fails again", async () => {
+    let attempts = 0;
+    const service = create(async (command) => {
+      if (command === "update_install") throw `failure ${++attempts}`;
+      return newer;
+    });
+    await service.check();
+    await service.install();
+    expect(service.error()).toBe("failure 1");
+    await service.install();
+    expect(service.state()).toBe("installFailed");
+    expect(service.error()).toBe("failure 2");
+    expect(service.info()).toEqual(newer);
+  });
+
+  it("does not install after a failed check", async () => {
+    const invoke = vi.fn(async () => {
+      throw "offline";
+    });
+    const service = create(invoke);
+    await service.check();
+    await service.install();
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(service.state()).toBe("error");
+  });
 });

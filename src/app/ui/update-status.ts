@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
 import { UpdateService } from "../core/update.service";
 
 /** The update check in the header: a button, and what the check found. */
@@ -36,7 +36,7 @@ import { UpdateService } from "../core/update.service";
         </button>
       }
     }
-    @if (updates.state() !== "available" && updates.state() !== "installing") {
+    @if (showCheck()) {
       <button
         type="button"
         class="btn btn-link btn-sm"
@@ -61,6 +61,9 @@ import { UpdateService } from "../core/update.service";
       user-select: text;
       cursor: text;
       overflow-wrap: anywhere;
+      max-width: 40ch;
+      max-height: 4.5em;
+      overflow-y: auto;
     }
     .err {
       color: var(--warn);
@@ -69,4 +72,8 @@ import { UpdateService } from "../core/update.service";
 })
 export class UpdateStatus {
   protected readonly updates = inject(UpdateService);
+  /** A new check is not offered while an update is pending: installing is the way forward. */
+  protected readonly showCheck = computed(
+    () => !["available", "installing", "installFailed"].includes(this.updates.state()),
+  );
 }
