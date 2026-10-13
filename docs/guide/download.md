@@ -29,19 +29,21 @@ The archives have a name without a version, so these links always lead to the ne
 | macOS Apple silicon    | [`agentlens-aarch64-apple-darwin.tar.gz`](https://github.com/GravionLabs/agentlens/releases/latest/download/agentlens-aarch64-apple-darwin.tar.gz)         |
 | Windows x86_64         | [`agentlens-x86_64-pc-windows-msvc.zip`](https://github.com/GravionLabs/agentlens/releases/latest/download/agentlens-x86_64-pc-windows-msvc.zip)           |
 
-Unpack the archive and put `agentlens` and `agentlens-mcp` (the [MCP server](mcp-server.md)) on your `PATH`. The desktop installers contain both programs as well, so with an installer you do not need the archive:
-
-| Installer | Where `agentlens` and `agentlens-mcp` are |
-| --------- | ----------------------------------------- |
-| Windows `.msi` or setup `.exe` | the install directory of the application |
-| Linux `.deb` or `.rpm` | `/usr/bin` |
-| macOS `.dmg` and Linux AppImage | inside the application bundle; a separate action to make them available on the command line is planned |
-
-The installers do not change your `PATH` on their own, except that `/usr/bin` is on it already. Check the download against Check the download against [`SHA256SUMS`](https://github.com/GravionLabs/agentlens/releases/latest/download/SHA256SUMS) from the same release:
+Check the download against [`SHA256SUMS`](https://github.com/GravionLabs/agentlens/releases/latest/download/SHA256SUMS) from the same release:
 
 ```sh
 sha256sum -c --ignore-missing SHA256SUMS
 ```
+
+Unpack the archive and put `agentlens` and `agentlens-mcp` (the [MCP server](mcp-server.md)) on your `PATH`. The desktop installers contain both programs as well, so with an installer you do not need the archive:
+
+| Installer                       | Where `agentlens` and `agentlens-mcp` are                                       |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| Windows `.msi` or setup `.exe`  | the install directory of the application                                        |
+| Linux `.deb` or `.rpm`          | `/usr/bin`, which is on your `PATH` already                                     |
+| macOS `.dmg` and Linux AppImage | inside the application bundle; making them available on the command line is planned |
+
+The installers do not change your `PATH`.
 
 ## From source
 

@@ -41,7 +41,7 @@ cargo clippy --workspace --exclude agentlens-app --all-targets -- -D warnings
 cargo test --workspace --exclude agentlens-app
 ```
 
-For the application: `pnpm lint && pnpm format:check && pnpm test && pnpm build` and `cargo test -p agentlens-app`.
+For the application: `pnpm lint && pnpm format:check && pnpm test && pnpm build` and `cargo test -p agentlens-app`. Run `scripts/stage-sidecars.sh` (`.ps1` on Windows) once before `cargo test -p agentlens-app` or `pnpm tauri build`: tauri-build needs the staged `externalBin` files in `src-tauri/binaries`.
 
 ## Issue and PR conventions
 

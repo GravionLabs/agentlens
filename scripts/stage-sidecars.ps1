@@ -9,16 +9,21 @@ if (-not $Target) {
   $Target = (rustc -vV | Select-String '^host: (.+)$').Matches[0].Groups[1].Value
 }
 if (-not $Target) { throw "cannot determine the target triple" }
+if ($Target -notmatch '^[A-Za-z0-9_.-]+$') { throw "invalid target triple: $Target" }
 $ext = if ($Target -like "*windows*") { ".exe" } else { "" }
 
 Set-Location $root
 cargo build --release --locked --target $Target -p agentlens-cli -p agentlens-mcp
 if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
 
+# Honor CARGO_TARGET_DIR and build.target-dir.
+$targetDir = $env:CARGO_TARGET_DIR
+if (-not $targetDir) { $targetDir = (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).target_directory }
+
 $out = Join-Path $root "src-tauri/binaries"
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 foreach ($name in "agentlens", "agentlens-mcp") {
   $dest = Join-Path $out "$name-$Target$ext"
-  Copy-Item "target/$Target/release/$name$ext" $dest -Force
+  Copy-Item (Join-Path $targetDir "$Target/release/$name$ext") $dest -Force
   Write-Host "staged $dest"
 }
