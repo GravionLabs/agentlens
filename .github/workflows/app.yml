@@ -65,5 +65,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # bundle.externalBin: the app crate needs the staged CLI and MCP server at build time.
+      - run: scripts/stage-sidecars.sh
       - run: cargo clippy -p agentlens-app --all-targets -- -D warnings
       - run: cargo test -p agentlens-app
