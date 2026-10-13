@@ -87,14 +87,39 @@ describe("UpdateService", () => {
     expect(service.state()).toBe("installing");
   });
 
-  it("returns to the error state when the installation fails", async () => {
+  it("tells a failed installation from a failed check and keeps the update", async () => {
     const service = create(async (command) => {
       if (command === "update_install") throw "Could not install the update: disk full";
       return newer;
     });
     await service.check();
     await service.install();
-    expect(service.state()).toBe("error");
+    expect(service.state()).toBe("installFailed");
     expect(service.error()).toContain("disk full");
+    expect(service.info()).toEqual(newer);
+  });
+
+  it("marks a failed check as error, not as a failed installation", async () => {
+    const service = create(async () => {
+      throw "offline";
+    });
+    await service.check();
+    expect(service.state()).toBe("error");
+  });
+
+  it("retries the installation after it failed", async () => {
+    let attempts = 0;
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "update_install" && ++attempts === 1) throw "download removed";
+      return command === "update_check" ? newer : null;
+    });
+    const service = create(invoke);
+    await service.check();
+    await service.install();
+    expect(service.state()).toBe("installFailed");
+    await service.install();
+    expect(attempts).toBe(2);
+    expect(service.state()).toBe("installing");
+    expect(service.error()).toBeNull();
   });
 });

@@ -3,7 +3,9 @@ import { messageOf } from "./analysis";
 import { Ipc } from "./ipc";
 import type { UpdateInfo } from "./types";
 
-export type UpdateState = "idle" | "checking" | "upToDate" | "available" | "installing" | "error";
+/** `error` is a failed check; `installFailed` keeps `info`, so the update can be retried. */
+export type UpdateState =
+  "idle" | "checking" | "upToDate" | "available" | "installing" | "error" | "installFailed";
 
 /**
  * Checks for and installs application updates. Nothing is checked in the background: the network
@@ -43,13 +45,14 @@ export class UpdateService {
 
   /** Installs the update found by {@link check}. On success the app restarts, so nothing follows. */
   async install(): Promise<void> {
-    if (this.state() !== "available") return;
+    if (this.state() !== "available" && this.state() !== "installFailed") return;
     this.state.set("installing");
     this.error.set(null);
     try {
       await this.ipc.invoke("update_install");
     } catch (error) {
-      this.fail(error);
+      this.error.set(messageOf(error));
+      this.state.set("installFailed");
     }
   }
 

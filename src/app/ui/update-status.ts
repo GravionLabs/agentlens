@@ -25,7 +25,15 @@ import { UpdateService } from "../core/update.service";
         <span class="note">Installing the update…</span>
       }
       @case ("error") {
-        <span class="note err" [title]="updates.error() ?? ''">Update check failed</span>
+        <span class="note err">Update check failed</span>
+        <span class="note err detail">{{ updates.error() }}</span>
+      }
+      @case ("installFailed") {
+        <span class="note err">Update failed</span>
+        <span class="note err detail">{{ updates.error() }}</span>
+        <button type="button" class="btn btn-sm" (click)="updates.install()">
+          Install and restart
+        </button>
       }
     }
     @if (updates.state() !== "available" && updates.state() !== "installing") {
@@ -48,6 +56,11 @@ import { UpdateService } from "../core/update.service";
     .note {
       font-size: 0.85rem;
       color: var(--muted);
+    }
+    .detail {
+      user-select: text;
+      cursor: text;
+      overflow-wrap: anywhere;
     }
     .err {
       color: var(--warn);

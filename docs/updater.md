@@ -5,6 +5,17 @@ The application updates itself from the latest GitHub release. It checks only wh
 no other network call. If a newer version exists, the status bar shows it with its release notes and
 **Install and restart** downloads, verifies and installs it.
 
+If something goes wrong, the header says which step failed and shows the error text next to it
+(select it to copy):
+
+- **Update check failed**: the check itself did not work.
+- **Update failed**: the update was found but could not be installed. It stays available, so
+  **Install and restart** can be clicked again.
+
+Common causes: no network connection; the release has no package for this platform (for example a
+release without an installer for your operating system or architecture); the download was removed
+from the release; the signature does not match the public key.
+
 ## Signing
 
 Update packages are signed with a Tauri updater key (this is separate from operating system code
