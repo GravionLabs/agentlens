@@ -43,7 +43,28 @@ Unpack the archive and put `agentlens` and `agentlens-mcp` (the [MCP server](mcp
 | Linux `.deb` or `.rpm`          | `/usr/bin`, which is on your `PATH` already                                     |
 | macOS `.dmg` and Linux AppImage | inside the application bundle; making them available on the command line is planned |
 
-The installers do not change your `PATH`.
+The Linux and macOS installers do not change your `PATH`. The Windows installers do, as described next.
+
+### Windows: the `PATH` entry
+
+Both Windows installers (setup `.exe` and `.msi`) add their install directory to your user `PATH`, so `agentlens` and `agentlens-mcp` work without any further step. A per-machine setup `.exe` that runs elevated adds the directory to the machine `PATH` instead.
+
+Programs that are already running keep the old `PATH`: open a **new** terminal (or restart your editor) before you use the commands.
+
+The uninstaller removes exactly that entry and leaves every other entry as it is. To remove it by hand (for example after deleting the files without the uninstaller):
+
+- Open **Edit environment variables for your account** from the Start menu, select `Path` under **User variables**, click **Edit**, select the AgentLens install directory, click **Delete** and confirm with **OK**.
+- Or run this in PowerShell, replacing the directory with your install directory (it edits the user `PATH` only, and a new terminal sees the change):
+
+```powershell
+$dir = 'C:\Path\To\AgentLens'
+$key = Get-Item 'HKCU:\Environment'
+$old = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+$new = ($old -split ';' | Where-Object { $_ -and $_ -ne $dir }) -join ';'
+Set-ItemProperty 'HKCU:\Environment' -Name Path -Value $new -Type ExpandString
+```
+
+If your existing `PATH` is very long (1023 characters or more), the setup `.exe` leaves `PATH` untouched, because it cannot read and write such a value safely without cutting off entries, and the same applies if the new entry would not fit. The installation still succeeds, but you must add the install directory by hand, with the dialog above (choose **New** instead of **Delete**). The uninstaller then has nothing to remove.
 
 ## From source
 
