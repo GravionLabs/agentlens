@@ -5,6 +5,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Ipc, SAMPLE_MODE } from "../core/ipc";
 import { TokenFormatService } from "../core/token-format.service";
 import { tokens } from "../core/format";
+import { ZoomService } from "../core/zoom.service";
 import { StatusBar } from "./status-bar";
 
 beforeAll(() => {
@@ -107,7 +108,7 @@ describe("StatusBar helix status bar", () => {
 
   it("labels sample mode as sample data, with the note and the install link", async () => {
     const { el, text } = await renderBar(true, "0.7.1");
-    expect(el.querySelector(".sample")?.textContent?.trim()).toBe("sample data");
+    expect(el.querySelector("hx-tag.sample")?.textContent?.trim()).toBe("sample data");
     expect(text).toContain("Nothing here is read from your machine.");
     expect(text).not.toContain("Staging");
     expect(text).not.toContain("Unknown");
@@ -122,5 +123,38 @@ describe("StatusBar helix status bar", () => {
     for (const label of ["Round token counts", "Smaller", "Reset size", "Larger"]) {
       expect(el.querySelector(`button[aria-label="${label}"]`), label).not.toBeNull();
     }
+  });
+});
+
+describe("StatusBar zoom controls", () => {
+  it("steps the size and shows the percentage on helix buttons", async () => {
+    localStorage.clear();
+    const { el } = await renderBar(false, "0.7.1");
+    const zoom = TestBed.inject(ZoomService);
+    const click = (label: string) =>
+      el.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click();
+    const reset = el.querySelector<HTMLButtonElement>('button[aria-label="Reset size"]')!;
+    expect(reset.classList.contains("hx-button")).toBe(true);
+    expect(reset.textContent?.trim()).toBe("100%");
+    click("Larger");
+    expect(zoom.factor()).toBe(1.1);
+    click("Smaller");
+    click("Smaller");
+    expect(zoom.factor()).toBe(0.9);
+    click("Reset size");
+    expect(zoom.factor()).toBe(1);
+  });
+
+  it("stays within 70 to 160 percent", async () => {
+    localStorage.clear();
+    const { el } = await renderBar(false, "0.7.1");
+    const zoom = TestBed.inject(ZoomService);
+    for (let i = 0; i < 12; i++)
+      el.querySelector<HTMLButtonElement>('[aria-label="Smaller"]')!.click();
+    expect(zoom.factor()).toBe(0.7);
+    for (let i = 0; i < 12; i++)
+      el.querySelector<HTMLButtonElement>('[aria-label="Larger"]')!.click();
+    expect(zoom.factor()).toBe(1.6);
+    zoom.reset();
   });
 });

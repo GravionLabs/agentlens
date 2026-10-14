@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component } from "@angular/core";
+import { HxButton } from "@gravionlabs/helix-ui";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { NAV } from "./app.routes";
 import { FiltersService } from "./core/filters.service";
@@ -12,7 +13,7 @@ import { inject } from "@angular/core";
 
 @Component({
   selector: "app-root",
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, FilterBar, StatusBar],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, FilterBar, StatusBar, HxButton],
   hostDirectives: [HelixDark],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { "(document:keydown)": "zoom.handleKey($event)" },
@@ -32,7 +33,7 @@ import { inject } from "@angular/core";
       </nav>
       <app-filter-bar />
       <div class="foot">
-        <button type="button" class="btn" (click)="refresh()" [disabled]="loading.busy()">
+        <button hx-button type="button" (click)="refresh()" [disabled]="loading.busy()">
           Refresh
         </button>
       </div>

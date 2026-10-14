@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
+import { HxButton, HxTag } from "@gravionlabs/helix-ui";
 import { HelixStatusBar, type HelixStatusBarVersion } from "@gravionlabs/helix-shell";
 import { SAMPLE_MODE } from "../core/ipc";
 import { TokenFormatService } from "../core/token-format.service";
@@ -13,7 +14,7 @@ import { UpdateStatus } from "./update-status";
  */
 @Component({
   selector: "app-status-bar",
-  imports: [HelixStatusBar, CliTools, UpdateStatus],
+  imports: [HelixStatusBar, HxButton, HxTag, CliTools, UpdateStatus],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <helix-status-bar
@@ -21,112 +22,111 @@ import { UpdateStatus } from "./update-status";
       [note]="sampleMode ? 'Nothing here is read from your machine.' : undefined"
       [versions]="versions()"
       height="auto"
-    />
-    @if (sampleMode) {
-      <span class="sample">sample data</span>
-      <a
-        class="demo-link"
-        href="https://github.com/GravionLabs/agentlens/releases/latest"
-        target="_blank"
-        rel="noopener noreferrer"
-        >Install the application</a
-      >
-    }
-    <span class="right">
-      <button
-        type="button"
-        class="btn btn-text btn-sm"
-        [title]="
-          rounded()
-            ? 'Token counts are rounded (2.11 M). Click to show them in full.'
-            : 'Token counts are shown in full (2,114,305). Click to round them.'
-        "
-        aria-label="Round token counts"
-        [attr.aria-pressed]="rounded()"
-        (click)="toggleRounded()"
-      >
-        {{ rounded() ? "2.11 M" : "2,114,305" }}
-      </button>
-      <span class="zoom" role="group" aria-label="Interface size">
-        <button
-          type="button"
-          class="btn btn-text btn-sm"
-          title="Smaller (Ctrl -)"
-          aria-label="Smaller"
-          (click)="zoom.zoomOut()"
-        >
-          <svg
-            class="icon"
-            viewBox="0 0 16 16"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            aria-hidden="true"
+    >
+      <span hxStatusBarEnd class="end">
+        @if (sampleMode) {
+          <hx-tag class="sample" severity="warn" value="sample data" rounded />
+          <a
+            class="demo-link"
+            href="https://github.com/GravionLabs/agentlens/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Install the application</a
           >
-            <circle cx="7" cy="7" r="4.5" />
-            <path d="M10.5 10.5 14 14M5 7h4" />
-          </svg>
-        </button>
+        }
         <button
+          hx-button
           type="button"
-          class="btn btn-text btn-sm"
-          title="Reset (Ctrl 0)"
-          aria-label="Reset size"
-          (click)="zoom.reset()"
+          variant="text"
+          size="small"
+          [title]="
+            rounded()
+              ? 'Token counts are rounded (2.11 M). Click to show them in full.'
+              : 'Token counts are shown in full (2,114,305). Click to round them.'
+          "
+          aria-label="Round token counts"
+          [attr.aria-pressed]="rounded()"
+          (click)="toggleRounded()"
         >
-          {{ percent() }}%
+          {{ rounded() ? "2.11 M" : "2,114,305" }}
         </button>
-        <button
-          type="button"
-          class="btn btn-text btn-sm"
-          title="Larger (Ctrl +)"
-          aria-label="Larger"
-          (click)="zoom.zoomIn()"
-        >
-          <svg
-            class="icon"
-            viewBox="0 0 16 16"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            aria-hidden="true"
+        <span class="zoom" role="group" aria-label="Interface size">
+          <button
+            hx-button
+            type="button"
+            variant="text"
+            size="small"
+            title="Smaller (Ctrl -)"
+            aria-label="Smaller"
+            (click)="zoom.zoomOut()"
           >
-            <circle cx="7" cy="7" r="4.5" />
-            <path d="M10.5 10.5 14 14M5 7h4M7 5v4" />
-          </svg>
-        </button>
+            <svg
+              class="icon"
+              viewBox="0 0 16 16"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="7" cy="7" r="4.5" />
+              <path d="M10.5 10.5 14 14M5 7h4" />
+            </svg>
+          </button>
+          <button
+            hx-button
+            type="button"
+            variant="text"
+            size="small"
+            title="Reset (Ctrl 0)"
+            aria-label="Reset size"
+            (click)="zoom.reset()"
+          >
+            {{ percent() }}%
+          </button>
+          <button
+            hx-button
+            type="button"
+            variant="text"
+            size="small"
+            title="Larger (Ctrl +)"
+            aria-label="Larger"
+            (click)="zoom.zoomIn()"
+          >
+            <svg
+              class="icon"
+              viewBox="0 0 16 16"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="7" cy="7" r="4.5" />
+              <path d="M10.5 10.5 14 14M5 7h4M7 5v4" />
+            </svg>
+          </button>
+        </span>
+        @if (!sampleMode) {
+          <app-cli-tools />
+          <app-update-status />
+        }
       </span>
-      @if (!sampleMode) {
-        <app-cli-tools />
-        <app-update-status />
-      }
-    </span>
+    </helix-status-bar>
   `,
   styles: `
     :host {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      min-height: 30px;
-      padding: 2px 12px;
+      display: block;
       border-top: 1px solid var(--line);
       background: var(--panel);
       font-size: 0.85rem;
       color: var(--muted);
     }
-    helix-status-bar {
-      flex: 1;
-      min-width: 0;
-      margin: -2px 0 -2px -12px;
-    }
-    .right,
+    .end,
     .zoom {
       display: inline-flex;
       align-items: center;
@@ -134,17 +134,6 @@ import { UpdateStatus } from "./update-status";
     }
     .zoom {
       gap: 2px;
-    }
-    .zoom .btn {
-      display: inline-flex;
-      align-items: center;
-    }
-    .sample {
-      border: 1px solid var(--warn);
-      color: var(--warn);
-      border-radius: 10px;
-      padding: 0 8px;
-      white-space: nowrap;
     }
     .demo-link {
       color: var(--accent);
