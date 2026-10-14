@@ -4,20 +4,20 @@ The application shows the same analyses as the CLI with shared filters, and the 
 
 ## Views
 
-The sidebar lists the views:
+The sidebar lists the views in three groups, Data, Optimize and Analyze, followed by the Glossary:
 
 | View       | Shows                                                                         |
 | ---------- | ----------------------------------------------------------------------------- |
 | Sources    | which agents were found, where, and how many sessions and events were read    |
-| Skills     | uses and cost per skill, with a cost split chart                              |
-| Advice     | what to change to save tokens, with the numbers behind each suggestion        |
-| Context    | what the clients add to every request, by owner or by project                 |
-| Unused     | installed skills, agents and MCP servers nobody used, and their idle cost     |
+| Timeline   | the context size of every request of one session                              |
 | Flow       | context growth, tool errors and retry loops, hooks and permission waits       |
+| Skills     | uses and cost per skill, with a cost split chart                              |
+| Unused     | installed skills, agents and MCP servers nobody used, and their idle cost     |
+| Context    | what the clients add to every request, by owner or by project                 |
+| Advice     | what to change to save tokens, with the numbers behind each suggestion        |
 | Cost       | cost per model, project, branch or issue, with a what-if model                |
 | Efficiency | cache hit rate and the share of subagents                                     |
 | Compare    | the agents side by side                                                       |
-| Timeline   | the context size of every request of one session                              |
 | Glossary   | the terms (overhead, baseline, carry, …) in one place                         |
 
 The [analyses](analyses.md) page explains what each one means.

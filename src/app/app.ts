@@ -5,7 +5,7 @@ import {
   type HelixStatusBarVersion,
   type HelixTopbarAction,
 } from "@gravionlabs/helix-shell";
-import { NAV } from "./app.routes";
+import { NAV, NAV_SECTIONS, type NavItem } from "./app.routes";
 import { FiltersService } from "./core/filters.service";
 import { Ipc, SAMPLE_MODE } from "./core/ipc";
 import { LoadingService } from "./core/loading.service";
@@ -13,6 +13,8 @@ import { UpdateService } from "./core/update.service";
 import { ZoomService } from "./core/zoom.service";
 import { HelixDark } from "./ui/helix-dark";
 import { StatusBar } from "./ui/status-bar";
+
+const toNavItem = (item: NavItem) => ({ label: item.label, routerLink: `/${item.path}` });
 
 @Component({
   selector: "app-root",
@@ -81,7 +83,11 @@ export class App {
   private readonly sampleMode = inject(SAMPLE_MODE);
 
   protected readonly navGroups: HelixNavGroup[] = [
-    { items: NAV.map((item) => ({ label: item.label, routerLink: `/${item.path}` })) },
+    ...NAV_SECTIONS.map((section) => ({
+      section,
+      items: NAV.filter((item) => item.group === section).map(toNavItem),
+    })),
+    { items: NAV.filter((item) => !item.group).map(toNavItem) },
   ];
   protected readonly topbarActions: HelixTopbarAction[] = [
     { icon: "pi pi-refresh", label: "Refresh", command: () => void this.refresh() },

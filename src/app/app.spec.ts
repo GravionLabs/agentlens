@@ -45,7 +45,7 @@ describe("app", () => {
     expect(Array.isArray(routes)).toBe(true);
   });
 
-  it("links every view in the navigation, in order", () => {
+  it("links every view in the navigation, in group order", () => {
     const { el } = render();
     const links = [...el.querySelectorAll<HTMLAnchorElement>("helix-nav-rail a[href]")].filter(
       (a) => a.getAttribute("href") !== "/",
@@ -53,6 +53,21 @@ describe("app", () => {
     const hrefs = links.map((a) => a.getAttribute("href"));
     expect(hrefs).toEqual(NAV.map((n) => `/${n.path}`));
     expect(links.map((a) => a.textContent?.trim())).toEqual(NAV.map((n) => n.label));
+  });
+
+  it("groups the navigation into Data, Optimize and Analyze, then Glossary", () => {
+    const { el } = render();
+    const sections = [
+      ...el.querySelectorAll("helix-nav-rail .nav-section, helix-nav-rail [class*='section']"),
+    ]
+      .map((e) => e.textContent?.trim().toLowerCase())
+      .filter((t) => ["data", "optimize", "analyze"].includes(t ?? ""));
+    expect(sections).toEqual(["data", "optimize", "analyze"]);
+    const members = (g: string) => NAV.filter((n) => n.group === g).map((n) => n.label);
+    expect(members("Data")).toEqual(["Sources", "Timeline", "Flow"]);
+    expect(members("Optimize")).toEqual(["Skills", "Unused", "Context", "Advice"]);
+    expect(members("Analyze")).toEqual(["Cost", "Efficiency", "Compare"]);
+    expect(NAV.filter((n) => !n.group).map((n) => n.label)).toEqual(["Glossary"]);
   });
 
   it("refreshes the backend and then bumps the filters", async () => {
