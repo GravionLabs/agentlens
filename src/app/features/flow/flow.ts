@@ -13,8 +13,9 @@ import {
 } from "../../core/format";
 import type { FlowData, SessionGrowth, ToolErrors } from "../../core/types";
 import { termTitle } from "../../ui/data-table";
+import { HelpLink } from "../../ui/help-link";
 import { Status } from "../../ui/status";
-import { HxCell, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 type Tab = "growth" | "errors" | "hooks";
 
@@ -48,7 +49,7 @@ export function errorRate(t: ToolErrors): number | null {
 
 @Component({
   selector: "app-flow",
-  imports: [PageHeader, Status, HxDataTable, HxCell],
+  imports: [PageHeader, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -96,9 +97,20 @@ export function errorRate(t: ToolErrors): number | null {
             [sortOrder]="-1"
             [paginator]="growth().length > 25"
             [rows]="25"
+            [rowsPerPageOptions]="[25, 'all']"
+            allLabel="Show all"
             emptyMessage="No sessions with requests."
             ariaLabel="Context growth"
           >
+            <ng-template hxColumnHeader="peak_tokens"
+              ><app-help-link term="peak" label="Peak"
+            /></ng-template>
+            <ng-template hxColumnHeader="compactionCount"
+              ><app-help-link term="compaction" label="Compactions"
+            /></ng-template>
+            <ng-template hxColumnHeader="near_limit"
+              ><app-help-link term="near-limit" label="Near limit"
+            /></ng-template>
             <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
             <ng-template hxCell="session" let-row>
               <span [attr.title]="row.session">{{ shortId(row.session) }}</span>
@@ -140,6 +152,8 @@ export function errorRate(t: ToolErrors): number | null {
             [sortOrder]="-1"
             [paginator]="errors().length > 25"
             [rows]="25"
+            [rowsPerPageOptions]="[25, 'all']"
+            allLabel="Show all"
             emptyMessage="No tool calls."
             ariaLabel="Tool errors"
           >
@@ -158,6 +172,8 @@ export function errorRate(t: ToolErrors): number | null {
               [sortOrder]="-1"
               [paginator]="loops().length > 25"
               [rows]="25"
+              [rowsPerPageOptions]="[25, 'all']"
+              allLabel="Show all"
               ariaLabel="Retry loops"
             >
               <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
@@ -189,6 +205,9 @@ export function errorRate(t: ToolErrors): number | null {
               [columns]="permissionColumns"
               ariaLabel="Permission prompts"
             >
+              <ng-template hxColumnHeader="total_wait_ms"
+                ><app-help-link term="permission-wait" label="Wait (s)"
+              /></ng-template>
               <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
               <ng-template hxCell="total_wait_ms" let-value="value">{{
                 seconds(value)

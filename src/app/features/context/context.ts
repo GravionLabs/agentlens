@@ -5,8 +5,9 @@ import { analysis } from "../../core/analysis";
 import { exactTokens, number, pathLabel, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { ContextKind, ContextReport, ContextRow, Tokens } from "../../core/types";
 import { termTitle } from "../../ui/data-table";
+import { HelpLink } from "../../ui/help-link";
 import { Status } from "../../ui/status";
-import { HxCell, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 export interface Note {
   text: string;
@@ -108,7 +109,7 @@ export function inView(kind: ContextKind, view: View): boolean {
 
 @Component({
   selector: "app-context",
-  imports: [PageHeader, Term, Status, HxDataTable, HxCell],
+  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -158,9 +159,24 @@ export function inView(kind: ContextKind, view: View): boolean {
         [sortOrder]="-1"
         [paginator]="rows().length > 100"
         [rows]="100"
+        [rowsPerPageOptions]="[100, 'all']"
+        allLabel="Show all"
         emptyMessage="No context items found."
         ariaLabel="Context"
       >
+        <ng-template hxColumnHeader="kind"><app-help-link term="kind" label="Kind" /></ng-template>
+        <ng-template hxColumnHeader="ownerLabel"
+          ><app-help-link term="owner" label="Owner"
+        /></ng-template>
+        <ng-template hxColumnHeader="tokenCount"
+          ><app-help-link term="token" label="Tokens"
+        /></ng-template>
+        <ng-template hxColumnHeader="requests"
+          ><app-help-link term="request" label="Requests"
+        /></ng-template>
+        <ng-template hxColumnHeader="overheadCount"
+          ><app-help-link term="overhead" label="Overhead"
+        /></ng-template>
         <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
         <ng-template hxCell="project" let-row>
           <span [attr.title]="row.project">{{ shortPath(row.project) }}</span>

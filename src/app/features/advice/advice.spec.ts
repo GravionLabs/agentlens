@@ -3,7 +3,8 @@ import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
-import { HxCell, HxDataTable } from "@gravionlabs/helix-ui";
+import { HxCell, HxColumnHeader, HxDataTable } from "@gravionlabs/helix-ui";
+import { HelpLinkStub } from "../../ui/help-link.testing";
 import { Ipc } from "../../core/ipc";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { tokenFormat } from "../../core/token-format.service";
@@ -79,7 +80,10 @@ class FakeIpc extends Ipc {
 
 async function render() {
   TestBed.overrideComponent(Advice, {
-    set: { imports: [HxDataTable, HxCell], schemas: [NO_ERRORS_SCHEMA] },
+    set: {
+      imports: [HxDataTable, HxCell, HxColumnHeader, HelpLinkStub],
+      schemas: [NO_ERRORS_SCHEMA],
+    },
   });
   const fixture = TestBed.createComponent(Advice);
   fixture.detectChanges();
@@ -158,5 +162,15 @@ describe("Advice table on helix", () => {
       detail: "",
     });
     expect(v).toMatchObject({ tokens: 5, tokensText: "~5", estimated: true });
+  });
+
+  it("links the Tokens and Requests headers to their glossary entries", async () => {
+    const { el } = await render();
+    const links = [...el.querySelectorAll<HTMLAnchorElement>("hx-data-table th a.help")];
+    expect(links.map((a) => a.getAttribute("aria-label"))).toEqual([
+      "Explain Tokens",
+      "Explain Requests",
+    ]);
+    expect(links[0].getAttribute("href")).toBe("/glossary?term=token");
   });
 });

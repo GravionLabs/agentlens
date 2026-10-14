@@ -3,7 +3,8 @@ import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
-import { HxCell, HxDataTable } from "@gravionlabs/helix-ui";
+import { HxCell, HxColumnHeader, HxDataTable } from "@gravionlabs/helix-ui";
+import { HelpLinkStub } from "../../ui/help-link.testing";
 import { Ipc } from "../../core/ipc";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { tokenFormat } from "../../core/token-format.service";
@@ -27,7 +28,10 @@ class FakeIpc extends Ipc {
 
 async function render() {
   TestBed.overrideComponent(Flow, {
-    set: { imports: [HxDataTable, HxCell], schemas: [NO_ERRORS_SCHEMA] },
+    set: {
+      imports: [HxDataTable, HxCell, HxColumnHeader, HelpLinkStub],
+      schemas: [NO_ERRORS_SCHEMA],
+    },
   });
   const fixture = TestBed.createComponent(Flow);
   fixture.detectChanges();
@@ -131,5 +135,17 @@ describe("Flow tables on helix", () => {
     expect(el.querySelector("hx-data-table tbody")!.textContent).toContain(
       "No sessions with requests.",
     );
+  });
+
+  it("links the glossary terms in the growth headers", async () => {
+    const { el } = await render();
+    const hrefs = [...el.querySelectorAll<HTMLAnchorElement>("hx-data-table th a.help")].map((a) =>
+      a.getAttribute("href"),
+    );
+    expect(hrefs).toEqual([
+      "/glossary?term=peak",
+      "/glossary?term=compaction",
+      "/glossary?term=near-limit",
+    ]);
   });
 });

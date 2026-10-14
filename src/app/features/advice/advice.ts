@@ -5,8 +5,9 @@ import { analysis } from "../../core/analysis";
 import { exactTokens, number, tokens } from "../../core/format";
 import type { AdviceItem, AdviceReport, Finding, FindingKind } from "../../core/types";
 import { termTitle } from "../../ui/data-table";
+import { HelpLink } from "../../ui/help-link";
 import { Status } from "../../ui/status";
-import { HxCell, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 const TITLES: Record<FindingKind, string> = {
   "unused-skills": "Unused skills",
@@ -61,7 +62,7 @@ export function findingTotal(f: Finding): string | null {
 
 @Component({
   selector: "app-advice",
-  imports: [PageHeader, Term, Status, HxDataTable, HxCell],
+  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -108,6 +109,12 @@ export function findingTotal(f: Finding): string | null {
               emptyMessage="Nothing to show."
               [ariaLabel]="title(f.kind)"
             >
+              <ng-template hxColumnHeader="tokens"
+                ><app-help-link term="token" label="Tokens"
+              /></ng-template>
+              <ng-template hxColumnHeader="requests"
+                ><app-help-link term="request" label="Requests"
+              /></ng-template>
               <ng-template hxCell="tokens" let-row>
                 <span [class.est]="row.estimated" [attr.title]="exact(row.tokens)">{{
                   row.tokensText

@@ -3,7 +3,8 @@ import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
-import { HxCell, HxDataTable } from "@gravionlabs/helix-ui";
+import { HxCell, HxColumnHeader, HxDataTable } from "@gravionlabs/helix-ui";
+import { HelpLinkStub } from "../../ui/help-link.testing";
 import { Ipc } from "../../core/ipc";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { tokenFormat } from "../../core/token-format.service";
@@ -103,7 +104,10 @@ class FakeIpc extends Ipc {
 
 async function render() {
   TestBed.overrideComponent(Context, {
-    set: { imports: [HxDataTable, HxCell], schemas: [NO_ERRORS_SCHEMA] },
+    set: {
+      imports: [HxDataTable, HxCell, HxColumnHeader, HelpLinkStub],
+      schemas: [NO_ERRORS_SCHEMA],
+    },
   });
   const fixture = TestBed.createComponent(Context);
   fixture.detectChanges();
@@ -184,5 +188,33 @@ describe("Context table on helix", () => {
     expect(el.querySelector("hx-data-table tbody")!.textContent).toContain(
       "No context items found.",
     );
+  });
+
+  it("links the glossary terms in the headers and offers all rows beyond the first 100", async () => {
+    const { el } = await render();
+    const hrefs = [...el.querySelectorAll<HTMLAnchorElement>("hx-data-table th a.help")].map((a) =>
+      a.getAttribute("href"),
+    );
+    expect(hrefs).toEqual([
+      "/glossary?term=kind",
+      "/glossary?term=owner",
+      "/glossary?term=token",
+      "/glossary?term=request",
+      "/glossary?term=overhead",
+    ]);
+    expect(el.querySelector("hx-paginator")).toBeNull();
+  });
+
+  it("pages above 100 rows with an option to show all", async () => {
+    payload = {
+      rows: Array.from({ length: 101 }, (_, i) => item(`o${i}`, i + 1, true, 1)),
+      first_request: {},
+      unavailable: {},
+    };
+    const { el } = await render();
+    expect(column(el, 2)).toHaveLength(100);
+    const paginator = el.querySelector("hx-paginator")!;
+    expect(paginator.textContent).toContain("1 - 100 of 101");
+    expect(paginator.querySelector("hx-select")).not.toBeNull();
   });
 });
