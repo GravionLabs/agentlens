@@ -1,0 +1,90 @@
+/*
+ * The AgentLens theme for helix: the roles of the helix tokens (--h-*, --helix-*) are bound to the
+ * AgentLens tokens of styles.scss (--bg, --panel, --text, --muted, --line, --accent, ...). Those flip
+ * with prefers-color-scheme and data-theme, so this one block serves light and dark; the `app-dark`
+ * class (set by HelixDark) only selects helix's own dark values, which are overridden here.
+ *
+ * Loaded after tokens.css and the helix style sheets (angular.json). `:root:root` has the specificity
+ * of helix's `:root.app-dark` / `:root[class*="app-dark"]` rules and wins by coming later.
+ */
+:root:root {
+  /* Shape and type */
+  --h-border-radius-md: 6px;
+  --helix-font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Text */
+  --h-text-color: var(--text);
+  --h-text-hover-color: var(--text);
+  --h-text-muted-color: var(--muted);
+  --h-text-hover-muted-color: var(--text);
+  --text-color: var(--text);
+
+  /* Primary: the accent; the contrast color is what sits on it (same rule as .btn-primary) */
+  --h-primary-color: var(--accent);
+  --h-primary-hover-color: color-mix(in srgb, var(--accent), var(--text) 15%);
+  --h-primary-active-color: color-mix(in srgb, var(--accent), var(--text) 25%);
+  --h-primary-contrast-color: var(--on-accent);
+  --h-focus-ring-color: var(--accent);
+
+  /* Selected rows and options: a tint of the accent */
+  --h-highlight-background: color-mix(in srgb, var(--accent), transparent 88%);
+  --h-highlight-focus-background: color-mix(in srgb, var(--accent), transparent 80%);
+  --h-highlight-color: var(--text);
+  --h-highlight-focus-color: var(--text);
+
+  /* Content surfaces: tables, panels */
+  --h-content-background: var(--panel);
+  --h-content-border-color: var(--line);
+  --h-content-color: var(--text);
+  --h-content-hover-background: color-mix(in srgb, var(--panel), var(--text) 5%);
+  --h-content-hover-color: var(--text);
+  --h-datatable-border-color: var(--line);
+  --h-datatable-row-striped-background: color-mix(in srgb, var(--panel), var(--bg) 60%);
+  --h-datatable-body-cell-selected-border-color: var(--line);
+
+  /* Form fields */
+  --h-form-field-background: var(--panel);
+  --h-form-field-color: var(--text);
+  --h-form-field-border-color: var(--line);
+  --h-form-field-hover-border-color: var(--muted);
+  --h-form-field-focus-border-color: var(--accent);
+  --h-form-field-placeholder-color: var(--muted);
+  --h-form-field-icon-color: var(--muted);
+  --h-form-field-float-label-color: var(--muted);
+  --h-form-field-disabled-background: var(--bg);
+  --h-form-field-disabled-color: var(--muted);
+  --h-form-field-shadow: none;
+
+  /* Overlays and lists */
+  --h-overlay-select-background: var(--panel);
+  --h-overlay-select-border-color: var(--line);
+  --h-overlay-select-color: var(--text);
+  --h-overlay-popover-background: var(--panel);
+  --h-overlay-popover-border-color: var(--line);
+  --h-overlay-popover-color: var(--text);
+  --h-overlay-modal-background: var(--panel);
+  --h-overlay-modal-border-color: var(--line);
+  --h-overlay-modal-color: var(--text);
+  --h-list-option-color: var(--text);
+  --h-list-option-focus-background: color-mix(in srgb, var(--panel), var(--text) 6%);
+  --h-list-option-focus-color: var(--text);
+  --h-list-option-icon-color: var(--muted);
+  --h-list-option-icon-focus-color: var(--muted);
+  --h-list-option-group-color: var(--muted);
+  --h-navigation-item-color: var(--text);
+  --h-navigation-item-focus-background: color-mix(in srgb, var(--panel), var(--text) 6%);
+  --h-navigation-item-active-background: color-mix(in srgb, var(--panel), var(--text) 6%);
+
+  /* Shell: ground, chrome (status bar), cards and borders are the app's own */
+  --helix-surface-ground: var(--bg);
+  --helix-surface-chrome: var(--panel);
+  --helix-surface-card: var(--panel);
+  --helix-surface-overlay: var(--panel);
+  --helix-surface-hover: color-mix(in srgb, var(--panel), var(--text) 6%);
+  --helix-border: var(--line);
+  --surface-ground: var(--helix-surface-ground);
+  --surface-card: var(--helix-surface-card);
+  --surface-overlay: var(--helix-surface-overlay);
+  --surface-hover: var(--helix-surface-hover);
+  --surface-border: var(--helix-border);
+}

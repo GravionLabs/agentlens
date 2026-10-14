@@ -30,7 +30,8 @@
               "node_modules/@gravionlabs/helix-ui/tokens.css",
               "node_modules/@gravionlabs/helix-ui/styles.css",
               "node_modules/@gravionlabs/helix-shell/styles.css",
-              "src/styles.scss"
+              "src/styles.scss",
+              "src/helix-theme.scss"
             ]
           },
           "configurations": {
