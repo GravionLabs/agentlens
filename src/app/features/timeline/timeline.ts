@@ -6,6 +6,7 @@ import { compact, day, number, sourceLabel, timeOfDay, usd } from "../../core/fo
 import type { SessionSummary, Timeline as TimelineData } from "../../core/types";
 import { Legend } from "../../ui/legend";
 import { Status } from "../../ui/status";
+import { hxEnabled, hxSamplePoints } from "../../ui/hx-flag";
 import { HxTimelineChart, syntheticTimeline } from "./hx-timeline-chart";
 import {
   HEIGHT,
@@ -70,7 +71,7 @@ const MARKER_LEGEND = [
           }
         </p>
         <app-legend [items]="markerLegend" />
-        @if (hx() !== undefined) {
+        @if (hxOn()) {
           <!-- Spike (#350): open the view as #/timeline?hx (or ?hx=400 for a 400-point sample) for the helix chart. -->
           <app-hx-timeline-chart [timeline]="hxTimeline() ?? t" />
         } @else {
@@ -226,9 +227,10 @@ export class Timeline {
   readonly hx = input<string>();
   protected readonly hxTimeline = computed(() => {
     const t = this.timeline();
-    const n = Number(this.hx());
-    return t && Number.isInteger(n) && n > 0 ? syntheticTimeline(t, n) : null;
+    const n = hxSamplePoints(this.hx());
+    return t && n !== null ? syntheticTimeline(t, n) : null;
   });
+  protected readonly hxOn = computed(() => hxEnabled(this.hx()));
   protected readonly list = analysis<SessionSummary[]>("sessions");
   protected readonly sessions = computed(() => this.list.value()?.data ?? []);
   private readonly picked = signal<string | null>(null);

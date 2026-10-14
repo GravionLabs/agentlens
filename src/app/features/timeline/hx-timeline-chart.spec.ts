@@ -165,6 +165,30 @@ describe("chartOptions", () => {
   });
 });
 
+describe("chartOptions edge cases", () => {
+  type O = {
+    scales: { x: { min: number; max: number } };
+    plugins: { tooltip: { callbacks: { title(i: unknown): string; footer(): string } } };
+  };
+  it("keeps a valid x range for no points and for a single point", () => {
+    const none = chartOptions({ ...t, points: [], markers: [] }) as O;
+    expect([none.scales.x.min, none.scales.x.max]).toEqual([1, 2]);
+    const one = chartOptions({ ...t, points: [t.points[0]] }) as O;
+    expect([one.scales.x.min, one.scales.x.max]).toEqual([1, 2]);
+  });
+
+  it("titles points with the request and markers with the gap, and has an empty footer when not thinned", () => {
+    const o = chartOptions(t) as O;
+    const cb = o.plugins.tooltip.callbacks;
+    expect(cb.title([{ dataset: {}, raw: { x: 2, y: 1 } }])).toBe("Request 2");
+    expect(cb.title([{ dataset: { kind: "compaction" }, raw: { x: 2.5, y: 1 } }])).toBe(
+      "Before request 3",
+    );
+    expect(cb.title([])).toBe("Request 0");
+    expect(cb.footer()).toBe("");
+  });
+});
+
 describe("fallback", () => {
   it("lists points and markers as text", () => {
     expect(fallbackRows(t)[1]).toEqual({
@@ -177,40 +201,69 @@ describe("fallback", () => {
 });
 
 describe("markerLines", () => {
-  it("draws one full-height line per marker point and makes compaction solid", () => {
-    const calls: string[] = [];
+  it("draws one full-height line per marker point, compaction solid and thick, others dashed and faint", () => {
+    document.documentElement.style.setProperty("--bad", "#aa0000");
+    document.documentElement.style.setProperty("--c-load", "#0000aa");
+    const strokes: {
+      style: unknown;
+      alpha: number;
+      width: number;
+      dash: number[];
+      path: string;
+    }[] = [];
+    let dash: number[] = [];
+    let path = "";
+    let saves = 0;
     const g = {
-      save: () => calls.push("save"),
-      restore: () => calls.push("restore"),
-      beginPath: () => undefined,
-      moveTo: (x: number) => calls.push(`move ${x}`),
-      lineTo: (x: number, y: number) => calls.push(`line ${x},${y}`),
-      stroke: () => calls.push("stroke"),
-      setLineDash: (d: number[]) => calls.push(`dash ${d.length}`),
-      strokeStyle: "",
+      save: () => saves++,
+      restore: () => saves--,
+      beginPath: () => (path = ""),
+      moveTo: (x: number, y: number) => (path += `M${x},${y}`),
+      lineTo: (x: number, y: number) => (path += `L${x},${y}`),
+      setLineDash: (d: number[]) => (dash = d),
+      stroke: () =>
+        strokes.push({
+          style: g.strokeStyle,
+          alpha: g.globalAlpha,
+          width: g.lineWidth,
+          dash,
+          path,
+        }),
+      strokeStyle: "" as unknown,
       globalAlpha: 1,
       lineWidth: 1,
     };
+    const canvas = document.createElement("canvas");
+    document.body.append(canvas);
     markerLines.beforeDatasetsDraw({
       ctx: g as unknown as CanvasRenderingContext2D,
-      canvas: document.createElement("canvas"),
+      canvas,
       chartArea: { top: 10, bottom: 200 },
       data: { datasets: [{}, { kind: "compaction" }, { kind: "skill" }] },
       getDatasetMeta: (i) => ({ data: i === 1 ? [{ x: 50 }, { x: 80 }] : [{ x: 20 }] }),
     });
-    expect(calls.filter((c) => c === "stroke")).toHaveLength(3);
-    expect(calls).toContain("move 80");
-    expect(calls).toContain("line 20,200");
-    expect(calls).toContain("dash 0");
-    expect(calls).toContain("dash 2");
+    expect(strokes).toEqual([
+      { style: "#aa0000", alpha: 1, width: 2.5, dash: [], path: "M50,10L50,200" },
+      { style: "#aa0000", alpha: 1, width: 2.5, dash: [], path: "M80,10L80,200" },
+      { style: "#0000aa", alpha: 0.55, width: 1, dash: [4, 3], path: "M20,10L20,200" },
+    ]);
+    expect(saves).toBe(0);
   });
 });
 
 describe("syntheticTimeline", () => {
   it("makes n points with all five marker kinds", () => {
-    const s = syntheticTimeline(t, 400);
-    expect(s.points).toHaveLength(400);
-    expect(new Set(s.markers.map((m) => m.kind.type)).size).toBe(5);
-    expect(s.thinned_from).toBe(2000);
+    const s = syntheticTimeline(t, 40);
+    expect(s.points).toHaveLength(40);
+    expect(new Set(s.markers.map((m) => m.kind.type))).toEqual(
+      new Set(["skill", "compaction", "tool-error", "hook-failed", "permission-prompt"]),
+    );
+    expect(s.thinned_from).toBe(200);
+  });
+
+  it("handles n of 1 without markers", () => {
+    const s = syntheticTimeline(t, 1);
+    expect(s.points).toHaveLength(1);
+    expect(s.markers).toEqual([]);
   });
 });

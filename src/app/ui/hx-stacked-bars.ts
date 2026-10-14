@@ -12,7 +12,7 @@ import { createPaint, type ColorContext, type Paint } from "./hatch";
 import type { BarRow } from "./stacked-bars";
 
 /*
- * Spike (#350): the stacked bars of the skills view on helix chart (chart.js). Findings: .agents/350/findings.md.
+ * Spike (#350): the stacked bars of the skills view on helix chart (chart.js). Findings: docs/spikes/helix-chart-spike.md.
  *
  * - HxChart passes `backgroundColor` of a dataset through untouched (it only fills it in when it is unset), so a
  *   CanvasPattern or a scriptable function works without a plugin.
@@ -131,7 +131,7 @@ export function chartOptions(rows: BarRow[]): Record<string, unknown> {
           }}
         </caption>
         <tbody>
-          @for (r of table(); track r.label) {
+          @for (r of table(); track $index) {
             <tr>
               <th scope="row">{{ r.label }}</th>
               @for (c of r.cells; track $index) {

@@ -14,8 +14,7 @@ import { valueText } from "../../ui/hx-stacked-bars";
 import { MARKER_COLORS, markerLabel, markerX, type Scale } from "./chart";
 
 /*
- * Spike (#350): the timeline area chart on helix chart (chart.js), type `line`. Findings: .agents/350/findings.md
- * and docs/spikes/helix-chart-spike.md.
+ * Spike (#350): the timeline area chart on helix chart (chart.js), type `line`. Findings: docs/spikes/helix-chart-spike.md.
  *
  * - Context size is one filled line dataset with linear x (request number) and `parsing: false`.
  * - Markers are one point-only dataset per kind (hover, tooltip, point style) plus the inline plugin `markerLines`
@@ -292,7 +291,7 @@ export function syntheticTimeline(base: Timeline, n: number): Timeline {
           </tr>
         </thead>
         <tbody>
-          @for (r of table(); track r.request) {
+          @for (r of table(); track $index) {
             <tr>
               <th scope="row">{{ r.request }}</th>
               @for (c of r.cells; track $index) {
@@ -324,16 +323,12 @@ export function syntheticTimeline(base: Timeline, n: number): Timeline {
 })
 export class HxTimelineChart {
   readonly timeline = input.required<Timeline>();
-  /** Draw the area hatched (an estimated series); the context size itself is measured. */
-  readonly estimated = input(false);
 
   readonly #host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   readonly #paint: Paint = createPaint(this.#host);
 
   protected readonly plugins = [markerLines];
-  protected readonly data = computed(() =>
-    buildTimelineData(this.timeline(), this.#paint, this.estimated()),
-  );
+  protected readonly data = computed(() => buildTimelineData(this.timeline(), this.#paint));
   protected readonly options = computed(() => chartOptions(this.timeline()));
   protected readonly table = computed(() => fallbackRows(this.timeline()));
   protected readonly markerList = computed(() => fallbackMarkers(this.timeline()));

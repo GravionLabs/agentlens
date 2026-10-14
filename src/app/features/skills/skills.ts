@@ -5,6 +5,7 @@ import { analysis } from "../../core/analysis";
 import { day, exactTokens, number, tokens } from "../../core/format";
 import type { SkillStats, SkillsData } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
+import { hxEnabled } from "../../ui/hx-flag";
 import { HxStackedBars } from "../../ui/hx-stacked-bars";
 import { Legend } from "../../ui/legend";
 import { type BarRow, StackedBars } from "../../ui/stacked-bars";
@@ -57,7 +58,7 @@ function attributedTokens(s: SkillStats): number {
         Top 15 skills by overhead. Hatched segments are estimates, solid ones were measured.
       </p>
       <app-legend [items]="legend" />
-      @if (hx() !== undefined) {
+      @if (hxOn()) {
         <!-- Spike (#350): open the view as #/skills?hx to draw the bars with helix chart. -->
         <app-hx-stacked-bars
           [rows]="bars()"
@@ -107,6 +108,7 @@ export class Skills {
   protected readonly res = analysis<SkillsData>("skills");
   /** Spike flag: the query parameter `hx` (bound by the router) switches to the helix chart bars. */
   readonly hx = input<string>();
+  protected readonly hxOn = computed(() => hxEnabled(this.hx()));
   protected readonly usedOnly = signal(false);
   protected readonly unused = (s: SkillStats) => s.invocations === 0;
 
