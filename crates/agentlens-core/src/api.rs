@@ -245,7 +245,8 @@ pub fn unused(ctx: &Context, f: &Filters) -> Result<Answer<UnusedReport>, String
     let now = Timestamp::now();
     let (mut filter, only) = f.resolve(now)?;
     if filter.since.is_none() {
-        filter.since = Some(parse_since("30d", now)?);
+        // The default window is 30 days back from the end of the period.
+        filter.since = Some(parse_since("30d", filter.until.unwrap_or(now))?);
     }
     let run = pipeline::unused_run(&ctx.registry, &ctx.env, &filter, &only, &CharsPerToken);
     answer(run.report, run.warnings, run.errors)
@@ -618,5 +619,34 @@ mod tests {
             err.contains("until") && err.contains("cannot parse"),
             "{err}"
         );
+    }
+
+    /// A home with one Claude Code session on 2026-01-10 (long before any `now` of a test run).
+    fn old_session_context() -> (tempfile::TempDir, Context) {
+        let dir = tempfile::tempdir().unwrap();
+        let projects = dir.path().join(".claude/projects/-work-demo");
+        std::fs::create_dir_all(&projects).unwrap();
+        let line = |ts: &str, body: &str| format!("{{\"timestamp\":\"{ts}\",{body}}}\n");
+        let text = line(
+            "2026-01-10T10:00:00Z",
+            r#""type":"user","sessionId":"old","cwd":"/work/demo","message":{"role":"user","content":"hi"}"#,
+        );
+        std::fs::write(projects.join("old.jsonl"), text).unwrap();
+        let ctx = Context {
+            env: Env::for_home(dir.path()),
+            registry: default_registry(),
+        };
+        (dir, ctx)
+    }
+
+    #[test]
+    fn the_default_unused_window_is_thirty_days_before_until() {
+        let (_dir, ctx) = old_session_context();
+        let f = filters(None, Some("2026-01-20"));
+        let a = unused(&ctx, &f).unwrap();
+        assert_eq!(a.data.sessions, 1);
+        // Counted from now, the default window would end long after `until` and be empty.
+        let f = filters(None, Some("2026-01-05"));
+        assert_eq!(unused(&ctx, &f).unwrap().data.sessions, 0);
     }
 }

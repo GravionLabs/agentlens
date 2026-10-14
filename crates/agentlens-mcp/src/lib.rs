@@ -27,6 +27,10 @@ use serde::{Deserialize, Serialize};
 pub struct Query {
     /// A duration (`30d`, `12h`, `4w`), a date (`2026-10-01`) or an RFC 3339 instant. Empty: all sessions.
     pub since: Option<String>,
+    /// Only sessions that ended before this point: `30d`, `12h`, `4w` count back from now, a date
+    /// (`2026-10-01`) is midnight UTC, or an RFC 3339 instant. With `since` this is a closed period
+    /// (`until` must be later). Empty: no upper bound.
+    pub until: Option<String>,
     /// Source ids: `claude-code`, `opencode`, `copilot-cli`, `vscode-copilot`. Empty: all.
     pub sources: Option<Vec<String>>,
     /// Only sessions that ran in this directory or below it.
@@ -37,7 +41,7 @@ impl Query {
     fn filters(&self) -> Filters {
         Filters {
             since: self.since.clone(),
-            until: None,
+            until: self.until.clone(),
             sources: self.sources.clone().unwrap_or_default(),
             project: self
                 .project

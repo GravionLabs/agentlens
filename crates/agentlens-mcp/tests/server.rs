@@ -219,6 +219,64 @@ fn a_bad_filter_is_an_error_the_agent_can_read() {
 }
 
 #[test]
+fn until_closes_the_period() {
+    // The Claude Code session of the home ran on 2026-10-02 at 09:00.
+    let home = home();
+    let mut client = Client::start(home.path());
+    let sessions = |client: &mut Client, args: Value| {
+        let r = client.call("sessions", args);
+        assert_eq!(r["isError"], false, "{r}");
+        r["structuredContent"]["data"].as_array().unwrap().len()
+    };
+    let base = |extra: Value| {
+        let mut v = json!({"sources": ["claude-code"]});
+        v.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        v
+    };
+    assert_eq!(sessions(&mut client, base(json!({}))), 1);
+    assert_eq!(
+        sessions(&mut client, base(json!({"until": "2026-10-03"}))),
+        1
+    );
+    assert_eq!(
+        sessions(&mut client, base(json!({"until": "2026-10-02"}))),
+        0
+    );
+    assert_eq!(
+        sessions(
+            &mut client,
+            base(json!({"since": "2026-10-01", "until": "2026-10-03"}))
+        ),
+        1
+    );
+    // The cost tool takes it too.
+    let cost = client.call("cost", base(json!({"until": "2026-10-02"})));
+    assert_eq!(cost["isError"], false, "{cost}");
+}
+
+#[test]
+fn until_not_after_since_is_an_error_the_agent_can_read() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    let result = client.call(
+        "cost",
+        json!({"since": "2026-10-02", "until": "2026-10-01"}),
+    );
+    assert_eq!(result["isError"], true, "{result}");
+    assert!(
+        result["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("until"),
+        "{result}"
+    );
+    let result = client.call("context", json!({"until": "soon"}));
+    assert_eq!(result["isError"], true, "{result}");
+}
+
+#[test]
 fn every_tool_answers_on_fixture_sessions() {
     let home = home();
     let mut client = Client::start(home.path());

@@ -15,6 +15,10 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "WHEN")]
     pub since: Option<String>,
 
+    /// Only sessions that ended before this point (same forms as --since); with --since a closed period
+    #[arg(long, global = true, value_name = "WHEN")]
+    pub until: Option<String>,
+
     /// Only this source (repeatable): claude-code, opencode, copilot-cli, vscode-copilot
     #[arg(long, global = true, value_name = "ID", value_parser = parse_source)]
     pub source: Vec<Source>,
@@ -105,7 +109,7 @@ pub enum Command {
     },
     /// List installed skills, agents and MCP servers that were not used
     Unused {
-        /// Length of the period to look at (ignored if --since is given)
+        /// Length of the period to look at (ignored if --since is given; counted back from --until if set)
         #[arg(long, value_name = "DAYS", default_value_t = 30)]
         days: u32,
         /// Also list items that were used
@@ -200,13 +204,26 @@ fn parse_source(s: &str) -> Result<Source, String> {
 
 impl Cli {
     pub fn filter(&self) -> Result<SessionFilter> {
+        let now = Timestamp::now();
         let since = match &self.since {
-            Some(s) => Some(parse_since(s, Timestamp::now())?),
+            Some(s) => Some(parse_since(s, now)?),
             None => None,
         };
+        let until = match &self.until {
+            Some(u) => Some(
+                agentlens_core::since::parse_since(u, now)
+                    .map_err(|e| anyhow::anyhow!("--until: {e}"))?,
+            ),
+            None => None,
+        };
+        if let (Some(since), Some(until)) = (since, until)
+            && until <= since
+        {
+            anyhow::bail!("--until ({until}) must be later than --since ({since})");
+        }
         Ok(SessionFilter {
             since,
-            until: None,
+            until,
             project: self.project.clone(),
         })
     }
