@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from "@angular/core";
-import { HxDateTimeRangePicker, HxMultiSelect, HxSelect } from "@gravionlabs/helix-ui";
+import { HxDateTimeRangePicker, HxInput, HxMultiSelect, HxSelect } from "@gravionlabs/helix-ui";
 import { FiltersService, PERIODS } from "../core/filters.service";
 import { SOURCES, type SourceId } from "../core/types";
 
 @Component({
   selector: "app-filter-bar",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HxSelect, HxMultiSelect, HxDateTimeRangePicker],
+  imports: [HxSelect, HxMultiSelect, HxDateTimeRangePicker, HxInput],
   template: `
     <form class="bar" (submit)="$event.preventDefault()" aria-label="Filters">
       <div class="field">
@@ -46,15 +46,18 @@ import { SOURCES, type SourceId } from "../core/types";
           (valueChange)="setSources($event)"
         />
       </div>
-      <label>
-        <span>Project</span>
+      <div class="field">
+        <label for="filter-project">Project</label>
         <input
+          hx-input
+          fluid
+          id="filter-project"
           type="text"
           placeholder="Directory, or empty for all"
           [value]="filters.project()"
           (change)="setProject($event)"
         />
-      </label>
+      </div>
     </form>
   `,
   styles: `
@@ -64,8 +67,7 @@ import { SOURCES, type SourceId } from "../core/types";
       align-items: flex-end;
       gap: 10px 16px;
     }
-    .field,
-    .bar > label {
+    .field {
       flex: 1 1 11rem;
       max-width: 18rem;
     }
@@ -75,19 +77,8 @@ import { SOURCES, type SourceId } from "../core/types";
       gap: 2px;
     }
     label {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
       font-size: 0.85rem;
       color: var(--muted);
-    }
-    input[type="text"] {
-      background: var(--bg);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 5px 8px;
-      width: 100%;
     }
   `,
 })
