@@ -10,7 +10,6 @@ import { HxChart } from "@gravionlabs/helix-ui/chart";
 import { compact, number, usd } from "../../core/format";
 import type { MarkerKind, Timeline, TimelineMarker } from "../../core/types";
 import { createPaint, resolveColor, type ColorContext, type Paint } from "../../ui/hatch";
-import { valueText } from "../../ui/hx-stacked-bars";
 import { MARKER_COLORS, markerLabel, markerX, type Scale } from "./chart";
 
 /*
@@ -154,8 +153,8 @@ export function pointLines(t: Timeline, index: number): string[] {
   const p = t.points[index];
   if (!p) return [];
   const lines = [
-    `${valueText(p.context_tokens, false)} tokens in context (measured)`,
-    `${valueText(p.output_tokens, false)} tokens out`,
+    `${compact(p.context_tokens)} tokens in context (measured)`,
+    `${compact(p.output_tokens)} tokens out`,
   ];
   if (p.cost_usd !== null) lines.push(`cost ${usd(p.cost_usd, p.cost_estimated)}`);
   return lines;
@@ -223,8 +222,8 @@ export function fallbackRows(t: Timeline): { request: string; cells: string[] }[
   return t.points.map((p) => ({
     request: number(p.request + 1),
     cells: [
-      valueText(p.context_tokens, false),
-      valueText(p.output_tokens, false),
+      compact(p.context_tokens),
+      compact(p.output_tokens),
       p.cost_usd === null ? "n/a" : usd(p.cost_usd, p.cost_estimated),
     ],
   }));

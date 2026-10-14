@@ -1,5 +1,5 @@
 /*
- * Hatched fill for estimated values on a chart.js canvas (spike #350), shared by the stacked bars and the timeline.
+ * Hatched fill for estimated values on a chart.js canvas (spike #350), used by the timeline.
  * HxChart passes dataset colors through untouched, so a scriptable color returning a CanvasPattern works without a
  * plugin. HxChart redraws on a theme change with the same data object, so the colors are scriptable and the pattern
  * is rebuilt when the resolved CSS color differs.

@@ -1,12 +1,10 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed, input, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { day, exactTokens, number, tokens } from "../../core/format";
 import type { SkillStats, SkillsData } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
-import { hxEnabled } from "../../ui/hx-flag";
-import { HxStackedBars } from "../../ui/hx-stacked-bars";
 import { Legend } from "../../ui/legend";
 import { type BarRow, StackedBars } from "../../ui/stacked-bars";
 import { StatCards } from "../../ui/stat-cards";
@@ -78,7 +76,6 @@ export function skillView(s: SkillStats): SkillView {
     HxColumnHeader,
     HelpLink,
     StackedBars,
-    HxStackedBars,
     Legend,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -113,18 +110,10 @@ export function skillView(s: SkillStats): SkillView {
         Top 15 skills by overhead. Hatched segments are estimates, solid ones were measured.
       </p>
       <app-legend [items]="legend" />
-      @if (hxOn()) {
-        <!-- Spike (#350): open the view as #/skills?hx to draw the bars with helix chart. -->
-        <app-hx-stacked-bars
-          [rows]="bars()"
-          label="Skill overhead split into baseline, load and carry"
-        />
-      } @else {
-        <app-stacked-bars
-          [rows]="bars()"
-          label="Skill overhead split into baseline, load and carry"
-        />
-      }
+      <app-stacked-bars
+        [rows]="bars()"
+        label="Skill overhead split into baseline, load and carry"
+      />
 
       <h3>All skills</h3>
       <label class="check">
@@ -219,9 +208,6 @@ export function skillView(s: SkillStats): SkillView {
 })
 export class Skills {
   protected readonly res = analysis<SkillsData>("skills");
-  /** Spike flag: the query parameter `hx` (bound by the router) switches to the helix chart bars. */
-  readonly hx = input<string>();
-  protected readonly hxOn = computed(() => hxEnabled(this.hx()));
   protected readonly usedOnly = signal(false);
 
   private readonly all = computed(() => this.res.value()?.data.report.skills ?? []);

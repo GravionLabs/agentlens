@@ -56,3 +56,7 @@ The 1.2 s between navigating and the canvas appearing is the demo data path (two
 ## Recommendation
 
 Keep SVG for the stacked bars; migrate the timeline only if interaction (zoom, brushing, per-series legend toggles) is wanted. Reasoning: the bars are simple and static and the SVG already gives hatching, native tooltips and text for free, so helix chart adds 204 kB raw (61 kB transfer) of lazy chart.js code and a canvas fallback for no visible gain. The timeline is where chart.js pays off if the data grows or interaction is added: 400 points with all markers draw in about 20 ms and theme and resize redraws work without extra code. If the owner prefers one chart stack for consistency with the rest of helix, migrating both is feasible with the hatch helper and builders from this spike. Not recommended: migrating the timeline alone just for looks.
+
+## Decision (#376)
+
+The owner decided to keep the SVG stacked bars in the skills view. The `HxChart` variant (`ui/hx-stacked-bars.ts`, its spec and the `?hx` switch in the skills view) was removed and `ui/stacked-bars.ts` now has a spec of its own. `ui/hatch.ts` and `ui/hx-flag.ts` stay for the timeline spike until its decision (#377).
