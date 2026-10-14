@@ -32,7 +32,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: "Session",
     group: "Basics",
     short: "One conversation of a coding agent, from its first to its last event.",
-    long: "A session is one conversation with a client such as Claude Code, OpenCode or Copilot CLI. Session time runs from the first to the last event, so idle time is included.",
+    long: "A session is one conversation with a client such as Claude Code, OpenCode, Copilot CLI or VS Code Copilot. Session time runs from the first to the last event, so idle time is included.",
   },
   {
     id: "request",
@@ -53,7 +53,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: "Source",
     group: "Basics",
     short: "The coding agent whose data was read.",
-    long: "A source is one supported client: Claude Code, OpenCode or Copilot CLI. Use the source filter at the top to include or exclude them.",
+    long: "A source is one supported client: Claude Code, OpenCode, Copilot CLI or VS Code Copilot. Use the source filter at the top to include or exclude them.",
   },
   {
     id: "subagent",
