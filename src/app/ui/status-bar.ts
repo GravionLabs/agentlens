@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
+import { HelixStatusBar, type HelixStatusBarVersion } from "@gravionlabs/helix-shell";
 import { SAMPLE_MODE } from "../core/ipc";
 import { TokenFormatService } from "../core/token-format.service";
 import { UpdateService } from "../core/update.service";
@@ -12,27 +13,25 @@ import { UpdateStatus } from "./update-status";
  */
 @Component({
   selector: "app-status-bar",
-  imports: [CliTools, UpdateStatus],
+  imports: [HelixStatusBar, CliTools, UpdateStatus],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <span class="version">
-      AgentLens
-      @if (sampleMode) {
-        <span class="sample">sample data</span>
-        <span class="demo-note">
-          Nothing here is read from your machine.
-          <a
-            href="https://github.com/GravionLabs/agentlens/releases/latest"
-            target="_blank"
-            rel="noopener noreferrer"
-            >Install the application</a
-          >
-          to analyze your own sessions.
-        </span>
-      } @else if (updates.version(); as v) {
-        <strong>v{{ v }}</strong>
-      }
-    </span>
+    <helix-status-bar
+      brand="AgentLens"
+      [note]="sampleMode ? 'Nothing here is read from your machine.' : undefined"
+      [versions]="versions()"
+      height="auto"
+    />
+    @if (sampleMode) {
+      <span class="sample">sample data</span>
+      <a
+        class="demo-link"
+        href="https://github.com/GravionLabs/agentlens/releases/latest"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Install the application</a
+      >
+    }
     <span class="right">
       <button
         type="button"
@@ -122,10 +121,10 @@ import { UpdateStatus } from "./update-status";
       font-size: 0.85rem;
       color: var(--muted);
     }
-    .version {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
+    helix-status-bar {
+      flex: 1;
+      min-width: 0;
+      margin: -2px 0 -2px -12px;
     }
     .right,
     .zoom {
@@ -140,17 +139,16 @@ import { UpdateStatus } from "./update-status";
       display: inline-flex;
       align-items: center;
     }
-    .demo-note a {
-      color: var(--accent);
-    }
-    strong {
-      color: var(--text);
-    }
     .sample {
       border: 1px solid var(--warn);
       color: var(--warn);
       border-radius: 10px;
       padding: 0 8px;
+      white-space: nowrap;
+    }
+    .demo-link {
+      color: var(--accent);
+      white-space: nowrap;
     }
   `,
 })
@@ -158,6 +156,10 @@ export class StatusBar {
   protected readonly updates = inject(UpdateService);
   protected readonly sampleMode = inject(SAMPLE_MODE);
   protected readonly zoom = inject(ZoomService);
+  protected readonly versions = computed<HelixStatusBarVersion[]>(() => {
+    const v = this.updates.version();
+    return !this.sampleMode && v ? [{ label: "Version", value: `v${v}` }] : [];
+  });
   protected readonly percent = computed(() => Math.round(this.zoom.factor() * 100));
 
   private readonly tokenFormat = inject(TokenFormatService);

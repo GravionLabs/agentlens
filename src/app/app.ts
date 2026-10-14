@@ -6,12 +6,14 @@ import { Ipc } from "./core/ipc";
 import { LoadingService } from "./core/loading.service";
 import { FilterBar } from "./ui/filter-bar";
 import { ZoomService } from "./core/zoom.service";
+import { HelixDark } from "./ui/helix-dark";
 import { StatusBar } from "./ui/status-bar";
 import { inject } from "@angular/core";
 
 @Component({
   selector: "app-root",
   imports: [RouterOutlet, RouterLink, RouterLinkActive, FilterBar, StatusBar],
+  hostDirectives: [HelixDark],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { "(document:keydown)": "zoom.handleKey($event)" },
   template: `

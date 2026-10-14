@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import { HxMessage } from "@gravionlabs/helix-ui";
 import { messageOf } from "../core/analysis";
 import { Ipc } from "../core/ipc";
 import type { Answer, CliTool, CliTools as CliToolsData } from "../core/types";
@@ -11,6 +12,7 @@ type Busy = "install" | "remove" | null;
  */
 @Component({
   selector: "app-cli-tools",
+  imports: [HxMessage],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (offered()) {
@@ -43,9 +45,13 @@ type Busy = "install" | "remove" | null;
             </button>
           </div>
           @if (busy() === "install") {
-            <p class="note">Installing the command line tools…</p>
+            <hx-message severity="info" variant="simple" size="small"
+              >Installing the command line tools…</hx-message
+            >
           } @else if (busy() === "remove") {
-            <p class="note">Removing the command line tools…</p>
+            <hx-message severity="info" variant="simple" size="small"
+              >Removing the command line tools…</hx-message
+            >
           }
           @if (state(); as s) {
             <ul class="tools">
@@ -61,21 +67,25 @@ type Busy = "install" | "remove" | null;
               }
             </ul>
             @if (s.created_dir) {
-              <p class="note">Created the folder {{ s.dir }}.</p>
+              <hx-message severity="info" variant="simple" size="small"
+                >Created the folder {{ s.dir }}.</hx-message
+              >
             }
             @for (f of s.foreign; track f) {
-              <p class="note err">
+              <hx-message severity="warn" variant="simple" size="small">
                 Not touched: {{ f }} is a file AgentLens did not create. Remove or rename it by hand
                 to install the tool there.
-              </p>
+              </hx-message>
             }
             @if (s.on_path) {
-              <p class="note">{{ s.dir }} is on your PATH.</p>
+              <hx-message severity="info" variant="simple" size="small"
+                >{{ s.dir }} is on your PATH.</hx-message
+              >
             } @else {
-              <p class="note">
+              <hx-message severity="warn" variant="simple" size="small">
                 {{ s.dir }} is not on the PATH AgentLens was started with. If your shell does not
                 have it either, add this line to your shell profile:
-              </p>
+              </hx-message>
               <ul class="lines">
                 @for (p of s.profile_lines; track p.shell) {
                   <li>
@@ -86,11 +96,11 @@ type Busy = "install" | "remove" | null;
               </ul>
             }
             @if (s.note) {
-              <p class="note">{{ s.note }}</p>
+              <hx-message severity="info" variant="simple" size="small">{{ s.note }}</hx-message>
             }
           }
           @for (e of errors(); track $index) {
-            <p class="note err" role="alert">{{ e }}</p>
+            <hx-message severity="error" variant="simple" size="small">{{ e }}</hx-message>
           }
         </div>
       }
