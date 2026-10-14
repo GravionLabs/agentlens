@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { TestBed } from "@angular/core/testing";
+import { By } from "@angular/platform-browser";
+import { HxDateTimeRangePicker, HxSelect } from "@gravionlabs/helix-ui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FiltersService } from "../core/filters.service";
 import { FilterBar } from "./filter-bar";
@@ -78,5 +80,60 @@ describe("FilterBar", () => {
     const { el } = await render();
     expect(el.querySelector("hx-date-time-range-picker")).not.toBeNull();
     expect(el.querySelector<HTMLInputElement>("#filter-window")!.readOnly).toBe(true);
+  });
+
+  it("selects several sources and clears them with the clear button", async () => {
+    const { fixture, el, filters } = await render();
+    el.querySelector<HTMLElement>("#filter-sources")!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    for (const name of ["OpenCode", "Copilot CLI"]) {
+      [...overlay().querySelectorAll<HTMLElement>('[role="option"]')]
+        .find((o) => o.textContent!.includes(name))!
+        .click();
+      fixture.detectChanges();
+    }
+    expect(filters.sources()).toHaveLength(2);
+    expect(filters.sources()).toContain("opencode");
+    const clear = el.querySelector<HTMLElement>("hx-multi-select [aria-label*='lear' i]");
+    expect(clear).not.toBeNull();
+    clear!.click();
+    fixture.detectChanges();
+    expect(filters.sources()).toEqual([]);
+  });
+
+  it("ignores a cleared or non-string period but accepts the empty All time value", async () => {
+    const { fixture, filters } = await render();
+    const select = fixture.debugElement.query(By.directive(HxSelect)).componentInstance as HxSelect;
+    filters.setSince("7d");
+    select.value.set(null as never);
+    select.value.set(undefined as never);
+    expect(filters.since()).toBe("7d");
+    select.value.set("");
+    expect(filters.since()).toBe("");
+  });
+
+  it("keeps the custom window local: it does not reach the filters", async () => {
+    const { fixture, filters } = await render();
+    const before = JSON.stringify({
+      since: filters.since(),
+      sources: filters.sources(),
+      project: filters.project(),
+    });
+    const picker = fixture.debugElement.query(By.directive(HxDateTimeRangePicker))
+      .componentInstance as HxDateTimeRangePicker;
+    picker.value.set({ from: new Date(2026, 0, 1), to: new Date(2026, 0, 2) });
+    fixture.detectChanges();
+    expect(
+      JSON.stringify({
+        since: filters.since(),
+        sources: filters.sources(),
+        project: filters.project(),
+      }),
+    ).toBe(before);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('label[for="filter-window"]')!
+        .textContent,
+    ).toContain("not applied");
   });
 });

@@ -87,13 +87,35 @@ describe("UpdateStatus", () => {
 });
 
 describe("UpdateStatus messages", () => {
-  it("renders a failed check as an alert and an up to date result as a status", async () => {
+  it("renders a failed check as an alert with its text", async () => {
     const { fixture, service } = render(async () => {
       throw "Could not check for updates: offline";
     });
     await service.check();
     fixture.detectChanges();
+    const alert = (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')!;
+    expect(alert.textContent).toContain("Update check failed");
+    expect(alert.textContent).toContain("offline");
+  });
+
+  it("renders an up to date result as a status, not an alert", async () => {
+    const { fixture, service, text } = render(async () => null);
+    await service.check();
+    fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('hx-message [role="alert"], hx-message[role="alert"]')).not.toBeNull();
+    expect(text()).toContain("Up to date");
+    expect(el.querySelector('[role="status"]')?.textContent).toContain("Up to date");
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("renders an available update as a status with the version", async () => {
+    const { fixture, service } = render(async () => newer);
+    await service.check();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[role="status"]')?.textContent).toContain(
+      "Version 0.5.0 is available",
+    );
+    expect(el.querySelector('[role="alert"]')).toBeNull();
   });
 });

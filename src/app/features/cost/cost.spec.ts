@@ -37,7 +37,8 @@ describe("cost money", () => {
   });
 });
 
-const rows = [
+let rows: CostRow[] = [];
+const baseRows = [
   row({ key: "model-a", requests: 1, input: 99999, output: 9999, measured_usd: 0.5 }),
   row({ key: "model-b", requests: 7, input: 10, output: 5, estimated_usd: 2 }),
   row({ key: "model-c", requests: 3, input: 20, output: 7, unpriced_requests: 3 }),
@@ -57,6 +58,7 @@ describe("Cost table on helix", () => {
   beforeEach(() => {
     localStorage.clear();
     tokenFormat.set("rounded");
+    rows = baseRows;
     TestBed.configureTestingModule({
       providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
     });
@@ -89,16 +91,49 @@ describe("Cost table on helix", () => {
     expect(el.querySelector("th[aria-sort='descending']")!.textContent).toContain("Cost");
   });
 
-  it("sorts by a header click", async () => {
-    const { fixture, el } = await render();
-    const header = [...el.querySelectorAll<HTMLElement>("hx-data-table th button")].find((b) =>
-      b.textContent!.includes("Requests"),
+  const headerButton = (el: HTMLElement, name: string) =>
+    [...el.querySelectorAll<HTMLElement>("hx-data-table th button")].find((b) =>
+      b.textContent!.includes(name),
     )!;
-    header.click();
+
+  it("sorts by a header click: ascending first, then descending", async () => {
+    const { fixture, el } = await render();
+    headerButton(el, "Requests").click();
     fixture.detectChanges();
-    expect(el.querySelector("th[aria-sort]:not([aria-sort='none'])")!.textContent).toContain(
-      "Requests",
+    expect(firstColumn(el)).toEqual(["model-a", "model-c", "model-b"]);
+    expect(el.querySelector("th[aria-sort='ascending']")!.textContent).toContain("Requests");
+    headerButton(el, "Requests").click();
+    fixture.detectChanges();
+    expect(firstColumn(el)).toEqual(["model-b", "model-c", "model-a"]);
+    expect(el.querySelector("th[aria-sort='descending']")!.textContent).toContain("Requests");
+  });
+
+  it("shows the premium requests column only when a row has premium requests", async () => {
+    const without = await render();
+    expect(without.el.querySelector("hx-data-table thead")!.textContent).not.toContain("Premium");
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
+    });
+    rows = [...baseRows, row({ key: "model-d", premium_requests: 4 })];
+    const withPremium = await render();
+    expect(withPremium.el.querySelector("hx-data-table thead")!.textContent).toContain(
+      "Premium requests",
     );
+  });
+
+  it("pages above 50 rows and shows everything on one page below", async () => {
+    const small = await render();
+    expect(firstColumn(small.el)).toHaveLength(3);
+    expect(small.el.querySelector("hx-paginator")).toBeNull();
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
+    });
+    rows = Array.from({ length: 51 }, (_, i) => row({ key: `m-${i}`, measured_usd: i + 1 }));
+    const large = await render();
+    expect(firstColumn(large.el)).toHaveLength(50);
+    expect(large.el.querySelector("hx-paginator")).not.toBeNull();
   });
 
   it("puts the exact token count in the tooltip while counts are rounded", async () => {

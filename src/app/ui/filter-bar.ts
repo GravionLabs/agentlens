@@ -22,10 +22,10 @@ import { SOURCES, type SourceId } from "../core/types";
         />
       </div>
       <div class="field">
-        <label for="filter-window">Custom window</label>
+        <label for="filter-window">Custom window (preview, not applied)</label>
         <hx-date-time-range-picker
           inputId="filter-window"
-          ariaLabel="Custom window"
+          ariaLabel="Custom window (preview, not applied)"
           showButtonBar
           [stepMinute]="15"
           [value]="window()"
@@ -100,7 +100,8 @@ export class FilterBar {
   });
 
   protected setSince(value: unknown): void {
-    this.filters.setSince(typeof value === "string" ? value : "");
+    // A cleared or non-string value is ignored: the period keeps its last value.
+    if (typeof value === "string") this.filters.setSince(value);
   }
 
   protected setSources(ids: SourceId[]): void {
@@ -112,9 +113,5 @@ export class FilterBar {
 
   protected setProject(event: Event): void {
     this.filters.setProject((event.target as HTMLInputElement).value);
-  }
-
-  protected isSource(id: SourceId): boolean {
-    return this.filters.sources().includes(id);
   }
 }

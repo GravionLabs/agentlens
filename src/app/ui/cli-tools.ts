@@ -67,7 +67,9 @@ type Busy = "install" | "remove" | null;
               }
             </ul>
             @if (s.created_dir) {
-              <p class="note">Created the folder {{ s.dir }}.</p>
+              <hx-message severity="info" variant="simple" size="small"
+                >Created the folder {{ s.dir }}.</hx-message
+              >
             }
             @for (f of s.foreign; track f) {
               <hx-message severity="warn" variant="simple" size="small">
@@ -76,12 +78,14 @@ type Busy = "install" | "remove" | null;
               </hx-message>
             }
             @if (s.on_path) {
-              <p class="note">{{ s.dir }} is on your PATH.</p>
+              <hx-message severity="info" variant="simple" size="small"
+                >{{ s.dir }} is on your PATH.</hx-message
+              >
             } @else {
-              <p class="note">
+              <hx-message severity="warn" variant="simple" size="small">
                 {{ s.dir }} is not on the PATH AgentLens was started with. If your shell does not
                 have it either, add this line to your shell profile:
-              </p>
+              </hx-message>
               <ul class="lines">
                 @for (p of s.profile_lines; track p.shell) {
                   <li>
@@ -92,7 +96,7 @@ type Busy = "install" | "remove" | null;
               </ul>
             }
             @if (s.note) {
-              <p class="note">{{ s.note }}</p>
+              <hx-message severity="info" variant="simple" size="small">{{ s.note }}</hx-message>
             }
           }
           @for (e of errors(); track $index) {

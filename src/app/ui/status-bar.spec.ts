@@ -66,40 +66,61 @@ describe("StatusBar command line tools", () => {
   });
 });
 
+async function renderBar(sample: boolean, version: string | null) {
+  TestBed.configureTestingModule({
+    providers: [
+      {
+        provide: Ipc,
+        useValue: {
+          invoke: async () => {
+            if (version === null) throw "no version";
+            return version;
+          },
+        },
+      },
+      { provide: SAMPLE_MODE, useValue: sample },
+    ],
+  });
+  const fixture = TestBed.createComponent(StatusBar);
+  fixture.detectChanges();
+  await fixture.whenStable();
+  fixture.detectChanges();
+  const el = fixture.nativeElement as HTMLElement;
+  return { el, text: (el.textContent ?? "").replace(/\s+/g, " ") };
+}
+
 describe("StatusBar helix status bar", () => {
   it("shows the version outside sample mode", async () => {
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: Ipc, useValue: { invoke: async () => "0.7.1" } },
-        { provide: SAMPLE_MODE, useValue: false },
-      ],
-    });
-    const fixture = TestBed.createComponent(StatusBar);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector("helix-status-bar")?.textContent).toContain("AgentLens");
-    expect(el.querySelector(".helix-status-bar-version-value")?.textContent).toBe("v0.7.1");
-    expect(el.querySelector("helix-environment-badge")).toBeNull();
+    const { el, text } = await renderBar(false, "0.7.1");
+    expect(text).toContain("AgentLens");
+    expect(text).toContain("Version:v0.7.1");
+    expect(text).not.toContain("sample data");
+    expect(text).not.toContain("Staging");
     expect(el.querySelector(".demo-link")).toBeNull();
   });
 
-  it("shows the sample badge, the note and the install link in sample mode, no version", async () => {
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: Ipc, useValue: { invoke: async () => "0.7.1" } },
-        { provide: SAMPLE_MODE, useValue: true },
-      ],
-    });
-    const fixture = TestBed.createComponent(StatusBar);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector("helix-environment-badge")).not.toBeNull();
-    expect(el.querySelector(".helix-status-bar-note")?.textContent).toContain("sample data");
-    expect(el.querySelector(".helix-status-bar-version")).toBeNull();
-    expect(el.querySelector(".demo-link")?.getAttribute("href")).toContain("releases/latest");
+  it("shows no version when it cannot be read", async () => {
+    const { text } = await renderBar(false, null);
+    expect(text).toContain("AgentLens");
+    expect(text).not.toContain("Version");
+  });
+
+  it("labels sample mode as sample data, with the note and the install link", async () => {
+    const { el, text } = await renderBar(true, "0.7.1");
+    expect(el.querySelector(".sample")?.textContent?.trim()).toBe("sample data");
+    expect(text).toContain("Nothing here is read from your machine.");
+    expect(text).not.toContain("Staging");
+    expect(text).not.toContain("Unknown");
+    expect(text).not.toContain("Version");
+    const link = el.querySelector<HTMLAnchorElement>("a.demo-link")!;
+    expect(link.textContent?.trim()).toBe("Install the application");
+    expect(link.href).toContain("releases/latest");
+  });
+
+  it("keeps the token toggle and the zoom controls in sample mode", async () => {
+    const { el } = await renderBar(true, null);
+    for (const label of ["Round token counts", "Smaller", "Reset size", "Larger"]) {
+      expect(el.querySelector(`button[aria-label="${label}"]`), label).not.toBeNull();
+    }
   });
 });

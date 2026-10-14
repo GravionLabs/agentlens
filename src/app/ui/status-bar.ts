@@ -18,12 +18,12 @@ import { UpdateStatus } from "./update-status";
   template: `
     <helix-status-bar
       brand="AgentLens"
-      [environment]="sampleMode ? 'staging' : undefined"
-      [note]="sampleMode ? 'sample data: nothing here is read from your machine' : undefined"
+      [note]="sampleMode ? 'Nothing here is read from your machine.' : undefined"
       [versions]="versions()"
-      [height]="'auto'"
+      height="auto"
     />
     @if (sampleMode) {
+      <span class="sample">sample data</span>
       <a
         class="demo-link"
         href="https://github.com/GravionLabs/agentlens/releases/latest"
@@ -138,6 +138,13 @@ import { UpdateStatus } from "./update-status";
     .zoom .btn {
       display: inline-flex;
       align-items: center;
+    }
+    .sample {
+      border: 1px solid var(--warn);
+      color: var(--warn);
+      border-radius: 10px;
+      padding: 0 8px;
+      white-space: nowrap;
     }
     .demo-link {
       color: var(--accent);
