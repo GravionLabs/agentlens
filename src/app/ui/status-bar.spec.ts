@@ -65,3 +65,41 @@ describe("StatusBar command line tools", () => {
     expect((fixture.nativeElement as HTMLElement).querySelector("app-cli-tools")).not.toBeNull();
   });
 });
+
+describe("StatusBar helix status bar", () => {
+  it("shows the version outside sample mode", async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: Ipc, useValue: { invoke: async () => "0.7.1" } },
+        { provide: SAMPLE_MODE, useValue: false },
+      ],
+    });
+    const fixture = TestBed.createComponent(StatusBar);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector("helix-status-bar")?.textContent).toContain("AgentLens");
+    expect(el.querySelector(".helix-status-bar-version-value")?.textContent).toBe("v0.7.1");
+    expect(el.querySelector("helix-environment-badge")).toBeNull();
+    expect(el.querySelector(".demo-link")).toBeNull();
+  });
+
+  it("shows the sample badge, the note and the install link in sample mode, no version", async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: Ipc, useValue: { invoke: async () => "0.7.1" } },
+        { provide: SAMPLE_MODE, useValue: true },
+      ],
+    });
+    const fixture = TestBed.createComponent(StatusBar);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector("helix-environment-badge")).not.toBeNull();
+    expect(el.querySelector(".helix-status-bar-note")?.textContent).toContain("sample data");
+    expect(el.querySelector(".helix-status-bar-version")).toBeNull();
+    expect(el.querySelector(".demo-link")?.getAttribute("href")).toContain("releases/latest");
+  });
+});

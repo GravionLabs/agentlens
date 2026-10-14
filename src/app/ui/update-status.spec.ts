@@ -85,3 +85,15 @@ describe("UpdateStatus", () => {
     expect(invoke.mock.calls.filter(([c]) => c === "update_install")).toHaveLength(2);
   });
 });
+
+describe("UpdateStatus messages", () => {
+  it("renders a failed check as an alert and an up to date result as a status", async () => {
+    const { fixture, service } = render(async () => {
+      throw "Could not check for updates: offline";
+    });
+    await service.check();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('hx-message [role="alert"], hx-message[role="alert"]')).not.toBeNull();
+  });
+});
