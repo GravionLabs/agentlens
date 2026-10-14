@@ -8,7 +8,7 @@ import { beforeAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 import { Ipc } from "../../core/ipc";
 import { tokenFormat } from "../../core/token-format.service";
 import type { CostRow } from "../../core/types";
-import { Cost, money } from "./cost";
+import { Cost, money, signedUsd, whatIfView } from "./cost";
 
 const row = (over: Partial<CostRow>): CostRow => ({
   key: "m",
@@ -34,6 +34,21 @@ describe("cost money", () => {
   it("says unpriced instead of showing zero when nothing has a price", () => {
     expect(money(row({ unpriced_requests: 2 }))).toBe("unpriced");
     expect(money(row({ requests: 0 }))).toBe("$0.00");
+  });
+});
+
+describe("cost what-if", () => {
+  it("computes the difference and signs it", () => {
+    const v = whatIfView({
+      model: "m",
+      requests: 1,
+      actual_usd: 3,
+      what_if_usd: 1,
+      excluded_requests: 0,
+    });
+    expect(v.diff).toBe(-2);
+    expect(signedUsd(v.diff)).toBe("-$2.00");
+    expect(signedUsd(1.5)).toBe("+$1.50");
   });
 });
 

@@ -1,5 +1,11 @@
 import { ChangeDetectionStrategy, Component, input } from "@angular/core";
 import { RouterLink } from "@angular/router";
+import { glossaryEntry } from "../core/glossary";
+
+/** The tooltip of a header with a glossary term: its short explanation. */
+export function termTitle(term: string): string | undefined {
+  return glossaryEntry(term)?.short;
+}
 
 /** The "?" beside a table header: links to the glossary entry of a term. */
 @Component({

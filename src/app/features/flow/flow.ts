@@ -12,8 +12,7 @@ import {
   tokens,
 } from "../../core/format";
 import type { FlowData, SessionGrowth, ToolErrors } from "../../core/types";
-import { termTitle } from "../../ui/data-table";
-import { HelpLink } from "../../ui/help-link";
+import { HelpLink, termTitle } from "../../ui/help-link";
 import { Status } from "../../ui/status";
 import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
