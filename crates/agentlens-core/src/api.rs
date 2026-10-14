@@ -28,7 +28,7 @@ use crate::model::Source;
 use crate::pipeline;
 use crate::prices::{self, PriceTable};
 use crate::report::Report;
-use crate::since::parse_since;
+use crate::since::{parse_window, window_start};
 use crate::tokens::CharsPerToken;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
@@ -58,6 +58,8 @@ impl Context {
 pub struct Filters {
     /// A duration (`30d`, `12h`, `4w`), a date or an RFC 3339 instant.
     pub since: Option<String>,
+    /// The end of the period (exclusive), in the same forms as `since`.
+    pub until: Option<String>,
     /// Source ids (`claude-code`, `opencode`, ...); empty means all.
     pub sources: Vec<String>,
     /// Only sessions that ran in this directory or below it.
@@ -70,15 +72,13 @@ impl Filters {
         // after the other share the sessions the registry cache holds for that selection.
         let now = Timestamp::from_second(now.as_second() - now.as_second().rem_euclid(300))
             .unwrap_or(now);
-        let since = match self
-            .since
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            Some(s) => Some(parse_since(s, now)?),
-            None => None,
-        };
+        // Both bounds count from the same rounded `now`, so `until` steps with `since`.
+        let (since, until) = parse_window(
+            self.since.as_deref(),
+            self.until.as_deref(),
+            now,
+            ("since", "until"),
+        )?;
         let mut sources = Vec::new();
         for id in &self.sources {
             sources.push(Source::from_id(id).ok_or_else(|| format!("unknown source `{id}`"))?);
@@ -86,6 +86,7 @@ impl Filters {
         Ok((
             SessionFilter {
                 since,
+                until,
                 project: self.project.clone().filter(|p| !p.as_os_str().is_empty()),
             },
             sources,
@@ -233,7 +234,8 @@ pub fn unused(ctx: &Context, f: &Filters) -> Result<Answer<UnusedReport>, String
     let now = Timestamp::now();
     let (mut filter, only) = f.resolve(now)?;
     if filter.since.is_none() {
-        filter.since = Some(parse_since("30d", now)?);
+        // The default window is 30 days back from the end of the period.
+        filter.since = Some(window_start(30, filter.until, now)?);
     }
     let run = pipeline::unused_run(&ctx.registry, &ctx.env, &filter, &only, &CharsPerToken);
     answer(run.report, run.warnings, run.errors)
@@ -529,5 +531,123 @@ pub fn export(
         }
         (view, "json") => Err(format!("the view `{view}` cannot be exported")),
         (_, other) => Err(format!("unknown format `{other}`")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn now() -> Timestamp {
+        "2026-10-10T12:03:20Z".parse().unwrap()
+    }
+
+    fn filters(since: Option<&str>, until: Option<&str>) -> Filters {
+        Filters {
+            since: since.map(Into::into),
+            until: until.map(Into::into),
+            ..Filters::default()
+        }
+    }
+
+    fn bounds(f: &Filters) -> (Option<String>, Option<String>) {
+        let (filter, _) = f.resolve(now()).unwrap();
+        (
+            filter.since.map(|t| t.to_string()),
+            filter.until.map(|t| t.to_string()),
+        )
+    }
+
+    #[test]
+    fn until_is_resolved_like_since() {
+        assert_eq!(
+            bounds(&filters(Some("2026-10-01"), Some("2026-10-08"))),
+            (
+                Some("2026-10-01T00:00:00Z".into()),
+                Some("2026-10-08T00:00:00Z".into())
+            )
+        );
+        assert_eq!(
+            bounds(&filters(None, Some("2026-10-08T06:30:00Z"))),
+            (None, Some("2026-10-08T06:30:00Z".into()))
+        );
+    }
+
+    #[test]
+    fn a_relative_until_counts_from_the_same_five_minute_step_as_since() {
+        // 12:03:20 rounds down to 12:00:00 for both bounds.
+        assert_eq!(
+            bounds(&filters(Some("2d"), Some("1h"))),
+            (
+                Some("2026-10-08T12:00:00Z".into()),
+                Some("2026-10-10T11:00:00Z".into())
+            )
+        );
+    }
+
+    #[test]
+    fn an_empty_until_means_no_upper_bound() {
+        assert_eq!(bounds(&filters(None, Some("  "))), (None, None));
+        assert_eq!(bounds(&Filters::default()), (None, None));
+    }
+
+    #[test]
+    fn until_not_after_since_is_an_error_naming_until() {
+        for until in ["2026-10-01", "2026-09-30"] {
+            let err = filters(Some("2026-10-01"), Some(until))
+                .resolve(now())
+                .unwrap_err();
+            assert!(err.contains("until"), "{err}");
+        }
+    }
+
+    #[test]
+    fn an_unparsable_until_is_an_error_naming_until() {
+        let err = filters(None, Some("soon")).resolve(now()).unwrap_err();
+        assert!(
+            err.contains("until") && err.contains("cannot parse"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn filters_deserialize_with_or_without_until() {
+        let f: Filters =
+            serde_json::from_str(r#"{"since":"7d","until":"1d","sources":[]}"#).unwrap();
+        assert_eq!(f.until.as_deref(), Some("1d"));
+        let f: Filters =
+            serde_json::from_str(r#"{"since":"7d","sources":[],"project":null}"#).unwrap();
+        assert_eq!(f.until, None);
+        let f: Filters = serde_json::from_str(r#"{"until":null}"#).unwrap();
+        assert_eq!(f.until, None);
+    }
+
+    /// A home with one Claude Code session on 2026-01-10 (long before any `now` of a test run).
+    fn old_session_context() -> (tempfile::TempDir, Context) {
+        let dir = tempfile::tempdir().unwrap();
+        let projects = dir.path().join(".claude/projects/-work-demo");
+        std::fs::create_dir_all(&projects).unwrap();
+        let line = |ts: &str, body: &str| format!("{{\"timestamp\":\"{ts}\",{body}}}\n");
+        let text = line(
+            "2026-01-10T10:00:00Z",
+            r#""type":"user","sessionId":"old","cwd":"/work/demo","message":{"role":"user","content":"hi"}"#,
+        );
+        std::fs::write(projects.join("old.jsonl"), text).unwrap();
+        let ctx = Context {
+            env: Env::for_home(dir.path()),
+            registry: default_registry(),
+        };
+        (dir, ctx)
+    }
+
+    #[test]
+    fn the_default_unused_window_is_thirty_days_before_until() {
+        let (_dir, ctx) = old_session_context();
+        let f = filters(None, Some("2026-01-20"));
+        let a = unused(&ctx, &f).unwrap();
+        assert_eq!(a.data.sessions, 1);
+        // Counted from now, the default window would end long after `until` and be empty.
+        let f = filters(None, Some("2026-01-05"));
+        assert_eq!(unused(&ctx, &f).unwrap().data.sessions, 0);
     }
 }

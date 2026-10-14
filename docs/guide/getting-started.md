@@ -23,11 +23,14 @@ Every command takes the same filters:
 | Flag                | Meaning                                                                                                            |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `--since <WHEN>`    | Only sessions active since a point in time: a duration (`12h`, `30d`, `4w`) or a date (`2026-10-01`).              |
+| `--until <WHEN>`    | Only sessions that ended before this point, same forms as `--since`; with `--since` the period is closed.          |
 | `--source <ID>`     | Only this source (repeatable): `claude-code`, `opencode`, `copilot-cli`, `vscode-copilot`.                         |
 | `--project <DIR>`   | Only sessions that ran in this project directory or below it.                                                      |
 | `--format <FORMAT>` | `table` (default), `json` or `csv`; see [Reports and export](reports-and-export.md).                               |
 | `--otel <FILE>`     | Add an [OpenTelemetry export](../telemetry.md) to the analysis (repeatable).                                       |
 | `--rounded`         | Token counts in text tables as `1.55 M`, `2.11 k` or `3.20 B` instead of the full number; JSON and CSV stay exact. |
+
+A period is `[since, until)`: a session counts when it ended at or after `--since` and before `--until`. A duration counts back from now, a date is midnight UTC, and an RFC 3339 instant is taken as given. `--until` must be later than `--since`. For example, `agentlens cost --since 2026-10-01 --until 2026-11-01` is the cost of October.
 
 ## Reading the numbers
 
