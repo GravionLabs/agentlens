@@ -60,7 +60,7 @@ Notes:
 
 - The initial transfer is about 2.2 times today's (73.88 kB against 159.00 kB and 160.49 kB), mostly because of the helix theme styles (405.78 kB raw css, 39.61 kB transfer) and the helix components in the main chunk; this is the cost of the component decision. The 4123adb4 row used local links to helix 0.1.0/0.2.0; the published 22.2.7 build (ced2b9d5) has an initial total of 890.67 kB (+0.30 kB over 4123adb4) and a main chunk of 137,116 B gzip (measured in this task's clean worktree build of ced2b9d5, like the table rows).
 - chart.js is a lazy chunk and not part of the initial load; the whole spike adds +218,263 B raw and +75,168 B gzip over all files (spike note, measured with `pnpm build:demo`, a different measure from the table).
-- With helix the initial bundle (895 kB) is over the 500 kB warning budget of `angular.json` (today it is under) and 105 kB below the 1 MB error budget; the migration PBI must handle it (raise the budget or trim the theme styles).
+- With helix the initial bundle (895 kB) is over the 500 kB warning budget of `angular.json` (today it is under) and 105 kB below the 1 MB error budget; the migration PBI must handle it (raise the budget or trim the theme styles). Outcome (#379): after the migration the initial total is 1.05 MB; the 500 kB warning is gone and the budget is 1.1 MB warning / 1.2 MB error.
 
 ## Consequences
 
