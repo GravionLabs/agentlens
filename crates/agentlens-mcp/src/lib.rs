@@ -37,6 +37,7 @@ impl Query {
     fn filters(&self) -> Filters {
         Filters {
             since: self.since.clone(),
+            until: None,
             sources: self.sources.clone().unwrap_or_default(),
             project: self
                 .project

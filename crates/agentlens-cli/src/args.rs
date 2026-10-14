@@ -206,6 +206,7 @@ impl Cli {
         };
         Ok(SessionFilter {
             since,
+            until: None,
             project: self.project.clone(),
         })
     }
