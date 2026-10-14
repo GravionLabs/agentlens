@@ -1,10 +1,12 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, input, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { day, exactTokens, number, tokens } from "../../core/format";
 import type { SkillStats, SkillsData } from "../../core/types";
 import { type Column, DataTable } from "../../ui/data-table";
+import { hxEnabled } from "../../ui/hx-flag";
+import { HxStackedBars } from "../../ui/hx-stacked-bars";
 import { Legend } from "../../ui/legend";
 import { type BarRow, StackedBars } from "../../ui/stacked-bars";
 import { StatCards } from "../../ui/stat-cards";
@@ -23,7 +25,7 @@ function attributedTokens(s: SkillStats): number {
 
 @Component({
   selector: "app-skills",
-  imports: [PageHeader, Term, Status, StatCards, DataTable, StackedBars, Legend],
+  imports: [PageHeader, Term, Status, StatCards, DataTable, StackedBars, HxStackedBars, Legend],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -56,10 +58,18 @@ function attributedTokens(s: SkillStats): number {
         Top 15 skills by overhead. Hatched segments are estimates, solid ones were measured.
       </p>
       <app-legend [items]="legend" />
-      <app-stacked-bars
-        [rows]="bars()"
-        label="Skill overhead split into baseline, load and carry"
-      />
+      @if (hxOn()) {
+        <!-- Spike (#350): open the view as #/skills?hx to draw the bars with helix chart. -->
+        <app-hx-stacked-bars
+          [rows]="bars()"
+          label="Skill overhead split into baseline, load and carry"
+        />
+      } @else {
+        <app-stacked-bars
+          [rows]="bars()"
+          label="Skill overhead split into baseline, load and carry"
+        />
+      }
 
       <h3>All skills</h3>
       <label class="check">
@@ -96,6 +106,9 @@ function attributedTokens(s: SkillStats): number {
 })
 export class Skills {
   protected readonly res = analysis<SkillsData>("skills");
+  /** Spike flag: the query parameter `hx` (bound by the router) switches to the helix chart bars. */
+  readonly hx = input<string>();
+  protected readonly hxOn = computed(() => hxEnabled(this.hx()));
   protected readonly usedOnly = signal(false);
   protected readonly unused = (s: SkillStats) => s.invocations === 0;
 

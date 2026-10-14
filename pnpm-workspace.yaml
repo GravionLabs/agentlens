@@ -3,3 +3,6 @@ allowBuilds:
   esbuild: true
   lmdb: true
   msgpackr-extract: true
+minimumReleaseAgeExclude:
+  - "@gravionlabs/helix-shell@22.2.7"
+  - "@gravionlabs/helix-ui@22.2.7"
