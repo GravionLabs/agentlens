@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { NO_ERRORS_SCHEMA } from "@angular/core";
+import { HxCell, HxDataTable } from "@gravionlabs/helix-ui";
+import { TestBed } from "@angular/core/testing";
+import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
+import { provideRouter } from "@angular/router";
+import { beforeAll, beforeEach, afterEach, describe, expect, it } from "vitest";
+import { Ipc } from "../../core/ipc";
+import { tokenFormat } from "../../core/token-format.service";
 import type { CostRow } from "../../core/types";
-import { money } from "./cost";
+import { Cost, money } from "./cost";
 
 const row = (over: Partial<CostRow>): CostRow => ({
   key: "m",
@@ -26,5 +34,79 @@ describe("cost money", () => {
   it("says unpriced instead of showing zero when nothing has a price", () => {
     expect(money(row({ unpriced_requests: 2 }))).toBe("unpriced");
     expect(money(row({ requests: 0 }))).toBe("$0.00");
+  });
+});
+
+const rows = [
+  row({ key: "model-a", requests: 1, input: 99999, output: 9999, measured_usd: 0.5 }),
+  row({ key: "model-b", requests: 7, input: 10, output: 5, estimated_usd: 2 }),
+  row({ key: "model-c", requests: 3, input: 20, output: 7, unpriced_requests: 3 }),
+];
+
+class FakeIpc extends Ipc {
+  override async invoke<T>(): Promise<T> {
+    const data = { report: { rows, total: rows[0], unpriced_models: {} }, what_if: null };
+    return { schema_version: 2, data, warnings: 0, errors: [] } as T;
+  }
+}
+
+describe("Cost table on helix", () => {
+  beforeAll(() => {
+    TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+  });
+  beforeEach(() => {
+    localStorage.clear();
+    tokenFormat.set("rounded");
+    TestBed.configureTestingModule({
+      providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
+    });
+  });
+  afterEach(() => TestBed.resetTestingModule());
+
+  async function render() {
+    // Signal inputs of app components need the Angular compiler plugin; only the table is under test.
+    TestBed.overrideComponent(Cost, {
+      set: { imports: [HxDataTable, HxCell], schemas: [NO_ERRORS_SCHEMA] },
+    });
+    const fixture = TestBed.createComponent(Cost);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return { fixture, el: fixture.nativeElement as HTMLElement };
+  }
+
+  const firstColumn = (el: HTMLElement) =>
+    [...el.querySelectorAll("hx-data-table tbody tr")].map((r) =>
+      r.querySelector("td")!.textContent!.trim(),
+    );
+
+  it("renders the rows sorted by cost, descending, with n/a-free text and a tilde", async () => {
+    const { el } = await render();
+    expect(firstColumn(el)).toEqual(["model-b", "model-a", "model-c"]);
+    const text = el.querySelector("hx-data-table tbody")!.textContent!;
+    expect(text).toContain("~$2.00");
+    expect(text).toContain("unpriced");
+    expect(el.querySelector("th[aria-sort='descending']")!.textContent).toContain("Cost");
+  });
+
+  it("sorts by a header click", async () => {
+    const { fixture, el } = await render();
+    const header = [...el.querySelectorAll<HTMLElement>("hx-data-table th button")].find((b) =>
+      b.textContent!.includes("Requests"),
+    )!;
+    header.click();
+    fixture.detectChanges();
+    expect(el.querySelector("th[aria-sort]:not([aria-sort='none'])")!.textContent).toContain(
+      "Requests",
+    );
+  });
+
+  it("puts the exact token count in the tooltip while counts are rounded", async () => {
+    const { el } = await render();
+    const titles = [...el.querySelectorAll("hx-data-table tbody span[title]")].map((s) =>
+      s.getAttribute("title"),
+    );
+    expect(titles).toContain("99,999");
+    expect(titles).toContain("model-a");
   });
 });
