@@ -4,12 +4,10 @@ import {
   chartOptions,
   clip,
   fallbackRows,
-  hatchPattern,
   tooltipLine,
   valueText,
-  type ColorContext,
-  type HatchCanvas,
 } from "./hx-stacked-bars";
+import type { ColorContext } from "./hatch";
 import type { BarRow } from "./stacked-bars";
 
 const rows: BarRow[] = [
@@ -34,42 +32,6 @@ const rows: BarRow[] = [
 const ctx = (dataIndex: number): ColorContext => ({
   dataIndex,
   chart: { ctx: { createPattern: () => null } },
-});
-
-function mockCanvas() {
-  const calls: string[] = [];
-  const g = {
-    fillStyle: "",
-    strokeStyle: "",
-    lineWidth: 0,
-    globalAlpha: 1,
-    fillRect: () => calls.push("fillRect"),
-    beginPath: () => calls.push("beginPath"),
-    moveTo: () => calls.push("moveTo"),
-    lineTo: () => calls.push("lineTo"),
-    stroke: () => calls.push("stroke"),
-  };
-  const canvas: HatchCanvas = { width: 0, height: 0, getContext: () => g };
-  return { canvas, g, calls };
-}
-
-describe("hatchPattern", () => {
-  it("draws a faint tile with solid stripes and returns the pattern of the target", () => {
-    const { canvas, g, calls } = mockCanvas();
-    const pattern = {};
-    const createPattern = vi.fn(() => pattern);
-    const out = hatchPattern({ createPattern }, "#123456", () => canvas);
-    expect(out).toBe(pattern);
-    expect(createPattern).toHaveBeenCalledWith(canvas, "repeat");
-    expect(canvas.width).toBe(8);
-    expect(g.strokeStyle).toBe("#123456");
-    expect(calls.filter((c) => c === "stroke")).toHaveLength(3);
-  });
-
-  it("returns null without a 2d context", () => {
-    const canvas: HatchCanvas = { width: 0, height: 0, getContext: () => null };
-    expect(hatchPattern({ createPattern: vi.fn() }, "red", () => canvas)).toBeNull();
-  });
 });
 
 describe("buildChartData", () => {

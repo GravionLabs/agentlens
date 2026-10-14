@@ -8,6 +8,7 @@ import {
 } from "@angular/core";
 import { HxChart } from "@gravionlabs/helix-ui/chart";
 import { compact } from "../core/format";
+import { createPaint, type ColorContext, type Paint } from "./hatch";
 import type { BarRow } from "./stacked-bars";
 
 /*
@@ -19,65 +20,6 @@ import type { BarRow } from "./stacked-bars";
  *   pattern would keep the old color. The datasets therefore use scriptable colors: chart.js calls them on every
  *   update and the pattern is rebuilt when the resolved color differs. No extra code in HxChart is needed.
  */
-
-/** The part of a canvas that the hatch needs; lets the tests pass a mock. */
-export interface HatchCanvas {
-  width: number;
-  height: number;
-  getContext(id: "2d"): HatchContext | null;
-}
-export interface HatchContext {
-  fillStyle: unknown;
-  strokeStyle: unknown;
-  lineWidth: number;
-  fillRect(x: number, y: number, w: number, h: number): void;
-  beginPath(): void;
-  moveTo(x: number, y: number): void;
-  lineTo(x: number, y: number): void;
-  stroke(): void;
-  globalAlpha: number;
-}
-
-const TILE = 8;
-
-/**
- * Diagonal hatch in `color`, like the SVG `<pattern>`: a faint background (35%) with solid 45 degree stripes.
- * `null` when no offscreen canvas is available.
- */
-export function hatchPattern(
-  target: { createPattern(image: never, repetition: string): unknown },
-  color: string,
-  makeCanvas: () => HatchCanvas = () => document.createElement("canvas") as unknown as HatchCanvas,
-): unknown {
-  const tile = makeCanvas();
-  tile.width = TILE;
-  tile.height = TILE;
-  const g = tile.getContext("2d");
-  if (!g) return null;
-  g.fillStyle = color;
-  g.globalAlpha = 0.35;
-  g.fillRect(0, 0, TILE, TILE);
-  g.globalAlpha = 1;
-  g.strokeStyle = color;
-  g.lineWidth = 3;
-  // three diagonals so that the stripes meet at the tile edges
-  for (const offset of [-TILE, 0, TILE]) {
-    g.beginPath();
-    g.moveTo(offset, TILE);
-    g.lineTo(offset + TILE, 0);
-    g.stroke();
-  }
-  return target.createPattern(tile as never, "repeat");
-}
-
-/** What the scriptable color gets from chart.js. */
-export interface ColorContext {
-  dataIndex: number;
-  chart: { ctx: { createPattern(image: never, repetition: string): unknown } };
-}
-
-/** Resolves a CSS color or variable to a color for the canvas. */
-export type Paint = (ctx: ColorContext, color: string, estimated: boolean) => unknown;
 
 export type ChartData = {
   labels: string[];
@@ -214,23 +156,11 @@ export class HxStackedBars {
   readonly label = input("Bar chart");
 
   readonly #host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
-  readonly #cache = new Map<string, unknown>();
 
   protected readonly height = computed(() => `${this.rows().length * 30 + 60}px`);
   protected readonly table = computed(() => fallbackRows(this.rows()));
   protected readonly options = computed(() => chartOptions(this.rows()));
   protected readonly data = computed(() => buildChartData(this.rows(), this.#paint));
 
-  /** Resolves `var(--c-load)` against the host on every call, so a theme change gives the new color. */
-  readonly #paint: Paint = (ctx, color, estimated) => {
-    const resolved = color.startsWith("var(")
-      ? getComputedStyle(this.#host).getPropertyValue(color.slice(4, -1).trim()).trim()
-      : color;
-    if (!estimated || !resolved) return resolved;
-    const cached = this.#cache.get(resolved);
-    if (cached) return cached;
-    const pattern = hatchPattern(ctx.chart.ctx, resolved) ?? resolved;
-    this.#cache.set(resolved, pattern);
-    return pattern;
-  };
+  readonly #paint: Paint = createPaint(this.#host);
 }
