@@ -22,6 +22,11 @@ export interface Column<T> {
   tokens?: boolean;
 }
 
+/** The tooltip of a header with a glossary term: its short explanation (helix tables have no link). */
+export function termTitle(term: string): string | undefined {
+  return glossaryEntry(term)?.short;
+}
+
 /** A sortable table with an optional text filter on the first column. */
 @Component({
   selector: "app-data-table",

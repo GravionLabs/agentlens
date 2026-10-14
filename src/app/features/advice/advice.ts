@@ -4,8 +4,9 @@ import { ChangeDetectionStrategy, Component, computed } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { exactTokens, number, tokens } from "../../core/format";
 import type { AdviceItem, AdviceReport, Finding, FindingKind } from "../../core/types";
-import { type Column, DataTable } from "../../ui/data-table";
+import { termTitle } from "../../ui/data-table";
 import { Status } from "../../ui/status";
+import { HxCell, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 const TITLES: Record<FindingKind, string> = {
   "unused-skills": "Unused skills",
@@ -17,6 +18,27 @@ const TITLES: Record<FindingKind, string> = {
   "costly-mcp-servers": "Costly MCP servers",
   "context-size": "Context size",
 };
+
+/** An advice item with the sortable token count and the estimate flag next to the display text. */
+export interface ItemView {
+  name: string;
+  tokens: number;
+  tokensText: string;
+  estimated: boolean;
+  requests: number;
+  detail: string;
+}
+
+export function itemView(i: AdviceItem): ItemView {
+  return {
+    name: i.name,
+    tokens: i.tokens.count,
+    tokensText: tokens(i.tokens.count, !i.tokens.measured),
+    estimated: !i.tokens.measured,
+    requests: i.requests,
+    detail: i.detail,
+  };
+}
 
 export function findingTitle(kind: FindingKind): string {
   return TITLES[kind];
@@ -39,7 +61,7 @@ export function findingTotal(f: Finding): string | null {
 
 @Component({
   selector: "app-advice",
-  imports: [PageHeader, Term, Status, DataTable],
+  imports: [PageHeader, Term, Status, HxDataTable, HxCell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -80,7 +102,19 @@ export function findingTotal(f: Finding): string | null {
             @if (total(f); as t) {
               <p class="total" [attr.title]="exact(f.total?.count)">{{ t }}</p>
             }
-            <app-data-table [columns]="columns" [data]="f.items" empty="Nothing to show." />
+            <hx-data-table
+              [value]="views(f.items)"
+              [columns]="columns"
+              emptyMessage="Nothing to show."
+              [ariaLabel]="title(f.kind)"
+            >
+              <ng-template hxCell="tokens" let-row>
+                <span [class.est]="row.estimated" [attr.title]="exact(row.tokens)">{{
+                  row.tokensText
+                }}</span>
+              </ng-template>
+              <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+            </hx-data-table>
             @if (f.items.length < f.count) {
               <p class="muted">
                 {{ f.count - f.items.length }} more; the export lists the top ones only.
@@ -128,26 +162,25 @@ export class Advice {
   protected readonly title = findingTitle;
   protected readonly total = findingTotal;
 
-  protected readonly columns: Column<AdviceItem>[] = [
-    { key: "name", label: "Skill", value: (i) => i.name },
+  protected readonly n = number;
+  protected readonly views = (items: AdviceItem[]): ItemView[] => items.map(itemView);
+
+  protected readonly columns: HxColumn[] = [
+    { field: "name", header: "Skill", sortable: true },
     {
-      key: "tokens",
-      label: "Tokens",
-      term: "token",
-      value: (i) => i.tokens.count,
-      text: (i) => tokens(i.tokens.count, !i.tokens.measured),
-      tokens: true,
-      estimated: (i) => !i.tokens.measured,
-      numeric: true,
+      field: "tokens",
+      header: "Tokens",
+      title: termTitle("token"),
+      align: "right",
+      sortable: true,
     },
     {
-      key: "requests",
-      label: "Requests",
-      term: "request",
-      value: (i) => i.requests,
-      text: (i) => number(i.requests),
-      numeric: true,
+      field: "requests",
+      header: "Requests",
+      title: termTitle("request"),
+      align: "right",
+      sortable: true,
     },
-    { key: "detail", label: "Detail", value: (i) => i.detail },
+    { field: "detail", header: "Detail", sortable: true },
   ];
 }

@@ -4,8 +4,9 @@ import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/c
 import { analysis } from "../../core/analysis";
 import { exactTokens, number, pathLabel, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { ContextKind, ContextReport, ContextRow, Tokens } from "../../core/types";
-import { type Column, DataTable } from "../../ui/data-table";
+import { termTitle } from "../../ui/data-table";
 import { Status } from "../../ui/status";
+import { HxCell, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 export interface Note {
   text: string;
@@ -66,6 +67,30 @@ export function byOwner(rows: ContextRow[]): ContextRow[] {
   return [...sums.values()];
 }
 
+/** A context row with sortable raw counts next to the estimate flags of the displayed ones. */
+export interface ContextView extends ContextRow {
+  tokenCount: number;
+  tokenText: string;
+  tokensEstimated: boolean;
+  overheadCount: number;
+  overheadText: string;
+  overheadEstimated: boolean;
+  ownerLabel: string;
+}
+
+export function contextView(r: ContextRow): ContextView {
+  return {
+    ...r,
+    tokenCount: r.tokens.count,
+    tokenText: tokens(r.tokens.count, !r.tokens.measured),
+    tokensEstimated: !r.tokens.measured,
+    overheadCount: r.overhead_tokens.count,
+    overheadText: tokens(r.overhead_tokens.count, !r.overhead_tokens.measured),
+    overheadEstimated: !r.overhead_tokens.measured,
+    ownerLabel: pathLabel(r.owner),
+  };
+}
+
 export function inView(kind: ContextKind, view: View): boolean {
   switch (view) {
     case "all":
@@ -83,7 +108,7 @@ export function inView(kind: ContextKind, view: View): boolean {
 
 @Component({
   selector: "app-context",
-  imports: [PageHeader, Term, Status, DataTable],
+  imports: [PageHeader, Term, Status, HxDataTable, HxCell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -125,14 +150,36 @@ export function inView(kind: ContextKind, view: View): boolean {
           By project
         </button>
       </div>
-      <app-data-table
+      <hx-data-table
+        [value]="rows()"
         [columns]="columns()"
-        [data]="rows()"
-        [initialSort]="{ key: 'overhead', descending: true }"
-        [filterable]="true"
-        placeholder="Filter by source"
-        empty="No context items found."
-      />
+        filterDisplay="row"
+        sortField="overheadCount"
+        [sortOrder]="-1"
+        [paginator]="rows().length > 100"
+        [rows]="100"
+        emptyMessage="No context items found."
+        ariaLabel="Context"
+      >
+        <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
+        <ng-template hxCell="project" let-row>
+          <span [attr.title]="row.project">{{ shortPath(row.project) }}</span>
+        </ng-template>
+        <ng-template hxCell="ownerLabel" let-row>
+          <span [attr.title]="row.owner">{{ row.ownerLabel }}</span>
+        </ng-template>
+        <ng-template hxCell="tokenCount" let-row>
+          <span [class.est]="row.tokensEstimated" [attr.title]="exact(row.tokenCount)">{{
+            row.tokenText
+          }}</span>
+        </ng-template>
+        <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+        <ng-template hxCell="overheadCount" let-row>
+          <span [class.est]="row.overheadEstimated" [attr.title]="exact(row.overheadCount)">{{
+            row.overheadText
+          }}</span>
+        </ng-template>
+      </hx-data-table>
       @for (n of notes(); track n.text) {
         <p class="muted" [attr.title]="n.title">{{ n.text }}</p>
       }
@@ -171,9 +218,14 @@ export class Context {
 
   protected readonly grouping = signal<Grouping>("owner");
 
+  protected readonly source = sourceLabel;
+  protected readonly shortPath = shortPath;
+  protected readonly n = number;
+  protected readonly exact = exactTokens;
+
   protected readonly rows = computed(() => {
     const shown = (this.res.value()?.data.rows ?? []).filter((r) => inView(r.kind, this.view()));
-    return this.grouping() === "owner" ? byOwner(shown) : shown;
+    return (this.grouping() === "owner" ? byOwner(shown) : shown).map(contextView);
   });
 
   protected readonly notes = computed(() => {
@@ -192,69 +244,34 @@ export class Context {
     return out;
   });
 
-  protected readonly columns = computed<Column<ContextRow>[]>(() => {
-    const project: Column<ContextRow>[] =
-      this.grouping() === "project"
-        ? [
-            {
-              key: "project",
-              label: "Project",
-              value: (r) => r.project,
-              text: (r) => shortPath(r.project),
-              hover: (r) => r.project,
-            },
-          ]
-        : [];
-    return [
-      {
-        key: "source",
-        label: "Source",
-        value: (r) => r.source,
-        text: (r) => sourceLabel(r.source),
-      },
-      ...project,
-      ...this.valueColumns,
-    ];
-  });
-
-  private readonly valueColumns: Column<ContextRow>[] = [
-    { key: "kind", label: "Kind", term: "kind", value: (r) => r.kind },
+  protected readonly columns = computed<HxColumn[]>(() => [
+    { field: "source", header: "Source", sortable: true, filter: true },
+    ...(this.grouping() === "project"
+      ? [{ field: "project", header: "Project", sortable: true }]
+      : []),
+    { field: "kind", header: "Kind", title: termTitle("kind"), sortable: true },
+    { field: "ownerLabel", header: "Owner", title: termTitle("owner"), sortable: true },
+    { field: "items", header: "Items", align: "right", sortable: true },
     {
-      key: "owner",
-      label: "Owner",
-      term: "owner",
-      value: (r) => r.owner,
-      text: (r) => pathLabel(r.owner),
-      hover: (r) => r.owner,
-    },
-    { key: "items", label: "Items", value: (r) => r.items, numeric: true },
-    {
-      key: "tokens",
-      label: "Tokens",
-      term: "token",
-      value: (r) => r.tokens.count,
-      text: (r) => tokens(r.tokens.count, !r.tokens.measured),
-      tokens: true,
-      estimated: (r) => !r.tokens.measured,
-      numeric: true,
+      field: "tokenCount",
+      header: "Tokens",
+      title: termTitle("token"),
+      align: "right",
+      sortable: true,
     },
     {
-      key: "requests",
-      label: "Requests",
-      term: "request",
-      value: (r) => r.requests,
-      text: (r) => number(r.requests),
-      numeric: true,
+      field: "requests",
+      header: "Requests",
+      title: termTitle("request"),
+      align: "right",
+      sortable: true,
     },
     {
-      key: "overhead",
-      label: "Overhead",
-      term: "overhead",
-      value: (r) => r.overhead_tokens.count,
-      text: (r) => tokens(r.overhead_tokens.count, !r.overhead_tokens.measured),
-      tokens: true,
-      estimated: (r) => !r.overhead_tokens.measured,
-      numeric: true,
+      field: "overheadCount",
+      header: "Overhead",
+      title: termTitle("overhead"),
+      align: "right",
+      sortable: true,
     },
-  ];
+  ]);
 }

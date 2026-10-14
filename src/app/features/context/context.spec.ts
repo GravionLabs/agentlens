@@ -1,8 +1,15 @@
-import { afterEach, describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { NO_ERRORS_SCHEMA } from "@angular/core";
+import { TestBed } from "@angular/core/testing";
+import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
+import { provideRouter } from "@angular/router";
+import { HxCell, HxDataTable } from "@gravionlabs/helix-ui";
+import { Ipc } from "../../core/ipc";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { tokenFormat } from "../../core/token-format.service";
 import type { ContextKind } from "../../core/types";
 import type { ContextRow } from "../../core/types";
-import { byOwner, firstRequestNote, inView } from "./context";
+import { byOwner, Context, firstRequestNote, inView } from "./context";
 
 describe("context views", () => {
   const kinds: ContextKind[] = [
@@ -83,5 +90,99 @@ describe("first request note", () => {
     const n = firstRequestNote("claude-code", f);
     expect(n.text).toContain("holds 2.11 M tokens on average, at most 2.50 M (");
     expect(n.title).toBe("Average 2,114,305 tokens, at most 2,500,000");
+  });
+});
+
+let payload: unknown = null;
+
+class FakeIpc extends Ipc {
+  override async invoke<T>(): Promise<T> {
+    return { schema_version: 2, data: payload, warnings: 0, errors: [] } as T;
+  }
+}
+
+async function render() {
+  TestBed.overrideComponent(Context, {
+    set: { imports: [HxDataTable, HxCell], schemas: [NO_ERRORS_SCHEMA] },
+  });
+  const fixture = TestBed.createComponent(Context);
+  fixture.detectChanges();
+  await fixture.whenStable();
+  fixture.detectChanges();
+  return { fixture, el: fixture.nativeElement as HTMLElement };
+}
+
+const column = (el: HTMLElement, index: number) =>
+  [...el.querySelectorAll("hx-data-table tbody tr")].map((r) =>
+    r.querySelectorAll("td")[index].textContent!.trim(),
+  );
+
+const headerButton = (el: HTMLElement, name: string) =>
+  [...el.querySelectorAll<HTMLElement>("hx-data-table th button")].find((b) =>
+    b.textContent!.includes(name),
+  )!;
+
+describe("Context table on helix", () => {
+  const item = (owner: string, tokens: number, measured: boolean, requests: number) => ({
+    source: "claude-code",
+    project: "/work/demo",
+    kind: "mcp-instructions",
+    owner,
+    items: 1,
+    bytes: 10,
+    tokens: { count: tokens, measured },
+    requests,
+    overhead_tokens: { count: tokens * requests, measured },
+  });
+
+  beforeAll(() => {
+    TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+  });
+  beforeEach(() => {
+    tokenFormat.set("full");
+    payload = {
+      rows: [item("small", 10, true, 2), item("big", 50, false, 4), item("mid", 20, true, 5)],
+      first_request: {},
+      unavailable: {},
+    };
+    TestBed.configureTestingModule({
+      providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
+    });
+  });
+  afterEach(() => TestBed.resetTestingModule());
+
+  it("sorts by overhead, descending, and marks estimated counts", async () => {
+    const { el } = await render();
+    // Columns: Source, Kind, Owner, Items, Tokens, Requests, Overhead
+    expect(column(el, 2)).toEqual(["big", "mid", "small"]);
+    expect(column(el, 6)).toEqual(["~200", "100", "20"]);
+    expect(column(el, 4)).toEqual(["~50", "20", "10"]);
+    expect(el.querySelectorAll("hx-data-table tbody span.est")).toHaveLength(2);
+    expect(el.querySelector("th[aria-sort='descending']")!.textContent).toContain("Overhead");
+  });
+
+  it("sorts by a header click: ascending first", async () => {
+    const { fixture, el } = await render();
+    headerButton(el, "Requests").click();
+    fixture.detectChanges();
+    expect(column(el, 2)).toEqual(["small", "big", "mid"]);
+  });
+
+  it("shows headers, a filter on the source column and a tooltip with the owner path", async () => {
+    const { el } = await render();
+    const head = el.querySelector("hx-data-table thead")!.textContent!;
+    for (const h of ["Source", "Kind", "Owner", "Items", "Tokens", "Requests", "Overhead"]) {
+      expect(head).toContain(h);
+    }
+    expect(el.querySelector("hx-data-table thead input")).not.toBeNull();
+    expect(column(el, 0)[0]).toBe("Claude Code");
+  });
+
+  it("says so when there is nothing to show", async () => {
+    payload = { rows: [], first_request: {}, unavailable: {} };
+    const { el } = await render();
+    expect(el.querySelector("hx-data-table tbody")!.textContent).toContain(
+      "No context items found.",
+    );
   });
 });
