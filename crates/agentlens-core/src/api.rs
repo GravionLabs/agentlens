@@ -28,7 +28,7 @@ use crate::model::Source;
 use crate::pipeline;
 use crate::prices::{self, PriceTable};
 use crate::report::Report;
-use crate::since::parse_since;
+use crate::since::{parse_window, window_start};
 use crate::tokens::CharsPerToken;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
@@ -73,23 +73,12 @@ impl Filters {
         let now = Timestamp::from_second(now.as_second() - now.as_second().rem_euclid(300))
             .unwrap_or(now);
         // Both bounds count from the same rounded `now`, so `until` steps with `since`.
-        let instant = |text: &Option<String>| match text
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            Some(s) => parse_since(s, now).map(Some),
-            None => Ok(None),
-        };
-        let since = instant(&self.since)?;
-        let until = instant(&self.until).map_err(|e| format!("until: {e}"))?;
-        if let (Some(since), Some(until)) = (since, until)
-            && until <= since
-        {
-            return Err(format!(
-                "`until` ({until}) must be later than `since` ({since})"
-            ));
-        }
+        let (since, until) = parse_window(
+            self.since.as_deref(),
+            self.until.as_deref(),
+            now,
+            ("since", "until"),
+        )?;
         let mut sources = Vec::new();
         for id in &self.sources {
             sources.push(Source::from_id(id).ok_or_else(|| format!("unknown source `{id}`"))?);
@@ -246,7 +235,7 @@ pub fn unused(ctx: &Context, f: &Filters) -> Result<Answer<UnusedReport>, String
     let (mut filter, only) = f.resolve(now)?;
     if filter.since.is_none() {
         // The default window is 30 days back from the end of the period.
-        filter.since = Some(parse_since("30d", filter.until.unwrap_or(now))?);
+        filter.since = Some(window_start(30, filter.until, now)?);
     }
     let run = pipeline::unused_run(&ctx.registry, &ctx.env, &filter, &only, &CharsPerToken);
     answer(run.report, run.warnings, run.errors)
@@ -619,6 +608,18 @@ mod tests {
             err.contains("until") && err.contains("cannot parse"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn filters_deserialize_with_or_without_until() {
+        let f: Filters =
+            serde_json::from_str(r#"{"since":"7d","until":"1d","sources":[]}"#).unwrap();
+        assert_eq!(f.until.as_deref(), Some("1d"));
+        let f: Filters =
+            serde_json::from_str(r#"{"since":"7d","sources":[],"project":null}"#).unwrap();
+        assert_eq!(f.until, None);
+        let f: Filters = serde_json::from_str(r#"{"until":null}"#).unwrap();
+        assert_eq!(f.until, None);
     }
 
     /// A home with one Claude Code session on 2026-01-10 (long before any `now` of a test run).

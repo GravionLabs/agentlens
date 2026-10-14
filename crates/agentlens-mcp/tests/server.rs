@@ -251,9 +251,38 @@ fn until_closes_the_period() {
         ),
         1
     );
-    // The cost tool takes it too.
-    let cost = client.call("cost", base(json!({"until": "2026-10-02"})));
-    assert_eq!(cost["isError"], false, "{cost}");
+    // The cost tool takes it too: the session inside the period is counted, the one outside is not.
+    let mut cost = |extra: Value| {
+        let r = client.call("cost", base(extra));
+        assert_eq!(r["isError"], false, "{r}");
+        r["structuredContent"]["data"]["report"].clone()
+    };
+    let all = cost(json!({}));
+    assert!(!all["rows"].as_array().unwrap().is_empty(), "{all}");
+    assert_eq!(cost(json!({"until": "2026-10-03"})), all);
+    let none = cost(json!({"until": "2026-10-02"}));
+    assert!(none["rows"].as_array().unwrap().is_empty(), "{none}");
+    assert_ne!(none["total"], all["total"]);
+}
+
+#[test]
+fn a_relative_until_counts_back_from_now() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    let mut count = |args: Value| {
+        let r = client.call("sessions", args);
+        assert_eq!(r["isError"], false, "{r}");
+        r["structuredContent"]["data"].as_array().unwrap().len()
+    };
+    // The session is from October 2026: an hour ago is after it, 3000 days ago long before.
+    assert_eq!(
+        count(json!({"sources": ["claude-code"], "since": "3000d", "until": "1h"})),
+        1
+    );
+    assert_eq!(
+        count(json!({"sources": ["claude-code"], "until": "3000d"})),
+        0
+    );
 }
 
 #[test]

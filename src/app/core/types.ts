@@ -14,7 +14,7 @@ export const SOURCES: { id: SourceId; label: string }[] = [
 export interface Filters {
   since: string | null;
   /** Upper bound of the period, same forms as `since`; the period is [since, until). */
-  until?: string;
+  until: string | null;
   sources: SourceId[];
   project: string | null;
 }

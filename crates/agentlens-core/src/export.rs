@@ -28,6 +28,7 @@ mod tests {
                 tool_version: "0.0.0".into(),
                 generated_at: "2026-10-10T00:00:00Z".parse().unwrap(),
                 since: None,
+                until: None,
                 sources: vec![],
                 installed_skills: 0,
                 warnings: 0,

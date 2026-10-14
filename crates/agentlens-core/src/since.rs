@@ -40,6 +40,45 @@ pub fn parse_since(text: &str, now: Timestamp) -> Result<Timestamp, String> {
     ))
 }
 
+/// The period `[since, until)` from the texts of the two bounds, each in the forms of [`parse_since`]
+/// and counted from the same `now`. A blank text is no bound. `names` are the labels the errors carry
+/// (`since` and `until`, or `--since` and `--until` for a command line).
+pub fn parse_window(
+    since: Option<&str>,
+    until: Option<&str>,
+    now: Timestamp,
+    names: (&str, &str),
+) -> Result<(Option<Timestamp>, Option<Timestamp>), String> {
+    let bound = |text: Option<&str>, name: &str| match text.map(str::trim).filter(|s| !s.is_empty())
+    {
+        Some(s) => parse_since(s, now)
+            .map(Some)
+            .map_err(|e| format!("{name}: {e}")),
+        None => Ok(None),
+    };
+    let since_at = bound(since, names.0)?;
+    let until_at = bound(until, names.1)?;
+    if let (Some(s), Some(u)) = (since_at, until_at)
+        && u <= s
+    {
+        return Err(format!(
+            "{} ({u}) must be later than {} ({s})",
+            names.1, names.0
+        ));
+    }
+    Ok((since_at, until_at))
+}
+
+/// The start of a period of `days` days that ends at `until`, or now: the default window of the
+/// unused view when no `since` is given.
+pub fn window_start(
+    days: u32,
+    until: Option<Timestamp>,
+    now: Timestamp,
+) -> Result<Timestamp, String> {
+    parse_since(&format!("{days}d"), until.unwrap_or(now))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,5 +113,50 @@ mod tests {
     fn garbage_is_rejected_with_a_hint() {
         assert!(parse_since("soon", now()).unwrap_err().contains("30d"));
         assert!(parse_since("d", now()).is_err());
+    }
+
+    #[test]
+    fn a_window_has_two_bounds_that_must_be_ordered() {
+        let w = parse_window(Some("2d"), Some("1d"), now(), ("since", "until")).unwrap();
+        assert_eq!(
+            (w.0.unwrap().to_string(), w.1.unwrap().to_string()),
+            ("2026-10-08T12:00:00Z".into(), "2026-10-09T12:00:00Z".into())
+        );
+        assert_eq!(
+            parse_window(None, Some(" "), now(), ("since", "until")).unwrap(),
+            (None, None)
+        );
+        let err = parse_window(
+            Some("2026-10-02"),
+            Some("2026-10-01"),
+            now(),
+            ("--since", "--until"),
+        )
+        .unwrap_err();
+        assert!(
+            err.starts_with("--until (") && err.contains("--since"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_window_error_names_the_bound() {
+        let err = parse_window(Some("soon"), None, now(), ("--since", "--until")).unwrap_err();
+        assert!(err.starts_with("--since: cannot parse"), "{err}");
+        let err = parse_window(None, Some("soon"), now(), ("since", "until")).unwrap_err();
+        assert!(err.starts_with("until: cannot parse"), "{err}");
+    }
+
+    #[test]
+    fn the_default_window_ends_at_until_or_now() {
+        let until: Timestamp = "2026-01-20T00:00:00Z".parse().unwrap();
+        assert_eq!(
+            window_start(30, Some(until), now()).unwrap().to_string(),
+            "2025-12-21T00:00:00Z"
+        );
+        assert_eq!(
+            window_start(30, None, now()).unwrap().to_string(),
+            "2026-09-10T12:00:00Z"
+        );
     }
 }

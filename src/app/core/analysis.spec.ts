@@ -8,11 +8,16 @@ describe("filters", () => {
     f.setSince("7d");
     f.setProject("  /work/demo ");
     f.toggleSource("opencode");
-    expect(f.payload()).toEqual({ since: "7d", sources: ["opencode"], project: "/work/demo" });
+    expect(f.payload()).toEqual({
+      since: "7d",
+      until: null,
+      sources: ["opencode"],
+      project: "/work/demo",
+    });
     f.toggleSource("opencode");
     f.setSince("");
     f.setProject("");
-    expect(f.payload()).toEqual({ since: null, sources: [], project: null });
+    expect(f.payload()).toEqual({ since: null, until: null, sources: [], project: null });
   });
 });
 

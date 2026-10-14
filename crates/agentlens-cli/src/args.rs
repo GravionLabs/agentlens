@@ -1,5 +1,6 @@
 use agentlens_core::adapter::SessionFilter;
 use agentlens_core::model::Source;
+use agentlens_core::since::parse_window;
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use jiff::Timestamp;
@@ -204,84 +205,17 @@ fn parse_source(s: &str) -> Result<Source, String> {
 
 impl Cli {
     pub fn filter(&self) -> Result<SessionFilter> {
-        let now = Timestamp::now();
-        let since = match &self.since {
-            Some(s) => Some(parse_since(s, now)?),
-            None => None,
-        };
-        let until = match &self.until {
-            Some(u) => Some(
-                agentlens_core::since::parse_since(u, now)
-                    .map_err(|e| anyhow::anyhow!("--until: {e}"))?,
-            ),
-            None => None,
-        };
-        if let (Some(since), Some(until)) = (since, until)
-            && until <= since
-        {
-            anyhow::bail!("--until ({until}) must be later than --since ({since})");
-        }
+        let (since, until) = parse_window(
+            self.since.as_deref(),
+            self.until.as_deref(),
+            Timestamp::now(),
+            ("--since", "--until"),
+        )
+        .map_err(anyhow::Error::msg)?;
         Ok(SessionFilter {
             since,
             until,
             project: self.project.clone(),
         })
-    }
-}
-
-/// The instant `days` days before `now`.
-pub fn days_ago(days: u32, now: Timestamp) -> Result<Timestamp> {
-    parse_since(&format!("{days}d"), now)
-}
-
-/// `30d`, `12h`, `4w` (relative to `now`), a date (`2026-10-01`, midnight UTC) or an RFC 3339 instant.
-pub fn parse_since(text: &str, now: Timestamp) -> Result<Timestamp> {
-    agentlens_core::since::parse_since(text, now).map_err(|e| anyhow::anyhow!("--since: {e}"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn now() -> Timestamp {
-        "2026-10-10T12:00:00Z".parse().unwrap()
-    }
-
-    #[test]
-    fn durations_are_relative_to_now() {
-        assert_eq!(
-            parse_since("30d", now()).unwrap().to_string(),
-            "2026-09-10T12:00:00Z"
-        );
-        assert_eq!(
-            parse_since("12h", now()).unwrap().to_string(),
-            "2026-10-10T00:00:00Z"
-        );
-        assert_eq!(
-            parse_since("2w", now()).unwrap().to_string(),
-            "2026-09-26T12:00:00Z"
-        );
-    }
-
-    #[test]
-    fn dates_and_instants_are_absolute() {
-        assert_eq!(
-            parse_since("2026-10-01", now()).unwrap().to_string(),
-            "2026-10-01T00:00:00Z"
-        );
-        assert_eq!(
-            parse_since("2026-10-01T08:30:00Z", now())
-                .unwrap()
-                .to_string(),
-            "2026-10-01T08:30:00Z"
-        );
-    }
-
-    #[test]
-    fn garbage_is_rejected_with_a_hint() {
-        let err = parse_since("soon", now()).unwrap_err().to_string();
-        assert!(err.contains("30d"), "{err}");
-        assert!(parse_since("d", now()).is_err());
-        assert!(parse_since("5x", now()).is_err());
     }
 }
