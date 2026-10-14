@@ -26,6 +26,7 @@ client files ─► Adapter ─► normalized events ─► Analyzer ─► repo
 
 - `src-tauri` (crate `agentlens-app`) is a thin shell: the plain function per analysis (taking the CLI's filter and returning the core's report types in an `Answer { data, warnings, errors }`) lives in `agentlens-core::api` and is shared with the MCP server; `src/api.rs` only re-exports it and `src/lib.rs` wraps the functions as Tauri commands. New logic belongs in `agentlens-core` so the CLI benefits too.
 - `src` is Angular 22 (standalone components, signals, pnpm). Views call commands through `analysis()` in `src/app/core`; types in `types.ts` mirror the JSON, and the samples in `src/app/core/samples` come from the Rust tests (`UPDATE_SAMPLES=1`). A change in a core report type needs a matching change in `types.ts`.
+- helix-ui, helix-shell and chart.js via `HxChart` are the adopted UI and chart libraries ([ADR 0007](docs/adr/0007-helix-ui.md)); the migration is pending in #351. Until then the SVG charts and everything else the ADR lists stay hand-written, and a new UI or chart dependency beyond the ADR needs a decision.
 - The CLI workflow (`ci.yml`) excludes the app crate and needs no system libraries; `app.yml` checks the frontend and the crate.
 - Estimates carry a tilde and missing data is `n/a`, as in the CLI. Prettier covers the frontend only.
 
