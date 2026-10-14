@@ -5,6 +5,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Bug Fixes
+- Recover poisoned locks instead of panicking, and complete the glossary and status bar docs (#352)
+
+
 ## [0.10.3] — 2026-10-13
 
 ### Bug Fixes
