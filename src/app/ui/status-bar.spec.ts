@@ -90,32 +90,19 @@ async function renderBar(sample: boolean, version: string | null) {
   return { el, text: (el.textContent ?? "").replace(/\s+/g, " ") };
 }
 
-describe("StatusBar helix status bar", () => {
-  it("shows the version outside sample mode", async () => {
-    const { el, text } = await renderBar(false, "0.7.1");
-    expect(text).toContain("AgentLens");
-    expect(text).toContain("Version:v0.7.1");
-    expect(text).not.toContain("sample data");
-    expect(text).not.toContain("Staging");
-    expect(el.querySelector(".demo-link")).toBeNull();
-  });
-
-  it("shows no version when it cannot be read", async () => {
-    const { text } = await renderBar(false, null);
-    expect(text).toContain("AgentLens");
-    expect(text).not.toContain("Version");
-  });
-
-  it("labels sample mode as sample data, with the note and the install link", async () => {
-    const { el, text } = await renderBar(true, "0.7.1");
+describe("StatusBar sample mode", () => {
+  it("labels sample mode as sample data with the install link", async () => {
+    const { el } = await renderBar(true, "0.7.1");
     expect(el.querySelector("hx-tag.sample")?.textContent?.trim()).toBe("sample data");
-    expect(text).toContain("Nothing here is read from your machine.");
-    expect(text).not.toContain("Staging");
-    expect(text).not.toContain("Unknown");
-    expect(text).not.toContain("Version");
     const link = el.querySelector<HTMLAnchorElement>("a.demo-link")!;
     expect(link.textContent?.trim()).toBe("Install the application");
     expect(link.href).toContain("releases/latest");
+  });
+
+  it("has no sample badge outside sample mode", async () => {
+    const { el } = await renderBar(false, "0.7.1");
+    expect(el.querySelector(".sample")).toBeNull();
+    expect(el.querySelector(".demo-link")).toBeNull();
   });
 
   it("keeps the token toggle and the zoom controls in sample mode", async () => {

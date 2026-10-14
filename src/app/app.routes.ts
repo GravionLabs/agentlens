@@ -1,4 +1,5 @@
 import { Routes } from "@angular/router";
+import { ViewFrame } from "./ui/view-frame";
 
 export interface NavItem {
   path: string;
@@ -19,7 +20,7 @@ export const NAV: NavItem[] = [
   { path: "glossary", label: "Glossary" },
 ];
 
-export const routes: Routes = [
+const views: Routes = [
   { path: "", pathMatch: "full", redirectTo: "overview" },
   {
     path: "overview",
@@ -67,3 +68,6 @@ export const routes: Routes = [
   },
   { path: "**", redirectTo: "overview" },
 ];
+
+/** Every view sits in the frame with the filter toolbar; the shell (topbar, nav, status bar) is in `App`. */
+export const routes: Routes = [{ path: "", component: ViewFrame, children: views }];

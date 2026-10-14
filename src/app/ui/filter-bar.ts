@@ -60,8 +60,14 @@ import { SOURCES, type SourceId } from "../core/types";
   styles: `
     .bar {
       display: flex;
-      flex-direction: column;
-      gap: 10px;
+      flex-flow: row wrap;
+      align-items: flex-end;
+      gap: 10px 16px;
+    }
+    .field,
+    .bar > label {
+      flex: 1 1 11rem;
+      max-width: 18rem;
     }
     .field {
       display: flex;

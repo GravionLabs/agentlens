@@ -6,7 +6,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { App } from "./app";
 import { NAV, routes } from "./app.routes";
 import { FiltersService } from "./core/filters.service";
-import { Ipc } from "./core/ipc";
+import { LoadingService } from "./core/loading.service";
+import { Ipc, SAMPLE_MODE } from "./core/ipc";
 import { ZoomService } from "./core/zoom.service";
 
 beforeAll(() => {
@@ -28,7 +29,11 @@ afterEach(() => {
 
 function render(invoke = vi.fn(async () => "0.1.0")) {
   TestBed.configureTestingModule({
-    providers: [provideRouter([]), { provide: Ipc, useValue: { invoke } }],
+    providers: [
+      provideRouter([]),
+      { provide: Ipc, useValue: { invoke } },
+      { provide: SAMPLE_MODE, useValue: false },
+    ],
   });
   const fixture = TestBed.createComponent(App);
   fixture.detectChanges();
@@ -42,19 +47,21 @@ describe("app", () => {
 
   it("links every view in the navigation, in order", () => {
     const { el } = render();
-    const links = [...el.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Views"] a')];
+    const links = [...el.querySelectorAll<HTMLAnchorElement>("helix-nav-rail a[href]")].filter(
+      (a) => a.getAttribute("href") !== "/",
+    );
+    const hrefs = links.map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual(NAV.map((n) => `/${n.path}`));
     expect(links.map((a) => a.textContent?.trim())).toEqual(NAV.map((n) => n.label));
-    expect(links[0].getAttribute("href")).toBe("/overview");
   });
 
   it("refreshes the backend and then bumps the filters", async () => {
     const { fixture, el, invoke } = render();
     const filters = TestBed.inject(FiltersService);
     const before = filters.generation();
-    const button = [...el.querySelectorAll<HTMLButtonElement>("button")].find(
+    const button = [...el.querySelectorAll<HTMLButtonElement>(".layout-topbar button")].find(
       (b) => b.textContent?.trim() === "Refresh",
     )!;
-    expect(button.classList.contains("hx-button")).toBe(true);
     button.click();
     await fixture.whenStable();
     expect(invoke).toHaveBeenCalledWith("refresh");
@@ -71,8 +78,20 @@ describe("app", () => {
     expect(zoom.factor()).toBe(1);
   });
 
-  it("renders the status bar below the views", () => {
-    const { el } = render();
-    expect(el.querySelector("app-status-bar helix-status-bar")).not.toBeNull();
+  it("shows the version and the controls in the status bar", async () => {
+    const { fixture, el } = render();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const bar = el.querySelector("helix-status-bar")!;
+    expect((bar.textContent ?? "").replace(/\s+/g, " ")).toContain("Version:v0.1.0");
+    expect(bar.querySelector('app-status-bar button[aria-label="Larger"]')).not.toBeNull();
+  });
+
+  it("shows the progress bar only while loading", () => {
+    const { fixture, el } = render();
+    expect(el.querySelector('[role="progressbar"]')).toBeNull();
+    TestBed.inject(LoadingService).set(Symbol("t"), true);
+    fixture.detectChanges();
+    expect(el.querySelector('[role="progressbar"]')).not.toBeNull();
   });
 });
