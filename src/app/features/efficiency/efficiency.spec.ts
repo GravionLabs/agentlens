@@ -37,6 +37,13 @@ const column = (el: HTMLElement, index: number, table = 0) =>
     r.querySelectorAll("td")[index].textContent!.trim(),
   );
 
+const typeFilter = (fixture: { detectChanges(): void }, el: HTMLElement, text: string) => {
+  const input = el.querySelector<HTMLInputElement>("hx-data-table thead input")!;
+  input.value = text;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  fixture.detectChanges();
+};
+
 const headerButton = (el: HTMLElement, name: string) =>
   [...el.querySelectorAll<HTMLElement>("hx-data-table th button")].find((b) =>
     b.textContent!.includes(name),
@@ -142,5 +149,15 @@ describe("Efficiency tables on helix", () => {
     headerButton(el, "Group").click();
     fixture.detectChanges();
     expect(column(el, 0)).toEqual(["a", "b", "c"]);
+  });
+
+  it("filters the group column by the label shown, not the long id", async () => {
+    const id = "0123456789abcdef0123456789abcdef-x";
+    payload = { ...(payload as object), cache: [cache(id, 2), cache("other", 1)] };
+    const { fixture, el } = await render();
+    typeFilter(fixture, el, "01234567");
+    expect(column(el, 0)).toEqual(["01234567"]);
+    typeFilter(fixture, el, "abcdef-x");
+    expect(el.querySelector("hx-data-table tbody")!.textContent).toContain("No usage found.");
   });
 });

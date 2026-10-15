@@ -83,7 +83,7 @@ export function subagentView(s: SubagentShare): SubagentView {
         [errors]="res.value()?.errors ?? []"
       />
       <hx-data-table
-        [value]="cache()"
+        [value]="cacheViews()"
         [sortFunction]="sort"
         [columns]="cacheColumns"
         filterDisplay="row"
@@ -108,8 +108,8 @@ export function subagentView(s: SubagentShare): SubagentView {
         <ng-template hxColumnHeader="hit_rate"
           ><app-help-link term="hit-rate" label="Hit rate"
         /></ng-template>
-        <ng-template hxCell="key" let-row>
-          <span [attr.title]="row.key">{{ groupLabel(row.key) }}</span>
+        <ng-template hxCell="groupName" let-row>
+          <span [attr.title]="row.key">{{ row.groupName }}</span>
         </ng-template>
         <ng-template hxCell="source" let-value="value">{{ label(value) }}</ng-template>
         <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
@@ -184,11 +184,14 @@ export class Efficiency {
   protected readonly tip = exactTokens;
   protected readonly percent = percent;
   protected readonly label = sourceLabel;
-  protected readonly groupLabel = groupLabel;
+  /** Cache rows with the group as shown, so the column filter matches the text the user sees. */
+  protected readonly cacheViews = computed(() =>
+    this.cache().map((c) => ({ ...c, groupName: groupLabel(c.key) })),
+  );
   protected readonly subagentViews = computed(() => this.subagents().map(subagentView));
 
   protected readonly cacheColumns: HxColumn[] = [
-    { field: "key", header: "Group", sortable: true, filter: true },
+    { field: "groupName", header: "Group", sortable: true, filter: true },
     { field: "source", header: "Source", sortable: true },
     {
       field: "requests",

@@ -45,6 +45,13 @@ const column = (el: HTMLElement, index: number) =>
     r.querySelectorAll("td")[index].textContent!.trim(),
   );
 
+const typeFilter = (fixture: { detectChanges(): void }, el: HTMLElement, text: string) => {
+  const input = el.querySelector<HTMLInputElement>("hx-data-table thead input")!;
+  input.value = text;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  fixture.detectChanges();
+};
+
 const headerButton = (el: HTMLElement, name: string) =>
   [...el.querySelectorAll<HTMLElement>("hx-data-table th button")].find((b) =>
     b.textContent!.includes(name),
@@ -135,6 +142,26 @@ describe("Flow tables on helix", () => {
     fixture.detectChanges();
     expect(el.querySelector("th[aria-sort='descending']")!.textContent).toContain("Error rate");
     expect(column(el, 4)).toEqual(["50.0%", "25.0%", "n/a"]);
+  });
+
+  it("filters the growth source column by the label shown, not the id", async () => {
+    const { fixture, el } = await render();
+    typeFilter(fixture, el, "Claude Code");
+    expect(column(el, 1)).toEqual(["bbbbbbbb", "aaaaaaaa"]);
+    typeFilter(fixture, el, "claude-code");
+    expect(el.querySelector("hx-data-table tbody")!.textContent).toContain(
+      "No sessions with requests.",
+    );
+  });
+
+  it("filters the tool errors source column by the label shown", async () => {
+    const { fixture, el } = await render();
+    [...el.querySelectorAll<HTMLElement>(".tabs button")][1].click();
+    fixture.detectChanges();
+    typeFilter(fixture, el, "OpenCode");
+    expect(column(el, 1)).toEqual(["Edit", "Bash", "Read"]);
+    typeFilter(fixture, el, "Copilot");
+    expect(el.querySelector("hx-data-table tbody")!.textContent).toContain("No tool calls.");
   });
 
   it("derives the sortable rate without counting unknown outcomes", () => {
