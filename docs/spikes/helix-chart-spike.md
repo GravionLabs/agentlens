@@ -59,8 +59,8 @@ Keep SVG for the stacked bars; migrate the timeline only if interaction (zoom, b
 
 ## Decision (#376)
 
-The owner decided to keep the SVG stacked bars in the skills view. The `HxChart` variant (`ui/hx-stacked-bars.ts`, its spec and the `?hx` switch in the skills view) was removed and `ui/stacked-bars.ts` now has a spec of its own. `ui/hatch.ts` and `ui/hx-flag.ts` stay for the timeline spike until its decision (#377).
+The owner decided to keep the SVG stacked bars in the skills view. The `HxChart` variant (`ui/hx-stacked-bars.ts`, its spec and the `?hx` switch in the skills view) was removed and `ui/stacked-bars.ts` now has a spec of its own. `ui/hatch.ts` and `ui/hx-flag.ts` stayed for the timeline spike until its decision; both were removed in #377.
 
 ## Decision (#377)
 
-The owner decided to keep the SVG timeline chart; the spike is closed. The `HxChart` variant (`features/timeline/hx-timeline-chart.ts` and its spec), the `?hx` switch in the timeline view, `ui/hx-flag.ts`, `ui/hatch.ts` (canvas hatch, not used by the SVG bars, which build an SVG `<pattern>`), `ui/chart-loader.ts` and the `HX_CHART_LOADER` provider were removed. No production code imports `helix-ui/chart` any more. The `chart.js` dependency in `package.json` is now unused; removing it is left to #378.
+The owner decided to keep the SVG timeline chart; the spike is closed. The `HxChart` variant (`features/timeline/hx-timeline-chart.ts` and its spec), the `?hx` switch in the timeline view, `ui/hx-flag.ts`, `ui/hatch.ts` (canvas hatch, not used by the SVG bars, which build an SVG `<pattern>`), `ui/chart-loader.ts` and the `HX_CHART_LOADER` provider were removed. No production code imports `helix-ui/chart` any more. The `chart.js` dependency in `package.json` is now unused; removing it (and `chart.js/auto` in `externalDependencies` of `angular.json`) is left to the owner, as in ADR 0007.

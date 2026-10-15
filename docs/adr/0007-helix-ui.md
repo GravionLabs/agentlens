@@ -30,13 +30,14 @@ Charts:
 ## Decision
 
 - **Components: helix-ui and helix-shell**, with `@angular/cdk` as peer dependency. The packages are pinned to the published release 22.2.7. The theme is the custom helix theme in `src/helix-theme.scss`, derived from the AgentLens tokens, so the look stays that of AgentLens.
-- **Charts: chart.js through `HxChart`** is the chart stack for charts that are built on a library. This replaces the ECharts option of #229 (to be closed once this ADR is merged).
-- **The choice per chart was made in the migration (#351):** both charts stay SVG, by the owner's ruling (#376 for the stacked bars, #377 for the timeline).. The `HxChart` variants, `hx-flag.ts`, `hatch.ts` and `chart-loader.ts` of the spikes are deleted. `chart.js`/`HxChart` therefore has no production use at the moment; the dependency in `package.json` (and `chart.js/auto` in `externalDependencies` of `angular.json`) is left for the owner to keep or remove.
+- **Charts: chart.js through `HxChart`** was chosen as the chart stack for charts built on a library; this replaces the ECharts option of #229 (to be closed once this ADR is merged). Outcome (#351): no chart uses it, see the next point.
+- **The choice per chart was made in the migration (#351):** both charts stay SVG, by the owner's ruling (#376 for the stacked bars, #377 for the timeline). The `HxChart` variants, `hx-flag.ts`, `hatch.ts` and `chart-loader.ts` of the spikes are deleted. `chart.js`/`HxChart` therefore has no production use at the moment; the dependency in `package.json` (and `chart.js/auto` in `externalDependencies` of `angular.json`) is left for the owner to keep or remove.
 - **What stays hand-written** (checked against the code of #351; none of these duplicates a helix component):
   - `src/app/ui/stat-cards.ts` and `page-header.ts`: thin domain wrappers around helix-shell `helix-stat-card` and `helix-page-header` (measured/estimated marking, help links, export menu).
   - `export-menu.ts`: `hx-button` and `hx-menu` plus the export logic of the application.
   - `help-link.ts` (glossary "?" links, `termTitle`) and `term.ts` (dotted-underline word linking to the glossary): glossary integration, which helix does not know.
   - `sort.ts` (`nullsLast`): sort function for `hx-data-table` that puts `n/a` last.
+  - `legend.ts` and `term.ts`: checked in #351, they hold no logic beyond a template and a one-line glossary lookup, so they have no spec of their own.
   - `view-frame.ts`: route component holding the filter bar, toolbar and main area; `filter-bar.ts`, `status-bar.ts` (content of the shell's status bar), `cli-tools.ts` and `update-status.ts`: application features.
   - `status.ts`: loading, failure and warning messages of one analysis, built from `hx-message` and `hx-progress-spinner`.
   - `helix-dark.ts`: host directive on the root component that maps the AgentLens dark mode (`data-theme`, `prefers-color-scheme`) to helix.
@@ -65,7 +66,7 @@ Notes:
 ## Consequences
 
 - **In-house dependency.** AgentLens follows helix's release cadence and Angular version; a breaking change in helix is ours to absorb, and fixes needed by AgentLens go to helix first. The published 22.2.7 is pinned: `package.json` has the exact version `22.2.7` (no range) for both helix packages, and they resolve from the default package registry (there is no `.npmrc` or scope registry) with integrity hashes in `pnpm-lock.yaml`, not through `link:` or `workspace:` references.
-- **Supply chain.** `pnpm-workspace.yaml` has a `minimumReleaseAgeExclude` entry for exactly `@gravionlabs/helix-shell@22.2.7` and `@gravionlabs/helix-ui@22.2.7`. It bypasses pnpm's release-age check for those two packages at that version only; no other package is exempt. The lockfile is committed and the workflows that install (`app.yml`, `pages.yml`) use `pnpm install --frozen-lockfile`, so CI installs what the lockfile records. Removing the entry once the release is older than the minimum age is tracked in the migration PBI #351 (it is part of its scope).
+- **Supply chain.** `pnpm-workspace.yaml` has a `minimumReleaseAgeExclude` entry for exactly `@gravionlabs/helix-shell@22.2.7` and `@gravionlabs/helix-ui@22.2.7`. It bypasses pnpm's release-age check for those two packages at that version only; no other package is exempt. The lockfile is committed and the workflows that install (`app.yml`, `pages.yml`) use `pnpm install --frozen-lockfile`, so CI installs what the lockfile records. Removing the entry once the release is older than the minimum age is Task #380, time gated: helix 22.2.7 was published 2026-10-14T09:59Z and the pnpm 11 `minimumReleaseAge` default is 1 day.
 - **Bundle.** +`@angular/cdk` and helix in the initial bundle, +chart.js as a lazy chunk (see the table).
 - **Dark mode.** The custom helix theme bridges the AgentLens tokens to helix, and the app's dark mode drives it: the AgentLens tokens flip with the media feature `prefers-color-scheme` and with the `data-theme` override (`src/styles.scss`, `src/helix-theme.scss`), so one theme block serves light and dark. Charts redraw on a theme change (about 90 ms measured); canvas colors must be scriptable functions, because `HxChart` leaves dataset colors alone.
 - **Tests (while canvas charts were in use).** jsdom has no canvas: only pure builders (data, options, tooltips) are unit tested, chart components are verified in a real browser. A canvas shim would be needed to render a chart component in a unit test.
@@ -75,5 +76,5 @@ Notes:
 ## Follow-up
 
 - Done in #351: both charts stay SVG (#376, #377). The open question of removing `chart.js` is with the owner.
-- The migration PBI #351 covers the components, the shell, the removal of the budget warning and the removal of the `minimumReleaseAgeExclude` entry once the release is old enough.
+- The migration PBI #351 covers the components, the shell, the removal of the budget warning. Removing the `minimumReleaseAgeExclude` entry is Task #380, time gated (helix 22.2.7 published 2026-10-14T09:59Z, pnpm 11 `minimumReleaseAge` default 1 day).
 - Close #229 when this ADR is merged.
