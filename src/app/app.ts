@@ -31,7 +31,7 @@ const toNavItem = (item: NavItem) => ({ label: item.label, routerLink: `/${item.
       brandIcon="favicon.svg"
       [navGroups]="navGroups"
       [topbarItems]="[]"
-      [topbarActions]="topbarActions"
+      [topbarActions]="topbarActions()"
       statusBarBrand="AgentLens"
       [statusBarNote]="note"
       [statusBarVersions]="versions()"
@@ -89,9 +89,15 @@ export class App {
     })),
     { items: NAV.filter((item) => !item.group).map(toNavItem) },
   ];
-  protected readonly topbarActions: HelixTopbarAction[] = [
-    { icon: "pi pi-refresh", label: "Refresh", command: () => void this.refresh() },
-  ];
+  /**
+   * The topbar action has no disabled state in helix-shell, so while an analysis loads it says
+   * "Refreshing…" (and `refresh()` ignores the click) instead of looking clickable.
+   */
+  protected readonly topbarActions = computed<HelixTopbarAction[]>(() =>
+    this.loading.busy()
+      ? [{ icon: "pi pi-spin pi-spinner", label: "Refreshing…", command: () => undefined }]
+      : [{ icon: "pi pi-refresh", label: "Refresh", command: () => void this.refresh() }],
+  );
   protected readonly note = this.sampleMode ? "Nothing here is read from your machine." : undefined;
   protected readonly versions = computed<HelixStatusBarVersion[]>(() => {
     const v = this.updates.version();

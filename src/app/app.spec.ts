@@ -83,6 +83,23 @@ describe("app", () => {
     expect(filters.generation()).toBe(before + 1);
   });
 
+  it("shows Refreshing… instead of a clickable Refresh while an analysis loads", () => {
+    const { fixture, el, invoke } = render();
+    const labels = () =>
+      [...el.querySelectorAll<HTMLButtonElement>(".layout-topbar button")].map((b) =>
+        b.textContent?.trim(),
+      );
+    expect(labels()).toContain("Refresh");
+    TestBed.inject(LoadingService).set(Symbol("t"), true);
+    fixture.detectChanges();
+    expect(labels()).toContain("Refreshing…");
+    expect(labels()).not.toContain("Refresh");
+    [...el.querySelectorAll<HTMLButtonElement>(".layout-topbar button")]
+      .find((b) => b.textContent?.trim() === "Refreshing…")!
+      .click();
+    expect(invoke).not.toHaveBeenCalledWith("refresh");
+  });
+
   it("zooms with Ctrl + and Ctrl 0 on the document", () => {
     localStorage.clear();
     render();
