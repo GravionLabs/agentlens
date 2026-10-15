@@ -76,8 +76,6 @@ export interface ContextView extends ContextRow {
   overheadText: string;
   overheadEstimated: boolean;
   ownerLabel: string;
-  /** The source as shown, so the column filter matches the text the user sees. */
-  sourceName: string;
 }
 
 export function contextView(r: ContextRow): ContextView {
@@ -90,7 +88,6 @@ export function contextView(r: ContextRow): ContextView {
     overheadText: tokens(r.overhead_tokens.count, !r.overhead_tokens.measured),
     overheadEstimated: !r.overhead_tokens.measured,
     ownerLabel: pathLabel(r.owner),
-    sourceName: sourceLabel(r.source),
   };
 }
 
@@ -156,7 +153,6 @@ export function inView(kind: ContextKind, view: View): boolean {
       <hx-data-table
         [value]="rows()"
         [columns]="columns()"
-        filterDisplay="row"
         sortField="overheadCount"
         [sortOrder]="-1"
         [paginator]="rows().length > 100"
@@ -179,7 +175,7 @@ export function inView(kind: ContextKind, view: View): boolean {
         <ng-template hxColumnHeader="overheadCount"
           ><app-help-link term="overhead" label="Overhead"
         /></ng-template>
-        <ng-template hxCell="sourceName" let-value="value">{{ source(value) }}</ng-template>
+        <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
         <ng-template hxCell="project" let-row>
           <span [attr.title]="row.project">{{ shortPath(row.project) }}</span>
         </ng-template>
@@ -263,7 +259,7 @@ export class Context {
   });
 
   protected readonly columns = computed<HxColumn[]>(() => [
-    { field: "sourceName", header: "Source", sortable: true, filter: true },
+    { field: "source", header: "Source", sortable: true },
     ...(this.grouping() === "project"
       ? [{ field: "project", header: "Project", sortable: true }]
       : []),

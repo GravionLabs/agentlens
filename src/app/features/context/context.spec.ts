@@ -121,13 +121,6 @@ const column = (el: HTMLElement, index: number) =>
     r.querySelectorAll("td")[index].textContent!.trim(),
   );
 
-const typeFilter = (fixture: { detectChanges(): void }, el: HTMLElement, text: string) => {
-  const input = el.querySelector<HTMLInputElement>("hx-data-table thead input")!;
-  input.value = text;
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  fixture.detectChanges();
-};
-
 const headerButton = (el: HTMLElement, name: string) =>
   [...el.querySelectorAll<HTMLElement>("hx-data-table th button")].find((b) =>
     b.textContent!.includes(name),
@@ -179,24 +172,14 @@ describe("Context table on helix", () => {
     expect(column(el, 2)).toEqual(["small", "big", "mid"]);
   });
 
-  it("shows headers, a filter on the source column and a tooltip with the owner path", async () => {
+  it("shows headers, no column filter (the filter bar filters by source) and a tooltip with the owner path", async () => {
     const { el } = await render();
     const head = el.querySelector("hx-data-table thead")!.textContent!;
     for (const h of ["Source", "Kind", "Owner", "Items", "Tokens", "Requests", "Overhead"]) {
       expect(head).toContain(h);
     }
-    expect(el.querySelector("hx-data-table thead input")).not.toBeNull();
+    expect(el.querySelector("hx-data-table thead input")).toBeNull();
     expect(column(el, 0)[0]).toBe("Claude Code");
-  });
-
-  it("filters the source column by the label shown, not the id", async () => {
-    const { fixture, el } = await render();
-    typeFilter(fixture, el, "Claude Code");
-    expect(column(el, 2)).toEqual(["big", "mid", "small"]);
-    typeFilter(fixture, el, "claude-code");
-    expect(el.querySelector("hx-data-table tbody")!.textContent).toContain(
-      "No context items found.",
-    );
   });
 
   it("says so when there is nothing to show", async () => {

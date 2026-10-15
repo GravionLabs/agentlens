@@ -28,23 +28,19 @@ const TABS: { id: Tab; label: string }[] = [
 /** An error row with its sortable rate next to it. */
 export interface ErrorView extends ToolErrors {
   rate: number | null;
-  /** The source as shown, so the column filter matches the text the user sees. */
-  sourceName: string;
 }
 
 export function errorView(t: ToolErrors): ErrorView {
-  return { ...t, rate: errorRate(t), sourceName: sourceLabel(t.source) };
+  return { ...t, rate: errorRate(t) };
 }
 
 /** A growth row with the number of compactions as a sortable value. */
 export interface GrowthView extends SessionGrowth {
   compactionCount: number;
-  /** The source as shown, so the column filter matches the text the user sees. */
-  sourceName: string;
 }
 
 export function growthView(g: SessionGrowth): GrowthView {
-  return { ...g, compactionCount: g.compactions.length, sourceName: sourceLabel(g.source) };
+  return { ...g, compactionCount: g.compactions.length };
 }
 
 export function errorRate(t: ToolErrors): number | null {
@@ -97,7 +93,6 @@ export function errorRate(t: ToolErrors): number | null {
             [value]="growth()"
             [sortFunction]="sort"
             [columns]="growthColumns"
-            filterDisplay="row"
             sortField="peak_tokens"
             [sortOrder]="-1"
             [paginator]="growth().length > 25"
@@ -116,7 +111,7 @@ export function errorRate(t: ToolErrors): number | null {
             <ng-template hxColumnHeader="near_limit"
               ><app-help-link term="near-limit" label="Near limit"
             /></ng-template>
-            <ng-template hxCell="sourceName" let-value="value">{{ source(value) }}</ng-template>
+            <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
             <ng-template hxCell="session" let-row>
               <span [attr.title]="row.session">{{ shortId(row.session) }}</span>
             </ng-template>
@@ -153,7 +148,6 @@ export function errorRate(t: ToolErrors): number | null {
             [value]="errors()"
             [sortFunction]="sort"
             [columns]="errorColumns"
-            filterDisplay="row"
             sortField="errors"
             [sortOrder]="-1"
             [paginator]="errors().length > 25"
@@ -163,7 +157,7 @@ export function errorRate(t: ToolErrors): number | null {
             emptyMessage="No tool calls."
             ariaLabel="Tool errors"
           >
-            <ng-template hxCell="sourceName" let-value="value">{{ source(value) }}</ng-template>
+            <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
             <ng-template hxCell="calls" let-value="value">{{ n(value) }}</ng-template>
             <ng-template hxCell="errors" let-value="value">{{ n(value) }}</ng-template>
             <ng-template hxCell="rate" let-value="value">{{ percent(value) }}</ng-template>
@@ -293,7 +287,7 @@ export class Flow {
   }
 
   protected readonly growthColumns: HxColumn[] = [
-    { field: "sourceName", header: "Source", sortable: true, filter: true },
+    { field: "source", header: "Source", sortable: true },
     { field: "session", header: "Session", sortable: true },
     { field: "project", header: "Project", sortable: true },
     { field: "model", header: "Model", sortable: true },
@@ -323,7 +317,7 @@ export class Flow {
   ];
 
   protected readonly errorColumns: HxColumn[] = [
-    { field: "sourceName", header: "Source", sortable: true, filter: true },
+    { field: "source", header: "Source", sortable: true },
     { field: "tool", header: "Tool", sortable: true },
     { field: "calls", header: "Calls", align: "right", sortable: true },
     { field: "errors", header: "Errors", align: "right", sortable: true },

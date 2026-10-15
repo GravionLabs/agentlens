@@ -28,7 +28,7 @@ The filter bar in the toolbar above the open view sets the period, the sources a
 
 ## Tables
 
-Tables are sortable by their column headers. Where a table has a filter, it is a filter row under the headers, one field per filterable column, instead of a single search box. Long tables have a paginator; its rows-per-page list ends with **Show all**.
+Tables are sortable by their column headers. Where a table has a filter (for example the group of the cache efficiency table or the skill and kind columns), it is a filter row under the headers, one field per filterable column, instead of a single search box. Filtering by source is left to the filter bar above the view. Long tables have a paginator; its rows-per-page list ends with **Show all**.
 
 ## Explaining the numbers
 
