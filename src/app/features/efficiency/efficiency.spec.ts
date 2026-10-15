@@ -8,6 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Ipc } from "../../core/ipc";
 import { tokenFormat } from "../../core/token-format.service";
 import { HelpLinkStub } from "../../ui/help-link.testing";
+import { StatusBar } from "../../ui/status-bar";
 import { Efficiency, groupLabel, share, subagentView } from "./efficiency";
 
 let payload: unknown = null;
@@ -135,6 +136,21 @@ describe("Efficiency tables on helix", () => {
     const input = el.querySelector("hx-data-table tbody tr td:nth-child(4) span")!;
     expect(input.textContent!.trim()).toBe("2.11 M");
     expect(input.getAttribute("title")).toBe("2,114,305");
+  });
+
+  it("follows the status bar switch for the token format", async () => {
+    const { fixture, el } = await render();
+    const input = () => el.querySelector("hx-data-table tbody tr td:nth-child(4) span")!;
+    expect(input().textContent!.trim()).toBe("2,114,305");
+    const bar = TestBed.createComponent(StatusBar);
+    bar.detectChanges();
+    const toggle = (bar.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button[aria-label="Round token counts"]',
+    )!;
+    toggle.click();
+    fixture.detectChanges();
+    expect(input().textContent!.trim()).toBe("2.11 M");
+    expect(input().getAttribute("title")).toBe("2,114,305");
   });
 
   it("shows the subagent shares as percentages", async () => {
