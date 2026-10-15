@@ -86,6 +86,44 @@ describe("UpdateStatus", () => {
   });
 });
 
+describe("UpdateStatus buttons", () => {
+  const classes = (fixture: { nativeElement: unknown }) =>
+    Array.from((fixture.nativeElement as HTMLElement).querySelectorAll("button")).map((b) => ({
+      text: (b.textContent ?? "").trim(),
+      hx: b.classList.contains("hx-button"),
+      link: b.classList.contains("hx-button-link"),
+      outlined: b.classList.contains("hx-button-outlined"),
+      disabled: b.disabled,
+    }));
+
+  it("renders the check as a link hx-button and the installation as an outlined one", async () => {
+    const { fixture, service } = render(async () => newer);
+    fixture.detectChanges();
+    expect(classes(fixture)).toEqual([
+      { text: "Check for updates", hx: true, link: true, outlined: false, disabled: false },
+    ]);
+    await service.check();
+    fixture.detectChanges();
+    expect(classes(fixture)).toEqual([
+      { text: "Install and restart", hx: true, link: false, outlined: true, disabled: false },
+    ]);
+  });
+
+  it("disables the check button while a check runs", async () => {
+    let finish: (value: unknown) => void = () => undefined;
+    const pending = new Promise((resolve) => (finish = resolve));
+    const { fixture, service } = render(() => pending);
+    fixture.detectChanges();
+    const check = service.check();
+    fixture.detectChanges();
+    expect(classes(fixture)[0]).toMatchObject({ text: "Check for updates", disabled: true });
+    finish(null);
+    await check;
+    fixture.detectChanges();
+    expect(classes(fixture)[0]).toMatchObject({ disabled: false });
+  });
+});
+
 describe("UpdateStatus messages", () => {
   it("renders a failed check as an alert with its text", async () => {
     const { fixture, service } = render(async () => {
