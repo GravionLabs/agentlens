@@ -1,18 +1,24 @@
-import { ChangeDetectionStrategy, Component } from "@angular/core";
-import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
-import { NAV } from "./app.routes";
+import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
+import {
+  HelixAppLayout,
+  type HelixNavGroup,
+  type HelixStatusBarVersion,
+  type HelixTopbarAction,
+} from "@gravionlabs/helix-shell";
+import { NAV, NAV_SECTIONS, type NavItem } from "./app.routes";
 import { FiltersService } from "./core/filters.service";
-import { Ipc } from "./core/ipc";
+import { Ipc, SAMPLE_MODE } from "./core/ipc";
 import { LoadingService } from "./core/loading.service";
-import { FilterBar } from "./ui/filter-bar";
+import { UpdateService } from "./core/update.service";
 import { ZoomService } from "./core/zoom.service";
 import { HelixDark } from "./ui/helix-dark";
 import { StatusBar } from "./ui/status-bar";
-import { inject } from "@angular/core";
+
+const toNavItem = (item: NavItem) => ({ label: item.label, routerLink: `/${item.path}` });
 
 @Component({
   selector: "app-root",
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, FilterBar, StatusBar],
+  imports: [HelixAppLayout, StatusBar],
   hostDirectives: [HelixDark],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { "(document:keydown)": "zoom.handleKey($event)" },
@@ -20,69 +26,25 @@ import { inject } from "@angular/core";
     @if (loading.busy()) {
       <div class="progress" role="progressbar" aria-label="Reading sessions"></div>
     }
-    <aside class="side">
-      <span class="brand">
-        <img src="favicon.svg" alt="" width="24" height="24" />
-        <strong>AgentLens</strong>
-      </span>
-      <nav aria-label="Views">
-        @for (item of nav; track item.path) {
-          <a [routerLink]="item.path" routerLinkActive="active">{{ item.label }}</a>
-        }
-      </nav>
-      <app-filter-bar />
-      <div class="foot">
-        <button type="button" class="btn" (click)="refresh()" [disabled]="loading.busy()">
-          Refresh
-        </button>
-      </div>
-    </aside>
-    <main [class.busy]="loading.busy()" [attr.aria-busy]="loading.busy()">
-      <router-outlet />
-    </main>
-    <app-status-bar />
+    <helix-app-layout
+      appTitle="AgentLens"
+      brandIcon="favicon.svg"
+      [navGroups]="navGroups"
+      [topbarItems]="[]"
+      [topbarActions]="topbarActions()"
+      statusBarBrand="AgentLens"
+      [statusBarNote]="note"
+      [statusBarVersions]="versions()"
+    >
+      <app-status-bar hxStatusBarEnd />
+    </helix-app-layout>
   `,
   styles: `
-    :host {
-      display: grid;
-      grid-template-columns: 210px 1fr;
-      grid-template-rows: minmax(0, 1fr) auto;
-      height: 100dvh;
-    }
-    app-status-bar {
-      grid-column: 1 / -1;
-    }
-    .side {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      padding: 12px;
-      background: var(--panel);
-      border-right: 1px solid var(--line);
-      overflow-y: auto;
-    }
-    .foot {
-      margin-top: auto;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-    }
-    .brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 1.1rem;
-    }
-    .brand img {
-      display: block;
-      border-radius: 6px;
-    }
     .progress {
       position: fixed;
       inset: 0 0 auto 0;
       height: 3px;
-      z-index: 10;
+      z-index: 1000;
       overflow: hidden;
       background: color-mix(in srgb, var(--accent) 20%, transparent);
       /* Short loads stay quiet: the bar only appears after a moment. */
@@ -110,44 +72,45 @@ import { inject } from "@angular/core";
         transform: translateX(290%);
       }
     }
-    nav {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    nav a {
-      color: var(--muted);
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      height: 30px;
-      padding: 0 10px;
-      border-radius: 6px;
-    }
-    nav a:hover {
-      color: var(--text);
-    }
-    nav a.active {
-      color: var(--accent);
-      background: color-mix(in srgb, var(--accent) 12%, transparent);
-      font-weight: 600;
-    }
-    main {
-      padding: 12px 20px 24px;
-      overflow-y: auto;
-      min-width: 0;
-    }
   `,
 })
 export class App {
-  protected readonly nav = NAV;
   protected readonly loading = inject(LoadingService);
   protected readonly zoom = inject(ZoomService);
   private readonly ipc = inject(Ipc);
   private readonly filters = inject(FiltersService);
+  private readonly updates = inject(UpdateService);
+  private readonly sampleMode = inject(SAMPLE_MODE);
+
+  protected readonly navGroups: HelixNavGroup[] = [
+    ...NAV_SECTIONS.map((section) => ({
+      section,
+      items: NAV.filter((item) => item.group === section).map(toNavItem),
+    })),
+    { items: NAV.filter((item) => !item.group).map(toNavItem) },
+  ];
+  /**
+   * The topbar action has no disabled state in helix-shell, so while an analysis loads it says
+   * "Refreshing…" (and `refresh()` ignores the click) instead of looking clickable.
+   */
+  protected readonly topbarActions = computed<HelixTopbarAction[]>(() =>
+    this.loading.busy()
+      ? [{ icon: "pi pi-spin pi-spinner", label: "Refreshing…", command: () => undefined }]
+      : [{ icon: "pi pi-refresh", label: "Refresh", command: () => void this.refresh() }],
+  );
+  protected readonly note = this.sampleMode ? "Nothing here is read from your machine." : undefined;
+  protected readonly versions = computed<HelixStatusBarVersion[]>(() => {
+    const v = this.updates.version();
+    return !this.sampleMode && v ? [{ label: "Version", value: `v${v}` }] : [];
+  });
+
+  constructor() {
+    void this.updates.loadVersion();
+  }
 
   /** Forgets the sessions the backend kept and runs the open view again. */
   protected async refresh(): Promise<void> {
+    if (this.loading.busy()) return;
     try {
       await this.ipc.invoke("refresh");
     } finally {

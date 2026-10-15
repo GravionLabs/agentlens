@@ -1,16 +1,16 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed, input, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { day, exactTokens, number, tokens } from "../../core/format";
 import type { SkillStats, SkillsData } from "../../core/types";
-import { type Column, DataTable } from "../../ui/data-table";
-import { hxEnabled } from "../../ui/hx-flag";
-import { HxStackedBars } from "../../ui/hx-stacked-bars";
+import { HelpLink, termTitle } from "../../ui/help-link";
 import { Legend } from "../../ui/legend";
 import { type BarRow, StackedBars } from "../../ui/stacked-bars";
 import { StatCards } from "../../ui/stat-cards";
+import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
+import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 const COLORS = { baseline: "var(--c-baseline)", load: "var(--c-load)", carry: "var(--c-carry)" };
 
@@ -23,9 +23,61 @@ function attributedTokens(s: SkillStats): number {
   return a.input + a.output + a.cache_read + a.cache_write;
 }
 
+/** A skill row with the sortable raw values; `Est` marks values shown with a tilde. */
+export interface SkillView {
+  name: string;
+  invocations: number;
+  sessions: number;
+  file_uses: number;
+  load: number;
+  loadEst: boolean;
+  carry: number;
+  carryEst: boolean;
+  baseline: number;
+  baselineEst: boolean;
+  overhead: number;
+  overheadEst: boolean;
+  /** `null` when the client attributes no requests to the skill. */
+  attributed: number | null;
+  follow_on: number;
+  last_used: string | null;
+}
+
+export function skillView(s: SkillStats): SkillView {
+  const f = s.follow_on;
+  return {
+    name: s.name,
+    invocations: s.invocations,
+    sessions: s.sessions,
+    file_uses: s.file_uses,
+    load: s.load.count,
+    loadEst: !s.load.measured && s.load.count > 0,
+    carry: s.carry.tokens.count,
+    carryEst: !s.carry.tokens.measured && s.carry.tokens.count > 0,
+    baseline: s.baseline.tokens.count,
+    baselineEst: !s.baseline.tokens.measured && s.baseline.tokens.count > 0,
+    overhead: overhead(s),
+    overheadEst: overhead(s) > 0,
+    attributed: s.attributed.requests > 0 ? attributedTokens(s) : null,
+    follow_on: f.input + f.output + f.cache_read + f.cache_write,
+    last_used: s.last_used,
+  };
+}
+
 @Component({
   selector: "app-skills",
-  imports: [PageHeader, Term, Status, StatCards, DataTable, StackedBars, HxStackedBars, Legend],
+  imports: [
+    PageHeader,
+    Term,
+    Status,
+    StatCards,
+    HxDataTable,
+    HxCell,
+    HxColumnHeader,
+    HelpLink,
+    StackedBars,
+    Legend,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -58,33 +110,80 @@ function attributedTokens(s: SkillStats): number {
         Top 15 skills by overhead. Hatched segments are estimates, solid ones were measured.
       </p>
       <app-legend [items]="legend" />
-      @if (hxOn()) {
-        <!-- Spike (#350): open the view as #/skills?hx to draw the bars with helix chart. -->
-        <app-hx-stacked-bars
-          [rows]="bars()"
-          label="Skill overhead split into baseline, load and carry"
-        />
-      } @else {
-        <app-stacked-bars
-          [rows]="bars()"
-          label="Skill overhead split into baseline, load and carry"
-        />
-      }
+      <app-stacked-bars
+        [rows]="bars()"
+        label="Skill overhead split into baseline, load and carry"
+      />
 
       <h3>All skills</h3>
       <label class="check">
         <input type="checkbox" [checked]="usedOnly()" (change)="usedOnly.set(!usedOnly())" />
         Used skills only
       </label>
-      <app-data-table
+      <hx-data-table
+        [value]="views()"
+        [sortFunction]="sort"
         [columns]="columns()"
-        [data]="rows()"
-        [initialSort]="{ key: 'overhead', descending: true }"
-        [filterable]="true"
-        placeholder="Filter skills"
-        [dim]="unused"
-        empty="No skills match."
-      />
+        filterDisplay="row"
+        sortField="overhead"
+        [sortOrder]="-1"
+        [rowClass]="rowClass"
+        [paginator]="views().length > 100"
+        [rows]="100"
+        [rowsPerPageOptions]="[100, 'all']"
+        allLabel="Show all"
+        emptyMessage="No skills match."
+        ariaLabel="All skills"
+      >
+        <ng-template hxColumnHeader="file_uses"
+          ><app-help-link term="file-use" label="File uses"
+        /></ng-template>
+        <ng-template hxColumnHeader="load"><app-help-link term="load" label="Load" /></ng-template>
+        <ng-template hxColumnHeader="carry"
+          ><app-help-link term="carry" label="Carry"
+        /></ng-template>
+        <ng-template hxColumnHeader="baseline"
+          ><app-help-link term="baseline" label="Baseline"
+        /></ng-template>
+        <ng-template hxColumnHeader="overhead"
+          ><app-help-link term="overhead" label="Overhead"
+        /></ng-template>
+        <ng-template hxColumnHeader="attributed"
+          ><app-help-link term="attributed" label="Attributed"
+        /></ng-template>
+        <ng-template hxColumnHeader="follow_on"
+          ><app-help-link term="follow-on" label="Follow-on"
+        /></ng-template>
+        <ng-template hxCell="load" let-row>
+          <span [class.est]="row.loadEst" [attr.title]="tip(row.load)">{{
+            tokens(row.load, row.loadEst)
+          }}</span>
+        </ng-template>
+        <ng-template hxCell="carry" let-row>
+          <span [class.est]="row.carryEst" [attr.title]="tip(row.carry)">{{
+            tokens(row.carry, row.carryEst)
+          }}</span>
+        </ng-template>
+        <ng-template hxCell="baseline" let-row>
+          <span [class.est]="row.baselineEst" [attr.title]="tip(row.baseline)">{{
+            tokens(row.baseline, row.baselineEst)
+          }}</span>
+        </ng-template>
+        <ng-template hxCell="overhead" let-row>
+          <span [class.est]="row.overheadEst" [attr.title]="tip(row.overhead)">{{
+            tokens(row.overhead, row.overheadEst)
+          }}</span>
+        </ng-template>
+        <ng-template hxCell="attributed" let-row>
+          <span [attr.title]="tip(row.attributed)">{{
+            row.attributed === null ? "-" : tokens(row.attributed)
+          }}</span>
+        </ng-template>
+        <ng-template hxCell="follow_on" let-row>
+          <span [attr.title]="tip(row.follow_on)">{{ tokens(row.follow_on) }}</span>
+        </ng-template>
+        <ng-template hxCell="last_used" let-value="value">{{ day(value) }}</ng-template>
+      </hx-data-table>
     </section>
   `,
   styles: `
@@ -102,15 +201,14 @@ function attributedTokens(s: SkillStats): number {
     .est {
       color: var(--warn);
     }
+    :host ::ng-deep tr.unused td {
+      color: var(--muted);
+    }
   `,
 })
 export class Skills {
   protected readonly res = analysis<SkillsData>("skills");
-  /** Spike flag: the query parameter `hx` (bound by the router) switches to the helix chart bars. */
-  readonly hx = input<string>();
-  protected readonly hxOn = computed(() => hxEnabled(this.hx()));
   protected readonly usedOnly = signal(false);
-  protected readonly unused = (s: SkillStats) => s.invocations === 0;
 
   private readonly all = computed(() => this.res.value()?.data.report.skills ?? []);
 
@@ -177,100 +275,73 @@ export class Skills {
       })),
   );
 
-  protected readonly columns = computed<Column<SkillStats>[]>(() => {
-    const cols: Column<SkillStats>[] = [
-      { key: "name", label: "Skill", value: (s) => s.name },
-      { key: "uses", label: "Uses", value: (s) => s.invocations, numeric: true },
-      { key: "sessions", label: "Sessions", value: (s) => s.sessions, numeric: true },
+  protected readonly views = computed(() => this.rows().map(skillView));
+  protected readonly rowClass = (v: SkillView) => (v.invocations === 0 ? "unused" : "");
+  protected readonly sort = nullsLast;
+  protected readonly tokens = tokens;
+  protected readonly tip = exactTokens;
+  protected readonly day = day;
+
+  protected readonly columns = computed<HxColumn[]>(() => {
+    const cols: HxColumn[] = [
+      { field: "name", header: "Skill", sortable: true, filter: true },
+      { field: "invocations", header: "Uses", align: "right", sortable: true },
+      { field: "sessions", header: "Sessions", align: "right", sortable: true },
       {
-        key: "file_uses",
-        label: "File uses",
-        term: "file-use",
-        value: (s) => s.file_uses,
-        numeric: true,
+        field: "file_uses",
+        header: "File uses",
         title: "Tool calls that read or ran files in the skill's folder without loading it",
+        align: "right",
+        sortable: true,
       },
       {
-        key: "load",
-        label: "Load",
-        term: "load",
-        value: (s) => s.load.count,
-        text: (s) => tokens(s.load.count, !s.load.measured && s.load.count > 0),
-        estimated: (s) => !s.load.measured && s.load.count > 0,
-        tokens: true,
-        numeric: true,
+        field: "load",
+        header: "Load",
         title: "Tokens the skill content added to the context when loaded",
+        align: "right",
+        sortable: true,
       },
       {
-        key: "carry",
-        label: "Carry",
-        term: "carry",
-        value: (s) => s.carry.tokens.count,
-        text: (s) =>
-          tokens(s.carry.tokens.count, !s.carry.tokens.measured && s.carry.tokens.count > 0),
-        estimated: (s) => !s.carry.tokens.measured && s.carry.tokens.count > 0,
-        tokens: true,
-        numeric: true,
+        field: "carry",
+        header: "Carry",
         title: "Loaded content sent again with every later request until a compaction",
+        align: "right",
+        sortable: true,
       },
       {
-        key: "baseline",
-        label: "Baseline",
-        term: "baseline",
-        value: (s) => s.baseline.tokens.count,
-        text: (s) =>
-          tokens(
-            s.baseline.tokens.count,
-            !s.baseline.tokens.measured && s.baseline.tokens.count > 0,
-          ),
-        estimated: (s) => !s.baseline.tokens.measured && s.baseline.tokens.count > 0,
-        tokens: true,
-        numeric: true,
+        field: "baseline",
+        header: "Baseline",
         title: "Name and description, sent with every request of the clients that list the skill",
+        align: "right",
+        sortable: true,
       },
       {
-        key: "overhead",
-        label: "Overhead",
-        term: "overhead",
-        value: (s) => overhead(s),
-        text: (s) => tokens(overhead(s), overhead(s) > 0),
-        estimated: (s) => overhead(s) > 0,
-        tokens: true,
-        numeric: true,
+        field: "overhead",
+        header: "Overhead",
+        title: termTitle("overhead"),
+        align: "right",
+        sortable: true,
       },
     ];
     if (this.all().some((s) => s.attributed.requests > 0)) {
       cols.push({
-        key: "attributed",
-        label: "Attributed",
-        term: "attributed",
-        value: (s) => (s.attributed.requests > 0 ? attributedTokens(s) : null),
-        text: (s) => (s.attributed.requests > 0 ? tokens(attributedTokens(s)) : "-"),
-        numeric: true,
-        tokens: true,
+        field: "attributed",
+        header: "Attributed",
         title: "Tokens of requests the client attributes to the skill (OpenTelemetry); measured",
+        align: "right",
+        sortable: true,
       });
     }
     cols.push(
       {
-        key: "follow",
-        label: "Follow-on",
-        term: "follow-on",
-        value: (s) =>
-          s.follow_on.input + s.follow_on.output + s.follow_on.cache_read + s.follow_on.cache_write,
-        text: (s) =>
-          tokens(
-            s.follow_on.input +
-              s.follow_on.output +
-              s.follow_on.cache_read +
-              s.follow_on.cache_write,
-          ),
-        numeric: true,
-        tokens: true,
+        field: "follow_on",
+        header: "Follow-on",
         title:
           "Tokens used until the next user turn, skill or compaction (attributed by assumption)",
+        align: "right",
+        sortable: true,
       },
-      { key: "last", label: "Last used", value: (s) => s.last_used, text: (s) => day(s.last_used) },
+      { field: "last_used", header: "Last used", sortable: true },
     );
     return cols;
   });

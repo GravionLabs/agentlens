@@ -1,30 +1,31 @@
 import { ChangeDetectionStrategy, Component, input, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
+import { HelixPageHeader } from "@gravionlabs/helix-shell";
 import type { ExportFormat } from "../core/export.service";
 import { ExportMenu } from "./export-menu";
 
 /** Title and a one-line summary; the longer explanation is folded away behind “Explain”. */
 @Component({
   selector: "app-page-header",
-  imports: [RouterLink, ExportMenu],
+  imports: [RouterLink, ExportMenu, HelixPageHeader],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <header>
-      <h2>{{ title() }}</h2>
-      <p class="summary muted">{{ summary() }}</p>
-      <button
-        type="button"
-        class="explain"
-        [attr.aria-expanded]="open()"
-        [attr.aria-controls]="'details-' + title()"
-        (click)="open.set(!open())"
-      >
-        {{ open() ? "Hide" : "Explain" }}
-      </button>
-      @if (exportView(); as view) {
-        <app-export-menu [view]="view" [formats]="exportFormats()" [options]="exportOptions()" />
-      }
-    </header>
+    <helix-page-header [title]="title()" [subtitle]="summary()" [headingLevel]="2">
+      <div helixPageActions class="actions">
+        <button
+          type="button"
+          class="explain"
+          [attr.aria-expanded]="open()"
+          [attr.aria-controls]="'details-' + title()"
+          (click)="open.set(!open())"
+        >
+          {{ open() ? "Hide" : "Explain" }}
+        </button>
+        @if (exportView(); as view) {
+          <app-export-menu [view]="view" [formats]="exportFormats()" [options]="exportOptions()" />
+        }
+      </div>
+    </helix-page-header>
     @if (open()) {
       <div class="details" [id]="'details-' + title()">
         <ng-content />
@@ -33,19 +34,13 @@ import { ExportMenu } from "./export-menu";
     }
   `,
   styles: `
-    header {
+    helix-page-header {
+      margin-bottom: 4px;
+    }
+    .actions {
       display: flex;
-      align-items: baseline;
-      flex-wrap: wrap;
-      gap: 4px 14px;
-    }
-    h2 {
-      margin: 0;
-    }
-    .summary {
-      margin: 0;
-      flex: 1;
-      min-width: 240px;
+      align-items: center;
+      gap: 14px;
     }
     .explain {
       all: unset;

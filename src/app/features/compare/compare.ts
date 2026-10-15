@@ -4,6 +4,7 @@ import { analysis } from "../../core/analysis";
 import { exactTokens, minutes, number, percent, sourceLabel, tokens } from "../../core/format";
 import type { CompareReport, SourceStats } from "../../core/types";
 import { Status } from "../../ui/status";
+import { HxDataTable, HxTableBody, type HxColumn } from "@gravionlabs/helix-ui";
 
 export interface Metric {
   label: string;
@@ -46,7 +47,7 @@ export const METRICS: Metric[] = [
 
 @Component({
   selector: "app-compare",
-  imports: [PageHeader, Status],
+  imports: [PageHeader, Status, HxDataTable, HxTableBody],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -68,68 +69,42 @@ export const METRICS: Metric[] = [
         [errors]="res.value()?.errors ?? []"
       />
       @if (sources().length > 0) {
-        <div class="wrap">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Metric</th>
-                @for (s of sources(); track s.source) {
-                  <th scope="col" class="num">{{ label(s.source) }}</th>
-                }
-              </tr>
-            </thead>
-            <tbody>
-              @for (m of metrics; track m.label) {
-                <tr>
-                  <th scope="row">{{ m.label }}</th>
-                  @for (s of sources(); track s.source) {
-                    <td
-                      class="num"
-                      [class.est]="m.estimated && !m.value(s).startsWith('n/a')"
-                      [attr.title]="exact(m, s)"
-                    >
-                      {{ m.value(s) }}
-                    </td>
-                  }
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
+        <hx-data-table
+          [value]="rows"
+          [columns]="columns()"
+          emptyMessage="No sessions for the selected filters."
+          ariaLabel="Compare"
+        >
+          <ng-template hxTableBody let-row>
+            <th scope="row" class="metric">{{ row.label }}</th>
+            @for (s of sources(); track s.source) {
+              <td
+                class="num"
+                [class.est]="row.estimated && !row.value(s).startsWith('n/a')"
+                [attr.title]="exact(row, s)"
+              >
+                {{ row.value(s) }}
+              </td>
+            }
+          </ng-template>
+        </hx-data-table>
       } @else if (!res.isLoading()) {
         <p class="muted">No sessions for the selected filters.</p>
       }
     </section>
   `,
   styles: `
-    .wrap {
-      overflow-x: auto;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 10px;
+    hx-data-table {
+      display: block;
       margin-top: 8px;
     }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      font-variant-numeric: tabular-nums;
-    }
-    th,
-    td {
-      padding: 6px 14px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      white-space: nowrap;
-    }
-    thead th {
-      color: var(--muted);
-      font-size: 0.85rem;
-    }
-    tbody th {
+    .metric {
       font-weight: 500;
+      text-align: left;
     }
     .num {
       text-align: right;
+      font-variant-numeric: tabular-nums;
     }
     .est {
       color: var(--warn);
@@ -143,6 +118,14 @@ export class Compare {
 
   protected readonly res = analysis<CompareReport>("compare");
   protected readonly sources = computed(() => this.res.value()?.data.sources ?? []);
-  protected readonly metrics = METRICS;
+  protected readonly rows = METRICS;
+  protected readonly columns = computed<HxColumn[]>(() => [
+    { field: "label", header: "Metric" },
+    ...this.sources().map((s) => ({
+      field: s.source,
+      header: sourceLabel(s.source),
+      align: "right" as const,
+    })),
+  ]);
   protected readonly label = sourceLabel;
 }

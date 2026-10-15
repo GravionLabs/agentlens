@@ -4,7 +4,6 @@ import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/c
 import { analysis } from "../../core/analysis";
 import { exactTokens, number, pathLabel, tokens, usd } from "../../core/format";
 import type { CostData, CostRow, WhatIfRow } from "../../core/types";
-import { type Column, DataTable } from "../../ui/data-table";
 import { Status } from "../../ui/status";
 import { HxCell, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
@@ -36,6 +35,20 @@ export function costView(r: CostRow): CostView {
   };
 }
 
+/** A what-if row with the difference computed, so the table can sort it. */
+export interface WhatIfView extends WhatIfRow {
+  diff: number;
+}
+
+export function whatIfView(r: WhatIfRow): WhatIfView {
+  return { ...r, diff: r.what_if_usd - r.actual_usd };
+}
+
+/** `+$1.20` or `-$0.40`. */
+export function signedUsd(d: number): string {
+  return `${d < 0 ? "-" : "+"}${usd(Math.abs(d))}`;
+}
+
 export type By = "model" | "project" | "branch" | "issue";
 
 const GROUPS: { id: By; label: string }[] = [
@@ -57,7 +70,7 @@ export function money(r: CostRow): string {
 
 @Component({
   selector: "app-cost",
-  imports: [PageHeader, Term, Status, DataTable, HxDataTable, HxCell],
+  imports: [PageHeader, Term, Status, HxDataTable, HxCell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -145,11 +158,16 @@ export function money(r: CostRow): string {
       }
       @if (res.value()?.data?.what_if; as w) {
         <h3>What if everything ran on {{ w.target }}?</h3>
-        <app-data-table
+        <hx-data-table
+          [value]="whatIfRows()"
           [columns]="whatIfColumns"
-          [data]="whatIfRows()"
-          empty="Nothing to compare."
-        />
+          emptyMessage="Nothing to compare."
+          [ariaLabel]="'What if everything ran on ' + w.target"
+        >
+          <ng-template hxCell="actual_usd" let-value="value">{{ usd(value, true) }}</ng-template>
+          <ng-template hxCell="what_if_usd" let-value="value">{{ usd(value, true) }}</ng-template>
+          <ng-template hxCell="diff" let-value="value">{{ signedUsd(value) }}</ng-template>
+        </hx-data-table>
         <p class="muted">
           Same tokens priced with the prices of {{ w.target }}. “Excluded” requests have no actual
           price and are left out of both sides.
@@ -230,7 +248,7 @@ export class Cost {
   );
   protected readonly whatIfRows = computed(() => {
     const w = this.res.value()?.data.what_if;
-    return w ? [...w.rows, w.total] : [];
+    return w ? [...w.rows, w.total].map(whatIfView) : [];
   });
 
   protected readonly views = computed(() => this.rows().map(costView));
@@ -250,34 +268,16 @@ export class Cost {
       : []),
   ]);
 
-  protected readonly whatIfColumns: Column<WhatIfRow>[] = [
-    { key: "model", label: "Model", value: (r) => r.model },
-    { key: "requests", label: "Requests", value: (r) => r.requests, numeric: true },
-    {
-      key: "actual",
-      label: "Actual",
-      value: (r) => r.actual_usd,
-      text: (r) => usd(r.actual_usd, true),
-      numeric: true,
-    },
-    {
-      key: "what",
-      label: "What-if",
-      value: (r) => r.what_if_usd,
-      text: (r) => usd(r.what_if_usd, true),
-      numeric: true,
-    },
-    {
-      key: "diff",
-      label: "Difference",
-      value: (r) => r.what_if_usd - r.actual_usd,
-      text: (r) => {
-        const d = r.what_if_usd - r.actual_usd;
-        return `${d < 0 ? "-" : "+"}${usd(Math.abs(d))}`;
-      },
-      numeric: true,
-    },
-    { key: "excluded", label: "Excluded", value: (r) => r.excluded_requests, numeric: true },
+  protected readonly usd = usd;
+  protected readonly signedUsd = signedUsd;
+
+  protected readonly whatIfColumns: HxColumn[] = [
+    { field: "model", header: "Model", sortable: true },
+    { field: "requests", header: "Requests", align: "right", sortable: true },
+    { field: "actual_usd", header: "Actual", align: "right", sortable: true },
+    { field: "what_if_usd", header: "What-if", align: "right", sortable: true },
+    { field: "diff", header: "Difference", align: "right", sortable: true },
+    { field: "excluded_requests", header: "Excluded", align: "right", sortable: true },
   ];
 
   protected apply(event: Event): void {

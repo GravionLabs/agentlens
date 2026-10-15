@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
-import { HxMessage } from "@gravionlabs/helix-ui";
+import { HxButton, HxMessage } from "@gravionlabs/helix-ui";
 import { messageOf } from "../core/analysis";
 import { Ipc } from "../core/ipc";
 import type { Answer, CliTool, CliTools as CliToolsData } from "../core/types";
@@ -12,13 +12,15 @@ type Busy = "install" | "remove" | null;
  */
 @Component({
   selector: "app-cli-tools",
-  imports: [HxMessage],
+  imports: [HxButton, HxMessage],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (offered()) {
       <button
+        hx-button
         type="button"
-        class="btn btn-link btn-sm trigger"
+        variant="link"
+        size="small"
         [attr.aria-expanded]="open()"
         (click)="open.set(!open())"
       >
@@ -28,16 +30,20 @@ type Busy = "install" | "remove" | null;
         <div class="panel" role="dialog" aria-label="Command line tools">
           <div class="actions">
             <button
+              hx-button
               type="button"
-              class="btn btn-sm"
+              variant="outlined"
+              size="small"
               [disabled]="busy() !== null"
               (click)="run('install')"
             >
               Install command line tools
             </button>
             <button
+              hx-button
               type="button"
-              class="btn btn-sm"
+              variant="outlined"
+              size="small"
               [disabled]="busy() !== null"
               (click)="run('remove')"
             >

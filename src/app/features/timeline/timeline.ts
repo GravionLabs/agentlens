@@ -1,13 +1,11 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed, input, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import { compact, day, number, sourceLabel, timeOfDay, usd } from "../../core/format";
 import type { SessionSummary, Timeline as TimelineData } from "../../core/types";
 import { Legend } from "../../ui/legend";
 import { Status } from "../../ui/status";
-import { hxEnabled, hxSamplePoints } from "../../ui/hx-flag";
-import { HxTimelineChart, syntheticTimeline } from "./hx-timeline-chart";
 import {
   HEIGHT,
   MARGIN,
@@ -31,7 +29,7 @@ const MARKER_LEGEND = [
 
 @Component({
   selector: "app-timeline",
-  imports: [PageHeader, Term, Status, Legend, HxTimelineChart],
+  imports: [PageHeader, Term, Status, Legend],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -71,58 +69,49 @@ const MARKER_LEGEND = [
           }
         </p>
         <app-legend [items]="markerLegend" />
-        @if (hxOn()) {
-          <!-- Spike (#350): open the view as #/timeline?hx (or ?hx=400 for a 400-point sample) for the helix chart. -->
-          <app-hx-timeline-chart [timeline]="hxTimeline() ?? t" />
-        } @else {
-          <svg
-            [attr.viewBox]="'0 0 ' + W + ' ' + H"
-            role="img"
-            aria-label="Context size per request"
-          >
-            @for (v of ticks(); track v) {
-              <line
-                class="grid"
-                [attr.x1]="m.left"
-                [attr.x2]="W - m.right"
-                [attr.y1]="y(v)"
-                [attr.y2]="y(v)"
-              />
-              <text [attr.x]="m.left - 6" [attr.y]="y(v) + 4" text-anchor="end">
-                {{ compact(v) }}
-              </text>
-            }
-            <path class="area" [attr.d]="area()" />
-            <path class="line" [attr.d]="line()" />
-            @for (mk of markers(); track $index) {
-              <line
-                class="marker"
-                [class.strong]="mk.strong"
-                [attr.x1]="mk.x"
-                [attr.x2]="mk.x"
-                [attr.y1]="m.top"
-                [attr.y2]="H - m.bottom"
-                [attr.stroke]="mk.color"
-              >
-                <title>{{ mk.text }}</title>
-              </line>
-            }
-            @for (p of t.points; track p.request) {
-              <circle [attr.cx]="x(p.request)" [attr.cy]="y(p.context_tokens)" r="2.5">
-                <title>
-                  Request {{ p.request + 1 }}: {{ n(p.context_tokens) }} tokens in context,
-                  {{ n(p.output_tokens) }} out @if (p.cost_usd !== null) { ,
-                  {{ usd(p.cost_usd, p.cost_estimated) }} } @if (p.at) { , {{ p.at }}
-                  }
-                </title>
-              </circle>
-            }
-            <text [attr.x]="m.left" [attr.y]="H - 8">request 1</text>
-            <text [attr.x]="W - m.right" [attr.y]="H - 8" text-anchor="end">
-              request {{ n(t.session.requests) }}
+        <svg [attr.viewBox]="'0 0 ' + W + ' ' + H" role="img" aria-label="Context size per request">
+          @for (v of ticks(); track v) {
+            <line
+              class="grid"
+              [attr.x1]="m.left"
+              [attr.x2]="W - m.right"
+              [attr.y1]="y(v)"
+              [attr.y2]="y(v)"
+            />
+            <text [attr.x]="m.left - 6" [attr.y]="y(v) + 4" text-anchor="end">
+              {{ compact(v) }}
             </text>
-          </svg>
-        }
+          }
+          <path class="area" [attr.d]="area()" />
+          <path class="line" [attr.d]="line()" />
+          @for (mk of markers(); track $index) {
+            <line
+              class="marker"
+              [class.strong]="mk.strong"
+              [attr.x1]="mk.x"
+              [attr.x2]="mk.x"
+              [attr.y1]="m.top"
+              [attr.y2]="H - m.bottom"
+              [attr.stroke]="mk.color"
+            >
+              <title>{{ mk.text }}</title>
+            </line>
+          }
+          @for (p of t.points; track p.request) {
+            <circle [attr.cx]="x(p.request)" [attr.cy]="y(p.context_tokens)" r="2.5">
+              <title>
+                Request {{ p.request + 1 }}: {{ n(p.context_tokens) }} tokens in context,
+                {{ n(p.output_tokens) }} out @if (p.cost_usd !== null) { ,
+                {{ usd(p.cost_usd, p.cost_estimated) }} } @if (p.at) { , {{ p.at }}
+                }
+              </title>
+            </circle>
+          }
+          <text [attr.x]="m.left" [attr.y]="H - 8">request 1</text>
+          <text [attr.x]="W - m.right" [attr.y]="H - 8" text-anchor="end">
+            request {{ n(t.session.requests) }}
+          </text>
+        </svg>
         @if (t.markers.length > 0) {
           <h3>Events</h3>
           <ul class="events">
@@ -223,14 +212,6 @@ const MARKER_LEGEND = [
   `,
 })
 export class Timeline {
-  /** Spike flag: the query parameter `hx` (bound by the router) switches to the helix chart; a number gives a synthetic sample. */
-  readonly hx = input<string>();
-  protected readonly hxTimeline = computed(() => {
-    const t = this.timeline();
-    const n = hxSamplePoints(this.hx());
-    return t && n !== null ? syntheticTimeline(t, n) : null;
-  });
-  protected readonly hxOn = computed(() => hxEnabled(this.hx()));
   protected readonly list = analysis<SessionSummary[]>("sessions");
   protected readonly sessions = computed(() => this.list.value()?.data ?? []);
   private readonly picked = signal<string | null>(null);

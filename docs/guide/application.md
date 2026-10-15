@@ -4,27 +4,31 @@ The application shows the same analyses as the CLI with shared filters, and the 
 
 ## Views
 
-The sidebar lists the views:
+The sidebar lists the views in three groups, Data, Optimize and Analyze, followed by the Glossary:
 
 | View       | Shows                                                                         |
 | ---------- | ----------------------------------------------------------------------------- |
 | Sources    | which agents were found, where, and how many sessions and events were read    |
-| Skills     | uses and cost per skill, with a cost split chart                              |
-| Advice     | what to change to save tokens, with the numbers behind each suggestion        |
-| Context    | what the clients add to every request, by owner or by project                 |
-| Unused     | installed skills, agents and MCP servers nobody used, and their idle cost     |
+| Timeline   | the context size of every request of one session                              |
 | Flow       | context growth, tool errors and retry loops, hooks and permission waits       |
+| Skills     | uses and cost per skill, with a cost split chart                              |
+| Unused     | installed skills, agents and MCP servers nobody used, and their idle cost     |
+| Context    | what the clients add to every request, by owner or by project                 |
+| Advice     | what to change to save tokens, with the numbers behind each suggestion        |
 | Cost       | cost per model, project, branch or issue, with a what-if model                |
 | Efficiency | cache hit rate and the share of subagents                                     |
 | Compare    | the agents side by side                                                       |
-| Timeline   | the context size of every request of one session                              |
 | Glossary   | the terms (overhead, baseline, carry, …) in one place                         |
 
 The [analyses](analyses.md) page explains what each one means.
 
 ## Filters and refresh
 
-The filter bar in the sidebar sets the period, the sources and the project for every view. The application keeps the sessions it has read for a few minutes so that switching views is quick; **Refresh** forgets them and reads the files again.
+The filter bar in the toolbar above the open view sets the period, the sources and the project for every view. The application keeps the sessions it has read for a few minutes so that switching views is quick; **Refresh** in the top bar forgets them and reads the files again. On a narrow window the top bar folds Refresh into its menu.
+
+## Tables
+
+Tables are sortable by their column headers. Where a table has a filter (for example the group of the cache efficiency table or the skill and kind columns), it is a filter row under the headers, one field per filterable column, instead of a single search box. Filtering by source is left to the filter bar above the view. Long tables have a paginator; its rows-per-page list ends with **Show all**.
 
 ## Explaining the numbers
 
@@ -32,7 +36,7 @@ Every page has a one-line summary and an **Explain** link that unfolds the detai
 
 ## Export
 
-The **Export** menu next to the title of a view saves it as JSON, CSV or (skills) the HTML report to a file you choose; see [Reports and export](reports-and-export.md#export-from-the-application).
+The **Export** menu in the page header, next to the title of a view, saves it as JSON, CSV or (skills) the HTML report to a file you choose; see [Reports and export](reports-and-export.md#export-from-the-application).
 
 ## The status bar
 
