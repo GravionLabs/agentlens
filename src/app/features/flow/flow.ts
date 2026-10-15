@@ -13,6 +13,7 @@ import {
 } from "../../core/format";
 import type { FlowData, SessionGrowth, ToolErrors } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
+import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
 import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
@@ -90,6 +91,7 @@ export function errorRate(t: ToolErrors): number | null {
           </p>
           <hx-data-table
             [value]="growth()"
+            [sortFunction]="sort"
             [columns]="growthColumns"
             filterDisplay="row"
             sortField="peak_tokens"
@@ -145,6 +147,7 @@ export function errorRate(t: ToolErrors): number | null {
           </p>
           <hx-data-table
             [value]="errors()"
+            [sortFunction]="sort"
             [columns]="errorColumns"
             filterDisplay="row"
             sortField="errors"
@@ -166,6 +169,7 @@ export function errorRate(t: ToolErrors): number | null {
             <h3>Retry loops</h3>
             <hx-data-table
               [value]="loops()"
+              [sortFunction]="sort"
               [columns]="loopColumns"
               sortField="calls"
               [sortOrder]="-1"
@@ -252,6 +256,7 @@ export class Flow {
   protected readonly tab = signal<Tab>("growth");
   protected readonly tabs = TABS;
 
+  protected readonly sort = nullsLast;
   protected readonly source = sourceLabel;
   protected readonly shortId = shortId;
   protected readonly shortPath = shortPath;

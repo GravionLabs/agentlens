@@ -124,6 +124,19 @@ describe("Flow tables on helix", () => {
     expect(column(el, 4)).toEqual(["50.0%", "25.0%", "n/a"]);
   });
 
+  it("keeps the n/a error rate last in both sort directions", async () => {
+    const { fixture, el } = await render();
+    [...el.querySelectorAll<HTMLElement>(".tabs button")][1].click();
+    fixture.detectChanges();
+    headerButton(el, "Error rate").click();
+    fixture.detectChanges();
+    expect(column(el, 4)).toEqual(["25.0%", "50.0%", "n/a"]);
+    headerButton(el, "Error rate").click();
+    fixture.detectChanges();
+    expect(el.querySelector("th[aria-sort='descending']")!.textContent).toContain("Error rate");
+    expect(column(el, 4)).toEqual(["50.0%", "25.0%", "n/a"]);
+  });
+
   it("derives the sortable rate without counting unknown outcomes", () => {
     expect(errorView(tool("Bash", 4, 1)).rate).toBe(0.25);
     expect(errorView(tool("Bash", 0, 0)).rate).toBeNull();
