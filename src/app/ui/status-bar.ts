@@ -1,41 +1,36 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
-import { HelixStatusBar, type HelixStatusBarVersion } from "@gravionlabs/helix-shell";
+import { HxButton, HxTag } from "@gravionlabs/helix-ui";
 import { SAMPLE_MODE } from "../core/ipc";
 import { TokenFormatService } from "../core/token-format.service";
-import { UpdateService } from "../core/update.service";
 import { ZoomService } from "../core/zoom.service";
 import { CliTools } from "./cli-tools";
 import { UpdateStatus } from "./update-status";
 
 /**
- * The bar at the bottom: the running version, the sample badge, the token format switch (full or
+ * The end of the status bar of the shell (the version and note are set in `App`): the sample badge, the token format switch (full or
  * rounded counts), the interface size controls, the command line tools and the update check.
  */
 @Component({
   selector: "app-status-bar",
-  imports: [HelixStatusBar, CliTools, UpdateStatus],
+  imports: [HxButton, HxTag, CliTools, UpdateStatus],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <helix-status-bar
-      brand="AgentLens"
-      [note]="sampleMode ? 'Nothing here is read from your machine.' : undefined"
-      [versions]="versions()"
-      height="auto"
-    />
-    @if (sampleMode) {
-      <span class="sample">sample data</span>
-      <a
-        class="demo-link"
-        href="https://github.com/GravionLabs/agentlens/releases/latest"
-        target="_blank"
-        rel="noopener noreferrer"
-        >Install the application</a
-      >
-    }
-    <span class="right">
+    <span class="end">
+      @if (sampleMode) {
+        <hx-tag class="sample" severity="warn" value="sample data" rounded />
+        <a
+          class="demo-link"
+          href="https://github.com/GravionLabs/agentlens/releases/latest"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Install the application</a
+        >
+      }
       <button
+        hx-button
         type="button"
-        class="btn btn-text btn-sm"
+        variant="text"
+        size="small"
         [title]="
           rounded()
             ? 'Token counts are rounded (2.11 M). Click to show them in full.'
@@ -49,8 +44,10 @@ import { UpdateStatus } from "./update-status";
       </button>
       <span class="zoom" role="group" aria-label="Interface size">
         <button
+          hx-button
           type="button"
-          class="btn btn-text btn-sm"
+          variant="text"
+          size="small"
           title="Smaller (Ctrl -)"
           aria-label="Smaller"
           (click)="zoom.zoomOut()"
@@ -71,8 +68,10 @@ import { UpdateStatus } from "./update-status";
           </svg>
         </button>
         <button
+          hx-button
           type="button"
-          class="btn btn-text btn-sm"
+          variant="text"
+          size="small"
           title="Reset (Ctrl 0)"
           aria-label="Reset size"
           (click)="zoom.reset()"
@@ -80,8 +79,10 @@ import { UpdateStatus } from "./update-status";
           {{ percent() }}%
         </button>
         <button
+          hx-button
           type="button"
-          class="btn btn-text btn-sm"
+          variant="text"
+          size="small"
           title="Larger (Ctrl +)"
           aria-label="Larger"
           (click)="zoom.zoomIn()"
@@ -110,23 +111,10 @@ import { UpdateStatus } from "./update-status";
   `,
   styles: `
     :host {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      min-height: 30px;
-      padding: 2px 12px;
-      border-top: 1px solid var(--line);
-      background: var(--panel);
+      display: block;
       font-size: 0.85rem;
-      color: var(--muted);
     }
-    helix-status-bar {
-      flex: 1;
-      min-width: 0;
-      margin: -2px 0 -2px -12px;
-    }
-    .right,
+    .end,
     .zoom {
       display: inline-flex;
       align-items: center;
@@ -135,17 +123,6 @@ import { UpdateStatus } from "./update-status";
     .zoom {
       gap: 2px;
     }
-    .zoom .btn {
-      display: inline-flex;
-      align-items: center;
-    }
-    .sample {
-      border: 1px solid var(--warn);
-      color: var(--warn);
-      border-radius: 10px;
-      padding: 0 8px;
-      white-space: nowrap;
-    }
     .demo-link {
       color: var(--accent);
       white-space: nowrap;
@@ -153,13 +130,8 @@ import { UpdateStatus } from "./update-status";
   `,
 })
 export class StatusBar {
-  protected readonly updates = inject(UpdateService);
   protected readonly sampleMode = inject(SAMPLE_MODE);
   protected readonly zoom = inject(ZoomService);
-  protected readonly versions = computed<HelixStatusBarVersion[]>(() => {
-    const v = this.updates.version();
-    return !this.sampleMode && v ? [{ label: "Version", value: `v${v}` }] : [];
-  });
   protected readonly percent = computed(() => Math.round(this.zoom.factor() * 100));
 
   private readonly tokenFormat = inject(TokenFormatService);
@@ -167,9 +139,5 @@ export class StatusBar {
 
   protected toggleRounded(): void {
     this.tokenFormat.set(this.rounded() ? "full" : "rounded");
-  }
-
-  constructor() {
-    void this.updates.loadVersion();
   }
 }

@@ -7,17 +7,20 @@ import {
   signal,
 } from "@angular/core";
 import { ActivatedRoute } from "@angular/router";
+import { HxInput } from "@gravionlabs/helix-ui";
 import { toSignal } from "@angular/core/rxjs-interop";
 import { GLOSSARY_GROUPS, searchGlossary } from "../../core/glossary";
 
 @Component({
   selector: "app-glossary",
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [HxInput],
   template: `
     <section class="view">
       <h2>Glossary</h2>
       <p class="muted">What the terms in the tables and charts mean.</p>
       <input
+        hx-input
         type="search"
         placeholder="Search terms"
         aria-label="Search terms"
@@ -45,7 +48,6 @@ import { GLOSSARY_GROUPS, searchGlossary } from "../../core/glossary";
   styles: `
     input {
       margin: 8px 0 4px;
-      padding: 5px 10px;
       width: min(320px, 100%);
     }
     h3 {

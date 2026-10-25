@@ -2,19 +2,54 @@ import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, shortPath, sourceLabel, tokens } from "../../core/format";
+import { exactTokens, number, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { UnusedItem, UnusedReport } from "../../core/types";
-import { type Column, DataTable } from "../../ui/data-table";
+import { HelpLink, termTitle } from "../../ui/help-link";
+import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
+import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 /** “agent dev-workflow, command ship”, empty if nothing names the skill. */
 export function referencedBy(i: UnusedItem): string {
   return (i.referenced_by ?? []).map((r) => `${r.kind} ${r.name}`).join(", ");
 }
 
+/** An unused item with the sortable raw values next to the display text. */
+export interface UnusedView {
+  kind: string;
+  name: string;
+  project: string | null;
+  clients: string;
+  uses: number;
+  requests: number;
+  /** `null` when the client reports no data (MCP servers). */
+  cost: number | null;
+  costText: string;
+  estimated: boolean;
+  referenced: string;
+}
+
+export function unusedView(i: UnusedItem): UnusedView {
+  return {
+    kind: i.kind,
+    name: i.name,
+    project: i.project,
+    clients: i.clients.map(sourceLabel).join(", "),
+    uses: i.uses,
+    requests: i.requests,
+    cost: i.overhead_tokens?.count ?? null,
+    costText:
+      i.overhead_tokens === null
+        ? "unknown"
+        : tokens(i.overhead_tokens.count, !i.overhead_tokens.measured),
+    estimated: i.overhead_tokens !== null && !i.overhead_tokens.measured,
+    referenced: referencedBy(i),
+  };
+}
+
 @Component({
   selector: "app-unused",
-  imports: [PageHeader, Term, Status, DataTable],
+  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -41,14 +76,34 @@ export function referencedBy(i: UnusedItem): string {
         <input type="checkbox" [checked]="all()" (change)="all.set(!all())" />
         Also show items that were used
       </label>
-      <app-data-table
+      <hx-data-table
+        [value]="views()"
+        [sortFunction]="sort"
         [columns]="columns"
-        [data]="rows()"
-        [initialSort]="{ key: 'cost', descending: true }"
-        [filterable]="true"
-        placeholder="Filter by kind"
-        empty="Everything installed was used."
-      />
+        filterDisplay="row"
+        sortField="cost"
+        [sortOrder]="-1"
+        [paginator]="views().length > 100"
+        [rows]="100"
+        [rowsPerPageOptions]="[100, 'all']"
+        allLabel="Show all"
+        emptyMessage="Everything installed was used."
+        ariaLabel="Unused items"
+      >
+        <ng-template hxColumnHeader="requests"
+          ><app-help-link term="request" label="Requests"
+        /></ng-template>
+        <ng-template hxColumnHeader="cost"
+          ><app-help-link term="idle-cost" label="Idle cost"
+        /></ng-template>
+        <ng-template hxCell="project" let-row>
+          <span [attr.title]="row.project">{{ shortPath(row.project) }}</span>
+        </ng-template>
+        <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+        <ng-template hxCell="cost" let-row>
+          <span [class.est]="row.estimated" [attr.title]="tip(row.cost)">{{ row.costText }}</span>
+        </ng-template>
+      </hx-data-table>
     </section>
   `,
   styles: `
@@ -72,51 +127,38 @@ export class Unused {
     (this.res.value()?.data.items ?? []).filter((i) => this.all() || i.uses === 0),
   );
 
-  protected readonly columns: Column<UnusedItem>[] = [
-    { key: "kind", label: "Kind", value: (i) => i.kind },
-    { key: "name", label: "Name", value: (i) => i.name },
+  protected readonly views = computed(() => this.rows().map(unusedView));
+  protected readonly sort = nullsLast;
+  protected readonly n = number;
+  protected readonly shortPath = shortPath;
+  protected readonly tip = exactTokens;
+
+  protected readonly columns: HxColumn[] = [
+    { field: "kind", header: "Kind", sortable: true, filter: true },
+    { field: "name", header: "Name", sortable: true },
+    { field: "project", header: "Project", sortable: true },
+    { field: "clients", header: "Clients", sortable: true },
+    { field: "uses", header: "Uses", align: "right", sortable: true },
     {
-      key: "project",
-      label: "Project",
-      value: (i) => i.project,
-      text: (i) => shortPath(i.project),
-      hover: (i) => i.project,
+      field: "requests",
+      header: "Requests",
+      title: termTitle("request"),
+      align: "right",
+      sortable: true,
     },
     {
-      key: "clients",
-      label: "Clients",
-      value: (i) => i.clients.join(" "),
-      text: (i) => i.clients.map(sourceLabel).join(", "),
-    },
-    { key: "uses", label: "Uses", value: (i) => i.uses, numeric: true },
-    {
-      key: "requests",
-      label: "Requests",
-      term: "request",
-      value: (i) => i.requests,
-      text: (i) => number(i.requests),
-      numeric: true,
-    },
-    {
-      key: "cost",
-      label: "Idle cost",
-      term: "idle-cost",
-      value: (i) => i.overhead_tokens?.count ?? null,
-      text: (i) =>
-        i.overhead_tokens === null
-          ? "unknown"
-          : tokens(i.overhead_tokens.count, !i.overhead_tokens.measured),
-      estimated: (i) => i.overhead_tokens !== null && !i.overhead_tokens.measured,
-      tokens: true,
-      numeric: true,
+      field: "cost",
+      header: "Idle cost",
       title: "Baseline tokens × the requests that carried the item",
+      align: "right",
+      sortable: true,
     },
     {
-      key: "referenced",
-      label: "Referenced by",
-      value: (i) => referencedBy(i),
+      field: "referenced",
+      header: "Referenced by",
       title:
         "Installed agents, commands and skills that name this skill. A mention does not prove use.",
+      sortable: true,
     },
   ];
 }

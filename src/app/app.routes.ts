@@ -1,25 +1,32 @@
 import { Routes } from "@angular/router";
+import { ViewFrame } from "./ui/view-frame";
+
+export type NavSection = "Data" | "Optimize" | "Analyze";
+
+export const NAV_SECTIONS: readonly NavSection[] = ["Data", "Optimize", "Analyze"];
 
 export interface NavItem {
   path: string;
   label: string;
+  /** Section of the side navigation; omitted for the final, unlabeled group. */
+  group?: NavSection;
 }
 
 export const NAV: NavItem[] = [
-  { path: "overview", label: "Sources" },
-  { path: "skills", label: "Skills" },
-  { path: "advice", label: "Advice" },
-  { path: "context", label: "Context" },
-  { path: "unused", label: "Unused" },
-  { path: "flow", label: "Flow" },
-  { path: "cost", label: "Cost" },
-  { path: "efficiency", label: "Efficiency" },
-  { path: "compare", label: "Compare" },
-  { path: "timeline", label: "Timeline" },
+  { path: "overview", label: "Sources", group: "Data" },
+  { path: "timeline", label: "Timeline", group: "Data" },
+  { path: "flow", label: "Flow", group: "Data" },
+  { path: "skills", label: "Skills", group: "Optimize" },
+  { path: "unused", label: "Unused", group: "Optimize" },
+  { path: "context", label: "Context", group: "Optimize" },
+  { path: "advice", label: "Advice", group: "Optimize" },
+  { path: "cost", label: "Cost", group: "Analyze" },
+  { path: "efficiency", label: "Efficiency", group: "Analyze" },
+  { path: "compare", label: "Compare", group: "Analyze" },
   { path: "glossary", label: "Glossary" },
 ];
 
-export const routes: Routes = [
+const views: Routes = [
   { path: "", pathMatch: "full", redirectTo: "overview" },
   {
     path: "overview",
@@ -67,3 +74,6 @@ export const routes: Routes = [
   },
   { path: "**", redirectTo: "overview" },
 ];
+
+/** Every view sits in the frame with the filter toolbar; the shell (topbar, nav, status bar) is in `App`. */
+export const routes: Routes = [{ path: "", component: ViewFrame, children: views }];

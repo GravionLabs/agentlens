@@ -70,7 +70,9 @@ describe("FilterBar", () => {
 
   it("keeps the project text input wired to the service", async () => {
     const { el, filters } = await render();
-    const input = el.querySelector<HTMLInputElement>('input[placeholder^="Directory"]')!;
+    const input = el.querySelector<HTMLInputElement>("#filter-project")!;
+    expect(el.querySelector('label[for="filter-project"]')!.textContent).toContain("Project");
+    expect(input.hasAttribute("hx-input")).toBe(true);
     input.value = "/work/demo";
     input.dispatchEvent(new Event("change"));
     expect(filters.project()).toBe("/work/demo");

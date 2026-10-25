@@ -1,11 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
-import { HxMessage } from "@gravionlabs/helix-ui";
+import { HxButton, HxMessage } from "@gravionlabs/helix-ui";
 import { UpdateService } from "../core/update.service";
 
 /** The update check in the header: a button, and what the check found. */
 @Component({
   selector: "app-update-status",
-  imports: [HxMessage],
+  imports: [HxButton, HxMessage],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @switch (updates.state()) {
@@ -26,7 +26,7 @@ import { UpdateService } from "../core/update.service";
         >
           Version {{ updates.info()?.version }} is available
         </hx-message>
-        <button type="button" class="btn btn-sm" (click)="updates.install()">
+        <button hx-button type="button" variant="outlined" size="small" (click)="updates.install()">
           Install and restart
         </button>
       }
@@ -46,15 +46,17 @@ import { UpdateService } from "../core/update.service";
           Update failed
           <span class="detail">{{ updates.error() }}</span>
         </hx-message>
-        <button type="button" class="btn btn-sm" (click)="updates.install()">
+        <button hx-button type="button" variant="outlined" size="small" (click)="updates.install()">
           Install and restart
         </button>
       }
     }
     @if (showCheck()) {
       <button
+        hx-button
         type="button"
-        class="btn btn-link btn-sm"
+        variant="link"
+        size="small"
         [disabled]="updates.busy()"
         (click)="updates.check()"
       >

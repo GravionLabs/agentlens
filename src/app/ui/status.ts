@@ -1,54 +1,44 @@
 import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
+import { HxMessage, HxProgressSpinner } from "@gravionlabs/helix-ui";
 import { messageOf } from "../core/analysis";
 
 /** Loading, failure and the warnings of reading the sessions for one analysis. */
 @Component({
   selector: "app-status",
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [HxMessage, HxProgressSpinner],
   template: `
     @if (loading()) {
-      <p class="status" role="status">
-        <span class="spinner" aria-hidden="true"></span>Reading sessions…
-      </p>
+      <hx-message severity="secondary" variant="simple" size="small">
+        <hx-progress-spinner class="spinner" ariaLabel="Loading" />Reading sessions…
+      </hx-message>
     }
     @if (failure(); as message) {
-      <p class="status error" role="alert">{{ message }}</p>
+      <hx-message severity="error" variant="simple" size="small">{{ message }}</hx-message>
     }
     @if (warnings() > 0) {
-      <p class="status note">{{ warnings() }} warnings while reading sessions.</p>
+      <hx-message severity="warn" variant="simple" size="small"
+        >{{ warnings() }} warnings while reading sessions.</hx-message
+      >
     }
     @for (e of errors(); track $index) {
-      <p class="status error">{{ e }}</p>
+      <hx-message severity="error" variant="simple" size="small">{{ e }}</hx-message>
     }
   `,
   styles: `
-    .status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    :host {
+      display: block;
+    }
+    hx-message {
+      display: block;
       margin: 8px 0;
-      color: var(--muted);
     }
     .spinner {
+      display: inline-block;
       width: 14px;
       height: 14px;
-      border: 2px solid var(--line);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .spinner {
-        animation-duration: 3s;
-      }
-    }
-    .error {
-      color: var(--bad);
+      margin-right: 8px;
+      vertical-align: middle;
     }
   `,
 })

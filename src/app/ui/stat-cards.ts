@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, input } from "@angular/core";
+import { HelixStatCard } from "@gravionlabs/helix-shell";
 
 export interface Stat {
   value: string;
@@ -7,16 +8,15 @@ export interface Stat {
   title?: string;
 }
 
+/** Thin domain wrapper: lays out helix stat cards; values arrive pre-formatted (tilde = estimate, n/a = missing). */
 @Component({
   selector: "app-stat-cards",
+  imports: [HelixStatCard],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="cards">
       @for (s of stats(); track s.label) {
-        <div class="card" [attr.title]="s.title ?? null">
-          <div class="v">{{ s.value }}</div>
-          <div class="l">{{ s.label }}</div>
-        </div>
+        <helix-stat-card [label]="s.label" [value]="s.value" [attr.title]="s.title ?? null" />
       }
     </div>
   `,
@@ -26,21 +26,6 @@ export interface Stat {
       grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
       gap: 8px;
       margin: 8px 0;
-    }
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 6px 12px;
-    }
-    .v {
-      font-size: 1.25rem;
-      font-weight: 650;
-      font-variant-numeric: tabular-nums;
-    }
-    .l {
-      color: var(--muted);
-      font-size: 0.85rem;
     }
   `,
 })

@@ -2,6 +2,7 @@ import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
 import {
+  exactTokens,
   number,
   percent,
   seconds,
@@ -10,16 +11,11 @@ import {
   sourceLabel,
   tokens,
 } from "../../core/format";
-import type {
-  FlowData,
-  HookStats,
-  PermissionStats,
-  RetryLoop,
-  SessionGrowth,
-  ToolErrors,
-} from "../../core/types";
-import { type Column, DataTable } from "../../ui/data-table";
+import type { FlowData, SessionGrowth, ToolErrors } from "../../core/types";
+import { HelpLink, termTitle } from "../../ui/help-link";
+import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
+import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 type Tab = "growth" | "errors" | "hooks";
 
@@ -29,13 +25,31 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "hooks", label: "Hooks and permissions" },
 ];
 
+/** An error row with its sortable rate next to it. */
+export interface ErrorView extends ToolErrors {
+  rate: number | null;
+}
+
+export function errorView(t: ToolErrors): ErrorView {
+  return { ...t, rate: errorRate(t) };
+}
+
+/** A growth row with the number of compactions as a sortable value. */
+export interface GrowthView extends SessionGrowth {
+  compactionCount: number;
+}
+
+export function growthView(g: SessionGrowth): GrowthView {
+  return { ...g, compactionCount: g.compactions.length };
+}
+
 export function errorRate(t: ToolErrors): number | null {
   return t.calls === 0 ? null : t.errors / t.calls;
 }
 
 @Component({
   selector: "app-flow",
-  imports: [PageHeader, Status, DataTable],
+  imports: [PageHeader, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -75,53 +89,131 @@ export function errorRate(t: ToolErrors): number | null {
             limit” means at least 90% of the model's documented window, or of the largest size at
             which that model was compacted if the window does not fit.
           </p>
-          <app-data-table
+          <hx-data-table
+            [value]="growth()"
+            [sortFunction]="sort"
             [columns]="growthColumns"
-            [data]="growth()"
-            [initialSort]="{ key: 'peak', descending: true }"
-            [limit]="25"
-            [filterable]="true"
-            placeholder="Filter by source"
-            empty="No sessions with requests."
-          />
+            sortField="peak_tokens"
+            [sortOrder]="-1"
+            [paginator]="growth().length > 25"
+            [rows]="25"
+            [rowsPerPageOptions]="[25, 'all']"
+            allLabel="Show all"
+            emptyMessage="No sessions with requests."
+            ariaLabel="Context growth"
+          >
+            <ng-template hxColumnHeader="peak_tokens"
+              ><app-help-link term="peak" label="Peak"
+            /></ng-template>
+            <ng-template hxColumnHeader="compactionCount"
+              ><app-help-link term="compaction" label="Compactions"
+            /></ng-template>
+            <ng-template hxColumnHeader="near_limit"
+              ><app-help-link term="near-limit" label="Near limit"
+            /></ng-template>
+            <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
+            <ng-template hxCell="session" let-row>
+              <span [attr.title]="row.session">{{ shortId(row.session) }}</span>
+            </ng-template>
+            <ng-template hxCell="project" let-row>
+              <span [attr.title]="row.project">{{ shortPath(row.project) }}</span>
+            </ng-template>
+            <ng-template hxCell="model" let-value="value">{{ value ?? "-" }}</ng-template>
+            <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+            <ng-template hxCell="first_tokens" let-value="value">
+              <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+            </ng-template>
+            <ng-template hxCell="last_tokens" let-value="value">
+              <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+            </ng-template>
+            <ng-template hxCell="peak_tokens" let-value="value">
+              <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+            </ng-template>
+            <ng-template hxCell="compactionCount" let-row>
+              <span [attr.title]="compactionTip(row)">{{
+                row.compactionCount > 0 ? row.compactionCount : "-"
+              }}</span>
+            </ng-template>
+            <ng-template hxCell="near_limit" let-value="value">{{
+              value ? "yes" : ""
+            }}</ng-template>
+          </hx-data-table>
         }
         @case ("errors") {
           <p class="muted">
             Calls without a recorded outcome are “unknown” and never counted as errors. A retry loop
             is three or more adjacent identical calls whose first two failed.
           </p>
-          <app-data-table
+          <hx-data-table
+            [value]="errors()"
+            [sortFunction]="sort"
             [columns]="errorColumns"
-            [data]="errors()"
-            [initialSort]="{ key: 'errors', descending: true }"
-            [limit]="25"
-            [filterable]="true"
-            placeholder="Filter by source"
-            empty="No tool calls."
-          />
+            sortField="errors"
+            [sortOrder]="-1"
+            [paginator]="errors().length > 25"
+            [rows]="25"
+            [rowsPerPageOptions]="[25, 'all']"
+            allLabel="Show all"
+            emptyMessage="No tool calls."
+            ariaLabel="Tool errors"
+          >
+            <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
+            <ng-template hxCell="calls" let-value="value">{{ n(value) }}</ng-template>
+            <ng-template hxCell="errors" let-value="value">{{ n(value) }}</ng-template>
+            <ng-template hxCell="rate" let-value="value">{{ percent(value) }}</ng-template>
+            <ng-template hxCell="unknown" let-value="value">{{ n(value) }}</ng-template>
+          </hx-data-table>
           @if (loops().length > 0) {
             <h3>Retry loops</h3>
-            <app-data-table
+            <hx-data-table
+              [value]="loops()"
+              [sortFunction]="sort"
               [columns]="loopColumns"
-              [data]="loops()"
-              [initialSort]="{ key: 'calls', descending: true }"
-              [limit]="25"
-            />
+              sortField="calls"
+              [sortOrder]="-1"
+              [paginator]="loops().length > 25"
+              [rows]="25"
+              [rowsPerPageOptions]="[25, 'all']"
+              allLabel="Show all"
+              ariaLabel="Retry loops"
+            >
+              <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
+              <ng-template hxCell="session" let-value="value">{{ shortId(value) }}</ng-template>
+              <ng-template hxCell="input" let-value="value">{{ value ?? "-" }}</ng-template>
+            </hx-data-table>
           }
         }
         @case ("hooks") {
           <p class="muted">
             Permission wait is the time until the answer, including the time the user was away.
           </p>
-          <app-data-table
+          <hx-data-table
+            [value]="hooks()"
             [columns]="hookColumns"
-            [data]="hooks()"
-            [initialSort]="{ key: 'runtime', descending: true }"
-            empty="No hook runs recorded."
-          />
+            sortField="total_ms"
+            [sortOrder]="-1"
+            emptyMessage="No hook runs recorded."
+            ariaLabel="Hooks"
+          >
+            <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
+            <ng-template hxCell="runs" let-value="value">{{ n(value) }}</ng-template>
+            <ng-template hxCell="total_ms" let-value="value">{{ seconds(value) }}</ng-template>
+          </hx-data-table>
           @if (permissions().length > 0) {
             <h3>Permission prompts</h3>
-            <app-data-table [columns]="permissionColumns" [data]="permissions()" />
+            <hx-data-table
+              [value]="permissions()"
+              [columns]="permissionColumns"
+              ariaLabel="Permission prompts"
+            >
+              <ng-template hxColumnHeader="total_wait_ms"
+                ><app-help-link term="permission-wait" label="Wait (s)"
+              /></ng-template>
+              <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
+              <ng-template hxCell="total_wait_ms" let-value="value">{{
+                seconds(value)
+              }}</ng-template>
+            </hx-data-table>
           }
           @for (n of unavailable(); track n) {
             <p class="muted">{{ n }}</p>
@@ -162,8 +254,22 @@ export class Flow {
   protected readonly tab = signal<Tab>("growth");
   protected readonly tabs = TABS;
 
-  protected readonly growth = computed(() => this.res.value()?.data.growth.sessions ?? []);
-  protected readonly errors = computed(() => this.res.value()?.data.errors.tools ?? []);
+  protected readonly sort = nullsLast;
+  protected readonly source = sourceLabel;
+  protected readonly shortId = shortId;
+  protected readonly shortPath = shortPath;
+  protected readonly n = number;
+  protected readonly percent = percent;
+  protected readonly seconds = seconds;
+  protected readonly tokens = tokens;
+  protected readonly tip = exactTokens;
+
+  protected readonly growth = computed(() =>
+    (this.res.value()?.data.growth.sessions ?? []).map(growthView),
+  );
+  protected readonly errors = computed(() =>
+    (this.res.value()?.data.errors.tools ?? []).map(errorView),
+  );
   protected readonly loops = computed(() => this.res.value()?.data.errors.loops ?? []);
   protected readonly hooks = computed(() => this.res.value()?.data.hooks.hooks ?? []);
   protected readonly permissions = computed(() => this.res.value()?.data.hooks.permissions ?? []);
@@ -174,146 +280,80 @@ export class Flow {
     ),
   );
 
-  protected readonly growthColumns: Column<SessionGrowth>[] = [
-    { key: "source", label: "Source", value: (g) => g.source, text: (g) => sourceLabel(g.source) },
+  protected compactionTip(g: GrowthView): string | null {
+    return g.compactions.length > 0
+      ? `Size before each compaction: ${g.compactions.map(number).join(", ")}`
+      : null;
+  }
+
+  protected readonly growthColumns: HxColumn[] = [
+    { field: "source", header: "Source", sortable: true },
+    { field: "session", header: "Session", sortable: true },
+    { field: "project", header: "Project", sortable: true },
+    { field: "model", header: "Model", sortable: true },
+    { field: "requests", header: "Requests", align: "right", sortable: true },
+    { field: "first_tokens", header: "First", align: "right", sortable: true },
+    { field: "last_tokens", header: "Last", align: "right", sortable: true },
     {
-      key: "session",
-      label: "Session",
-      value: (g) => g.session,
-      text: (g) => shortId(g.session),
-      hover: (g) => g.session,
+      field: "peak_tokens",
+      header: "Peak",
+      title: termTitle("peak"),
+      align: "right",
+      sortable: true,
     },
     {
-      key: "project",
-      label: "Project",
-      value: (g) => g.project,
-      text: (g) => shortPath(g.project),
-      hover: (g) => g.project,
-    },
-    { key: "model", label: "Model", value: (g) => g.model, text: (g) => g.model ?? "-" },
-    { key: "requests", label: "Requests", value: (g) => g.requests, numeric: true },
-    {
-      key: "first",
-      label: "First",
-      value: (g) => g.first_tokens,
-      text: (g) => tokens(g.first_tokens),
-      numeric: true,
-      tokens: true,
+      field: "compactionCount",
+      header: "Compactions",
+      title: termTitle("compaction"),
+      align: "right",
+      sortable: true,
     },
     {
-      key: "last",
-      label: "Last",
-      value: (g) => g.last_tokens,
-      text: (g) => tokens(g.last_tokens),
-      numeric: true,
-      tokens: true,
-    },
-    {
-      key: "peak",
-      label: "Peak",
-      term: "peak",
-      value: (g) => g.peak_tokens,
-      text: (g) => tokens(g.peak_tokens),
-      numeric: true,
-      tokens: true,
-    },
-    {
-      key: "compactions",
-      label: "Compactions",
-      term: "compaction",
-      value: (g) => g.compactions.length,
-      text: (g) => (g.compactions.length > 0 ? String(g.compactions.length) : "-"),
-      hover: (g) =>
-        g.compactions.length > 0
-          ? `Size before each compaction: ${g.compactions.map(number).join(", ")}`
-          : null,
-      numeric: true,
-    },
-    {
-      key: "near",
-      label: "Near limit",
-      term: "near-limit",
-      value: (g) => (g.near_limit ? 1 : 0),
-      text: (g) => (g.near_limit ? "yes" : ""),
+      field: "near_limit",
+      header: "Near limit",
       title: "At least 90% of the model's window",
+      sortable: true,
     },
   ];
 
-  protected readonly errorColumns: Column<ToolErrors>[] = [
-    { key: "source", label: "Source", value: (t) => t.source, text: (t) => sourceLabel(t.source) },
-    { key: "tool", label: "Tool", value: (t) => t.tool },
-    {
-      key: "calls",
-      label: "Calls",
-      value: (t) => t.calls,
-      text: (t) => number(t.calls),
-      numeric: true,
-    },
-    {
-      key: "errors",
-      label: "Errors",
-      value: (t) => t.errors,
-      text: (t) => number(t.errors),
-      numeric: true,
-    },
-    {
-      key: "rate",
-      label: "Error rate",
-      value: (t) => errorRate(t),
-      text: (t) => percent(errorRate(t)),
-      numeric: true,
-    },
-    {
-      key: "unknown",
-      label: "Unknown",
-      value: (t) => t.unknown,
-      text: (t) => number(t.unknown),
-      numeric: true,
-    },
-    { key: "loops", label: "Retry loops", value: (t) => t.loops, numeric: true },
+  protected readonly errorColumns: HxColumn[] = [
+    { field: "source", header: "Source", sortable: true },
+    { field: "tool", header: "Tool", sortable: true },
+    { field: "calls", header: "Calls", align: "right", sortable: true },
+    { field: "errors", header: "Errors", align: "right", sortable: true },
+    { field: "rate", header: "Error rate", align: "right", sortable: true },
+    { field: "unknown", header: "Unknown", align: "right", sortable: true },
+    { field: "loops", header: "Retry loops", align: "right", sortable: true },
   ];
 
-  protected readonly loopColumns: Column<RetryLoop>[] = [
-    { key: "source", label: "Source", value: (l) => l.source, text: (l) => sourceLabel(l.source) },
-    { key: "session", label: "Session", value: (l) => l.session, text: (l) => shortId(l.session) },
-    { key: "tool", label: "Tool", value: (l) => l.tool },
-    { key: "input", label: "Input", value: (l) => l.input, text: (l) => l.input ?? "-" },
-    { key: "calls", label: "Calls", value: (l) => l.calls, numeric: true },
-    { key: "errors", label: "Errors", value: (l) => l.errors, numeric: true },
+  protected readonly loopColumns: HxColumn[] = [
+    { field: "source", header: "Source", sortable: true },
+    { field: "session", header: "Session", sortable: true },
+    { field: "tool", header: "Tool", sortable: true },
+    { field: "input", header: "Input", sortable: true },
+    { field: "calls", header: "Calls", align: "right", sortable: true },
+    { field: "errors", header: "Errors", align: "right", sortable: true },
   ];
 
-  protected readonly hookColumns: Column<HookStats>[] = [
-    { key: "source", label: "Source", value: (h) => h.source, text: (h) => sourceLabel(h.source) },
-    { key: "hook", label: "Hook", value: (h) => h.hook },
-    {
-      key: "runs",
-      label: "Runs",
-      value: (h) => h.runs,
-      text: (h) => number(h.runs),
-      numeric: true,
-    },
-    { key: "failures", label: "Failures", value: (h) => h.failures, numeric: true },
-    { key: "unknown", label: "No outcome", value: (h) => h.unknown, numeric: true },
-    {
-      key: "runtime",
-      label: "Runtime (s)",
-      value: (h) => h.total_ms,
-      text: (h) => seconds(h.total_ms),
-      numeric: true,
-    },
+  protected readonly hookColumns: HxColumn[] = [
+    { field: "source", header: "Source", sortable: true },
+    { field: "hook", header: "Hook", sortable: true },
+    { field: "runs", header: "Runs", align: "right", sortable: true },
+    { field: "failures", header: "Failures", align: "right", sortable: true },
+    { field: "unknown", header: "No outcome", align: "right", sortable: true },
+    { field: "total_ms", header: "Runtime (s)", align: "right", sortable: true },
   ];
 
-  protected readonly permissionColumns: Column<PermissionStats>[] = [
-    { key: "source", label: "Source", value: (p) => p.source, text: (p) => sourceLabel(p.source) },
-    { key: "prompts", label: "Prompts", value: (p) => p.prompts, numeric: true },
-    { key: "answered", label: "Answered", value: (p) => p.answered, numeric: true },
+  protected readonly permissionColumns: HxColumn[] = [
+    { field: "source", header: "Source", sortable: true },
+    { field: "prompts", header: "Prompts", align: "right", sortable: true },
+    { field: "answered", header: "Answered", align: "right", sortable: true },
     {
-      key: "wait",
-      label: "Wait (s)",
-      term: "permission-wait",
-      value: (p) => p.total_wait_ms,
-      text: (p) => seconds(p.total_wait_ms),
-      numeric: true,
+      field: "total_wait_ms",
+      header: "Wait (s)",
+      title: termTitle("permission-wait"),
+      align: "right",
+      sortable: true,
     },
   ];
 }

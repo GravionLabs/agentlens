@@ -52,6 +52,16 @@ describe("CliTools", () => {
     expect(el.querySelector("button")).toBeNull();
   });
 
+  it("renders every button as an hx-button, the toggle as link and the actions as outlined", async () => {
+    const { el, button, click } = await render(async () => offered);
+    await click("Command line tools");
+    const all = Array.from(el.querySelectorAll("button"));
+    expect(all.every((b) => b.classList.contains("hx-button"))).toBe(true);
+    expect(all.map((b) => b.classList.contains("hx-button-link"))).toEqual([true, false, false]);
+    expect(all.map((b) => b.classList.contains("hx-button-outlined"))).toEqual([false, true, true]);
+    expect(button("Command line tools")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("offers install and remove when the backend offers the tools", async () => {
     const { button, click } = await render(async () => offered);
     expect(button("Command line tools")).toBeTruthy();
