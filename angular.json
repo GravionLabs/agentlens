@@ -24,7 +24,6 @@
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [{ "glob": "favicon.svg", "input": "src" }],
-            "externalDependencies": ["chart.js/auto"],
             "styles": [
               "node_modules/primeicons/primeicons.css",
               "node_modules/@gravionlabs/helix-ui/tokens.css",
