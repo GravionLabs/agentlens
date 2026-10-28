@@ -23,5 +23,6 @@ site/.vitepress/cache
 # APM dependencies
 apm_modules/
 
-# dromos worktrees
+# dromos worktrees and event store
 /.worktrees/
+/.agents/
