@@ -31,7 +31,7 @@ Charts:
 
 - **Components: helix-ui and helix-shell**, with `@angular/cdk` as peer dependency. The packages are pinned to the published release 22.2.7. The theme is the custom helix theme in `src/helix-theme.scss`, derived from the AgentLens tokens, so the look stays that of AgentLens.
 - **Charts: chart.js through `HxChart`** was chosen as the chart stack for charts built on a library; this replaces the ECharts option of #229 (to be closed once this ADR is merged). Outcome (#351): no chart uses it, see the next point.
-- **The choice per chart was made in the migration (#351):** both charts stay SVG, by the owner's ruling (#376 for the stacked bars, #377 for the timeline). The `HxChart` variants, `hx-flag.ts`, `hatch.ts` and `chart-loader.ts` of the spikes are deleted. `chart.js`/`HxChart` therefore has no production use at the moment; the dependency in `package.json` (and `chart.js/auto` in `externalDependencies` of `angular.json`) is left for the owner to keep or remove.
+- **The choice per chart was made in the migration (#351):** both charts stay SVG, by the owner's ruling (#376 for the stacked bars, #377 for the timeline). The `HxChart` variants, `hx-flag.ts`, `hatch.ts` and `chart-loader.ts` of the spikes are deleted. `chart.js`/`HxChart` therefore has no production use; by the owner's decision of 2026-10-28 (#413) `chart.js` is removed from `package.json` and `chart.js/auto` from `externalDependencies` of `angular.json`. The first chart that uses `HxChart` adds both back.
 - **What stays hand-written** (checked against the code of #351; none of these duplicates a helix component):
   - `src/app/ui/stat-cards.ts` and `page-header.ts`: thin domain wrappers around helix-shell `helix-stat-card` and `helix-page-header` (measured/estimated marking, help links, export menu).
   - `export-menu.ts`: `hx-button` and `hx-menu` plus the export logic of the application.
@@ -45,7 +45,7 @@ Charts:
   - The estimate marking and the number formatting with the tilde (`src/app/core/format.ts`), which helix does not know and which the measured/estimated rule requires.
   - The overview and glossary pages: domain content built on the page header and plain markup.
   - The shell itself is helix `HelixAppLayout`, with the navigation grouped Data, Optimize and Analyze (`app.ts`).
-- Dependencies added: `@gravionlabs/helix-ui`, `@gravionlabs/helix-shell`, `@angular/cdk` (peer) and `chart.js` (peer of helix-ui, bar and line elements only, loaded lazily).
+- Dependencies added: `@gravionlabs/helix-ui`, `@gravionlabs/helix-shell` and `@angular/cdk` (peer). `chart.js` is an optional peer of helix-ui, used only by its secondary entry point `@gravionlabs/helix-ui/chart`; it was added for the spikes and removed again in #413. pnpm still resolves it in `pnpm-lock.yaml` as an optional peer of helix-ui, but it is not a dependency of the application and not part of any chunk.
 
 ## Bundle size
 
@@ -67,7 +67,7 @@ Notes:
 
 - **In-house dependency.** AgentLens follows helix's release cadence and Angular version; a breaking change in helix is ours to absorb, and fixes needed by AgentLens go to helix first. The published 22.2.7 is pinned: `package.json` has the exact version `22.2.7` (no range) for both helix packages, and they resolve from the default package registry (there is no `.npmrc` or scope registry) with integrity hashes in `pnpm-lock.yaml`, not through `link:` or `workspace:` references.
 - **Supply chain.** `pnpm-workspace.yaml` has a `minimumReleaseAgeExclude` entry for exactly `@gravionlabs/helix-shell@22.2.7` and `@gravionlabs/helix-ui@22.2.7`. It bypasses pnpm's release-age check for those two packages at that version only; no other package is exempt. The lockfile is committed and the workflows that install (`app.yml`, `pages.yml`) use `pnpm install --frozen-lockfile`, so CI installs what the lockfile records. Removing the entry once the release is older than the minimum age is Task #380, time gated: helix 22.2.7 was published 2026-10-14T09:59Z and the pnpm 11 `minimumReleaseAge` default is 1 day.
-- **Bundle.** +`@angular/cdk` and helix in the initial bundle, +chart.js as a lazy chunk (see the table).
+- **Bundle.** +`@angular/cdk` and helix in the initial bundle (see the table). Removing `chart.js` (#413) left the build unchanged: initial total 1.05 MB (190.90 kB transfer), main chunk 641.32 kB raw and 175,933 B gzip before and after, measured on 2026-10-28 with `pnpm build` on `release/0.12`, because no chunk imported it.
 - **Dark mode.** The custom helix theme bridges the AgentLens tokens to helix, and the app's dark mode drives it: the AgentLens tokens flip with the media feature `prefers-color-scheme` and with the `data-theme` override (`src/styles.scss`, `src/helix-theme.scss`), so one theme block serves light and dark. Charts redraw on a theme change (about 90 ms measured); canvas colors must be scriptable functions, because `HxChart` leaves dataset colors alone.
 - **Tests (while canvas charts were in use).** jsdom has no canvas: only pure builders (data, options, tooltips) are unit tested, chart components are verified in a real browser. A canvas shim would be needed to render a chart component in a unit test.
 - **Canvas charts** (not in production use now) need a table fallback for assistive technology (`hxChartFallback`) and have no selectable text; the spike did not test screen readers, the Tauri webviews (WebKitGTK, WebView2, WKWebView) or `color-mix()` on canvas there. These checks belong to #351.
@@ -75,6 +75,6 @@ Notes:
 
 ## Follow-up
 
-- Done in #351: both charts stay SVG (#376, #377). The open question of removing `chart.js` is with the owner.
+- Done in #351: both charts stay SVG (#376, #377). Done in #413: `chart.js` removed from the dependencies (owner decision 2026-10-28).
 - The migration PBI #351 covers the components, the shell, the removal of the budget warning. Removing the `minimumReleaseAgeExclude` entry is Task #380, time gated (helix 22.2.7 published 2026-10-14T09:59Z, pnpm 11 `minimumReleaseAge` default 1 day).
-- Close #229 when this ADR is merged.
+- #229 is closed (decided by this ADR).
