@@ -86,12 +86,8 @@ impl Filters {
         let now = Timestamp::from_second(now.as_second() - now.as_second().rem_euclid(300))
             .unwrap_or(now);
         // Both bounds count from the same rounded `now`, so `until` steps with `since`.
-        let (since, until) = parse_window(
-            self.since.as_deref(),
-            self.until.as_deref(),
-            now,
-            names,
-        )?;
+        let (since, until) =
+            parse_window(self.since.as_deref(), self.until.as_deref(), now, names)?;
         let mut sources = Vec::new();
         for id in &self.sources {
             sources.push(Source::from_id(id).ok_or_else(|| format!("unknown source `{id}`"))?);
