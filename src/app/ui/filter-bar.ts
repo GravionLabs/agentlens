@@ -1,12 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from "@angular/core";
-import { HxDateTimeRangePicker, HxInput, HxMultiSelect, HxSelect } from "@gravionlabs/helix-ui";
+import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
+import { HxInput, HxMultiSelect, HxSelect } from "@gravionlabs/helix-ui";
 import { FiltersService, PERIODS } from "../core/filters.service";
 import { SOURCES, type SourceId } from "../core/types";
 
 @Component({
   selector: "app-filter-bar",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HxSelect, HxMultiSelect, HxDateTimeRangePicker, HxInput],
+  imports: [HxSelect, HxMultiSelect, HxInput],
   template: `
     <form class="bar" (submit)="$event.preventDefault()" aria-label="Filters">
       <div class="field">
@@ -19,17 +19,6 @@ import { SOURCES, type SourceId } from "../core/types";
           optionValue="value"
           [value]="filters.since()"
           (valueChange)="setSince($event)"
-        />
-      </div>
-      <div class="field">
-        <label for="filter-window">Custom window (preview, not applied)</label>
-        <hx-date-time-range-picker
-          inputId="filter-window"
-          ariaLabel="Custom window (preview, not applied)"
-          showButtonBar
-          [stepMinute]="15"
-          [value]="window()"
-          (valueChange)="window.set($event)"
         />
       </div>
       <div class="field">
@@ -86,15 +75,6 @@ export class FilterBar {
   protected readonly filters = inject(FiltersService);
   protected readonly periods = PERIODS;
   protected readonly sources = SOURCES;
-
-  /**
-   * A custom window. Local only: the core has no `until` yet, so it does not reach
-   * FiltersService (out of scope of the spike, see #331).
-   */
-  protected readonly window = signal<{ from: Date | null; to: Date | null }>({
-    from: null,
-    to: null,
-  });
 
   protected setSince(value: unknown): void {
     // A cleared or non-string value is ignored: the period keeps its last value.

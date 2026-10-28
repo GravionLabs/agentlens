@@ -2,7 +2,7 @@
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { TestBed } from "@angular/core/testing";
 import { By } from "@angular/platform-browser";
-import { HxDateTimeRangePicker, HxSelect } from "@gravionlabs/helix-ui";
+import { HxSelect } from "@gravionlabs/helix-ui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FiltersService } from "../core/filters.service";
 import { FilterBar } from "./filter-bar";
@@ -37,7 +37,6 @@ describe("FilterBar", () => {
     expect(period.getAttribute("role")).toBe("combobox");
     expect(period.textContent).toContain("Last 30 days");
     expect(el.querySelector('label[for="filter-sources"]')!.textContent).toContain("Sources");
-    expect(el.querySelector('label[for="filter-window"]')!.textContent).toContain("Custom window");
   });
 
   it("sets the period from the listbox", async () => {
@@ -78,10 +77,10 @@ describe("FilterBar", () => {
     expect(filters.project()).toBe("/work/demo");
   });
 
-  it("renders the custom window picker as a field that opens a dialog", async () => {
+  it("renders no custom window until it is wired to the filters (#337)", async () => {
     const { el } = await render();
-    expect(el.querySelector("hx-date-time-range-picker")).not.toBeNull();
-    expect(el.querySelector<HTMLInputElement>("#filter-window")!.readOnly).toBe(true);
+    expect(el.querySelector("hx-date-time-range-picker")).toBeNull();
+    expect(el.querySelector("#filter-window")).toBeNull();
   });
 
   it("selects several sources and clears them with the clear button", async () => {
@@ -113,29 +112,5 @@ describe("FilterBar", () => {
     expect(filters.since()).toBe("7d");
     select.value.set("");
     expect(filters.since()).toBe("");
-  });
-
-  it("keeps the custom window local: it does not reach the filters", async () => {
-    const { fixture, filters } = await render();
-    const before = JSON.stringify({
-      since: filters.since(),
-      sources: filters.sources(),
-      project: filters.project(),
-    });
-    const picker = fixture.debugElement.query(By.directive(HxDateTimeRangePicker))
-      .componentInstance as HxDateTimeRangePicker;
-    picker.value.set({ from: new Date(2026, 0, 1), to: new Date(2026, 0, 2) });
-    fixture.detectChanges();
-    expect(
-      JSON.stringify({
-        since: filters.since(),
-        sources: filters.sources(),
-        project: filters.project(),
-      }),
-    ).toBe(before);
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('label[for="filter-window"]')!
-        .textContent,
-    ).toContain("not applied");
   });
 });
