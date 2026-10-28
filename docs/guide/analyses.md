@@ -1,6 +1,6 @@
 # The analyses
 
-Each analysis is a command of the CLI, a view of the [application](application.md) and a tool of the [MCP server](mcp-server.md), and all three show the same numbers (what you can rely on in their output is on the [Compatibility](compatibility.md) page). Every command takes the [filters](getting-started.md#narrowing-down) and `--format table|json|csv`.
+Each analysis is a command of the CLI, a view of the [application](application.md) and a tool of the [MCP server](mcp-server.md), and all three show the same numbers (what you can rely on in their output is on the [Compatibility](compatibility.md) page). Every command takes the [filters](getting-started.md#narrowing-down) (`--since`, `--until`, `--source`, `--project`) and `--format table|json|csv`.
 
 ## Skills
 
@@ -65,6 +65,8 @@ What the clients put into the context besides the conversation. Columns: `kind` 
 ```sh
 agentlens unused --days 30          # --all also lists items that were used
 ```
+
+`--days` is ignored when `--since` is given; with `--until` the period is counted back from that point instead of from now (`agentlens unused --days 30 --until 2026-10-01`).
 
 Installed skills (loaded or used through their files), agents (`.claude/agents`, `.github/agents`, `.opencode/agents`) and configured MCP servers that were not used in the period, with what they cost while idle. The idle cost is the estimated baseline tokens times the requests that carried the item; for MCP servers it comes from the context items the client reports, so servers of other clients show `unknown`. MCP configuration files are read for server names only.
 

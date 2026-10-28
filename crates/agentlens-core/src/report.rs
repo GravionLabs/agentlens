@@ -21,6 +21,8 @@ pub struct ReportMeta {
     pub generated_at: Timestamp,
     /// The `--since` filter, if any.
     pub since: Option<Timestamp>,
+    /// The `--until` filter, if any: the report covers `[since, until)`.
+    pub until: Option<Timestamp>,
     /// Sources that were requested (empty means all).
     pub sources: Vec<Source>,
     /// Number of skills found in the inventory.
@@ -50,6 +52,7 @@ impl Report {
                 tool_version: crate::VERSION.to_owned(),
                 generated_at: now,
                 since: filter.since,
+                until: filter.until,
                 sources: sources.to_vec(),
                 installed_skills: run.inventory.skills.len() as u32,
                 warnings: run.warnings,
@@ -105,6 +108,7 @@ mod tests {
                 tool_version: "0.0.0".into(),
                 generated_at: "2026-10-10T00:00:00Z".parse().unwrap(),
                 since: None,
+                until: None,
                 sources: vec![Source::ClaudeCode, Source::OpenCode],
                 installed_skills: 3,
                 warnings: 1,

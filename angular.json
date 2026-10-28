@@ -24,12 +24,19 @@
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [{ "glob": "favicon.svg", "input": "src" }],
-            "styles": ["src/styles.scss"]
+            "styles": [
+              "node_modules/primeicons/primeicons.css",
+              "node_modules/@gravionlabs/helix-ui/tokens.css",
+              "node_modules/@gravionlabs/helix-ui/styles.css",
+              "node_modules/@gravionlabs/helix-shell/styles.css",
+              "src/styles.scss",
+              "src/helix-theme.scss"
+            ]
           },
           "configurations": {
             "production": {
               "budgets": [
-                { "type": "initial", "maximumWarning": "500kB", "maximumError": "1MB" },
+                { "type": "initial", "maximumWarning": "1.1MB", "maximumError": "1.2MB" },
                 { "type": "anyComponentStyle", "maximumWarning": "8kB", "maximumError": "16kB" }
               ],
               "outputHashing": "all"

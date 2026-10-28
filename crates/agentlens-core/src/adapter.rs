@@ -53,6 +53,9 @@ impl Detection {
 pub struct SessionFilter {
     /// Only sessions that were active at or after this instant.
     pub since: Option<Timestamp>,
+    /// Only sessions that were last active before this instant (exclusive), so
+    /// the period is `[since, until)`.
+    pub until: Option<Timestamp>,
     /// Only sessions whose project directory is this directory or inside it.
     pub project: Option<PathBuf>,
 }
@@ -60,11 +63,17 @@ pub struct SessionFilter {
 impl SessionFilter {
     /// `true` if the session passes the filter. Sessions without the needed
     /// metadata pass, so that missing data does not hide them.
+    ///
+    /// A session counts at its end (its start if it has no end): it passes when
+    /// that instant is at or after `since` and before `until`.
     pub fn matches(&self, session: &Session) -> bool {
-        if let (Some(since), Some(last)) = (self.since, session.ended_at.or(session.started_at))
-            && last < since
-        {
-            return false;
+        if let Some(last) = session.ended_at.or(session.started_at) {
+            if self.since.is_some_and(|since| last < since) {
+                return false;
+            }
+            if self.until.is_some_and(|until| last >= until) {
+                return false;
+            }
         }
         if let (Some(project), Some(dir)) = (&self.project, &session.project_dir)
             && !dir.starts_with(project)
@@ -164,7 +173,12 @@ pub fn merge_export(local: SessionEvents, export: SessionEvents) -> SessionEvent
 }
 
 /// Sessions read for one selection, kept for a while by a caching registry.
-type CacheKey = (Option<Timestamp>, Option<PathBuf>, Vec<Source>);
+type CacheKey = (
+    Option<Timestamp>,
+    Option<Timestamp>,
+    Option<PathBuf>,
+    Vec<Source>,
+);
 type Cached = (
     std::time::Instant,
     std::sync::Arc<Vec<Result<SessionEvents, String>>>,
@@ -234,7 +248,7 @@ impl Registry {
         };
         let mut sources = only.to_vec();
         sources.sort();
-        let key: CacheKey = (filter.since, filter.project.clone(), sources);
+        let key: CacheKey = (filter.since, filter.until, filter.project.clone(), sources);
         let fresh = {
             let entries = cache.entries.lock().unwrap_or_else(|e| e.into_inner());
             entries
@@ -406,21 +420,81 @@ mod tests {
     fn since_filter_drops_old_sessions() {
         let f = SessionFilter {
             since: Some("2026-06-01T00:00:00Z".parse().unwrap()),
-            project: None,
+            ..SessionFilter::default()
         };
         assert_eq!(ids(&registry(), &f, &[]), ["new"]);
     }
 
     #[test]
+    fn until_filter_drops_new_sessions() {
+        let f = SessionFilter {
+            until: Some("2026-06-01T00:00:00Z".parse().unwrap()),
+            ..SessionFilter::default()
+        };
+        assert_eq!(ids(&registry(), &f, &[]), ["old"]);
+    }
+
+    fn at(ts: &str) -> Option<Timestamp> {
+        Some(ts.parse().unwrap())
+    }
+
+    fn timed(started: Option<Timestamp>, ended: Option<Timestamp>) -> Session {
+        let mut s = Session::new("s", Source::ClaudeCode);
+        s.started_at = started;
+        s.ended_at = ended;
+        s
+    }
+
+    fn window() -> SessionFilter {
+        SessionFilter {
+            since: at("2026-10-01T00:00:00Z"),
+            until: at("2026-10-08T00:00:00Z"),
+            ..SessionFilter::default()
+        }
+    }
+
+    #[test]
+    fn since_is_inclusive_and_until_is_exclusive() {
+        let f = window();
+        assert!(f.matches(&timed(None, at("2026-10-01T00:00:00Z"))));
+        assert!(f.matches(&timed(None, at("2026-10-07T23:59:59Z"))));
+        assert!(!f.matches(&timed(None, at("2026-10-08T00:00:00Z"))));
+        assert!(!f.matches(&timed(None, at("2026-09-30T23:59:59Z"))));
+    }
+
+    #[test]
+    fn a_session_counts_at_its_end_or_at_its_start_without_one() {
+        let f = window();
+        // Started before the window, ended inside it: kept.
+        assert!(f.matches(&timed(
+            at("2026-09-20T00:00:00Z"),
+            at("2026-10-02T00:00:00Z")
+        )));
+        // Started inside the window, ended after it: dropped.
+        assert!(!f.matches(&timed(
+            at("2026-10-07T00:00:00Z"),
+            at("2026-10-09T00:00:00Z")
+        )));
+        // No end: the start decides.
+        assert!(f.matches(&timed(at("2026-10-03T00:00:00Z"), None)));
+        assert!(!f.matches(&timed(at("2026-10-08T00:00:00Z"), None)));
+    }
+
+    #[test]
+    fn a_session_without_times_passes_both_bounds() {
+        assert!(window().matches(&timed(None, None)));
+    }
+
+    #[test]
     fn project_filter_keeps_sessions_without_project_metadata() {
         let f = SessionFilter {
-            since: None,
             project: Some("/work/a".into()),
+            ..SessionFilter::default()
         };
         assert_eq!(ids(&registry(), &f, &[]), ["old", "new"]);
         let f = SessionFilter {
-            since: None,
             project: Some("/work/b".into()),
+            ..SessionFilter::default()
         };
         assert_eq!(ids(&registry(), &f, &[]), ["old"]);
     }
@@ -574,7 +648,7 @@ mod tests {
         // Another selection is read on its own.
         let recent = SessionFilter {
             since: Some("2026-01-01T00:00:00Z".parse().unwrap()),
-            project: None,
+            ..SessionFilter::default()
         };
         ids(&recent);
         assert_eq!(calls.load(SeqCst), 2);
@@ -587,6 +661,30 @@ mod tests {
         plain.sessions(&env, &all, &[]).count();
         plain.sessions(&env, &all, &[]).count();
         assert_eq!(calls.load(SeqCst), 5);
+    }
+
+    #[test]
+    fn selections_that_differ_only_by_until_are_cached_apart() {
+        use std::sync::atomic::Ordering::SeqCst;
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let mut r = Registry::new().with_cache(std::time::Duration::from_secs(60));
+        r.register(Box::new(Counting(calls.clone())));
+        let env = Env::for_home("/h");
+        let since = Some("2026-01-01T00:00:00Z".parse().unwrap());
+        let open = SessionFilter {
+            since,
+            ..SessionFilter::default()
+        };
+        let closed = SessionFilter {
+            since,
+            until: Some("2026-02-01T00:00:00Z".parse().unwrap()),
+            ..SessionFilter::default()
+        };
+        r.sessions(&env, &open, &[]).count();
+        r.sessions(&env, &closed, &[]).count();
+        assert_eq!(calls.load(SeqCst), 2);
+        r.sessions(&env, &closed, &[]).count();
+        assert_eq!(calls.load(SeqCst), 2);
     }
 
     #[test]

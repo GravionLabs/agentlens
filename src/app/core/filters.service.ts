@@ -42,6 +42,7 @@ export class FiltersService {
   /** What the commands receive. */
   readonly payload = computed<Filters>(() => ({
     since: this.since() || null,
+    until: null,
     sources: this.sources(),
     project: this.project().trim() || null,
   }));

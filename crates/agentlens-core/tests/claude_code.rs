@@ -237,7 +237,7 @@ fn since_filter_skips_files_not_touched_since() {
     let env = home.env();
     let future = SessionFilter {
         since: Some("2999-01-01T00:00:00Z".parse().unwrap()),
-        project: None,
+        ..SessionFilter::default()
     };
     assert_eq!(ClaudeCodeAdapter.sessions(&env, &future).count(), 0);
 }

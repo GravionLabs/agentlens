@@ -88,7 +88,11 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Unused { days, all } => {
             let mut filter = filter;
             if cli.since.is_none() {
-                filter.since = Some(crate::args::days_ago(days, jiff::Timestamp::now())?);
+                // The period ends at --until, or now.
+                filter.since = Some(
+                    agentlens_core::since::window_start(days, filter.until, jiff::Timestamp::now())
+                        .map_err(anyhow::Error::msg)?,
+                );
             }
             unused::run(&registry, &env, &filter, &cli.source, est, all, display)
         }

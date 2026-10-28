@@ -52,6 +52,16 @@ describe("CliTools", () => {
     expect(el.querySelector("button")).toBeNull();
   });
 
+  it("renders every button as an hx-button, the toggle as link and the actions as outlined", async () => {
+    const { el, button, click } = await render(async () => offered);
+    await click("Command line tools");
+    const all = Array.from(el.querySelectorAll("button"));
+    expect(all.every((b) => b.classList.contains("hx-button"))).toBe(true);
+    expect(all.map((b) => b.classList.contains("hx-button-link"))).toEqual([true, false, false]);
+    expect(all.map((b) => b.classList.contains("hx-button-outlined"))).toEqual([false, true, true]);
+    expect(button("Command line tools")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("offers install and remove when the backend offers the tools", async () => {
     const { button, click } = await render(async () => offered);
     expect(button("Command line tools")).toBeTruthy();
@@ -250,5 +260,45 @@ describe("CliTools", () => {
       a.textContent?.trim(),
     );
     expect(alerts).toEqual(["move AgentLens.app to /Applications"]);
+  });
+});
+
+describe("CliTools messages", () => {
+  it("shows the foreign file as a warning status, not an alert", async () => {
+    const foreign = answer({
+      offered: true,
+      foreign: ["/home/user/.local/bin/agentlens"],
+      tools: base.tools.map((t) => ({ ...t, action: "skipped_foreign" as const })),
+    });
+    const { el, click } = await render(async (command) =>
+      command === "cli_tools_install" ? foreign : offered,
+    );
+    await click("Command line tools");
+    await click("Install command line tools");
+    const status = Array.from(el.querySelectorAll('[role="status"]')).map((m) => m.textContent);
+    expect(status.some((t) => t?.includes("Not touched: /home/user/.local/bin/agentlens"))).toBe(
+      true,
+    );
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("shows the folder, PATH and note lines as messages", async () => {
+    const done = answer({
+      offered: true,
+      created_dir: true,
+      on_path: true,
+      note: "Restart the terminal.",
+    });
+    const { el, click } = await render(async (command) =>
+      command === "cli_tools_install" ? done : offered,
+    );
+    await click("Command line tools");
+    await click("Install command line tools");
+    const status = Array.from(el.querySelectorAll('[role="status"]')).map((m) =>
+      m.textContent?.trim(),
+    );
+    expect(status).toContain("Created the folder /home/user/.local/bin.");
+    expect(status).toContain("/home/user/.local/bin is on your PATH.");
+    expect(status).toContain("Restart the terminal.");
   });
 });

@@ -158,6 +158,73 @@ fn since_in_the_future_selects_no_sessions() {
 }
 
 #[test]
+fn until_closes_the_period_on_the_fixture_sessions() {
+    let home = home();
+    let sessions = |args: &[&str]| {
+        let mut cmd = agentlens(&home);
+        cmd.args(["skills", "--format", "json"]).args(args);
+        json(&mut cmd)["sessions"].clone()
+    };
+    // The sessions ran on 2026-10-01 (10:00-10:02 and 11:00-11:06).
+    assert_eq!(sessions(&["--until", "2026-10-02"]), 2);
+    assert_eq!(sessions(&["--until", "2026-10-01"]), 0);
+    assert_eq!(
+        sessions(&["--since", "2026-10-01", "--until", "2026-10-02"]),
+        2
+    );
+    assert_eq!(
+        sessions(&[
+            "--since",
+            "2026-10-01T10:30:00Z",
+            "--until",
+            "2026-10-01T12:00:00Z"
+        ]),
+        1
+    );
+    assert_eq!(
+        sessions(&["--since", "2026-10-02", "--until", "2026-10-03"]),
+        0
+    );
+}
+
+#[test]
+fn a_relative_until_counts_back_from_now() {
+    let home = home();
+    let sessions = |args: &[&str]| {
+        let mut cmd = agentlens(&home);
+        cmd.args(["skills", "--format", "json"]).args(args);
+        json(&mut cmd)["sessions"].clone()
+    };
+    // The sessions are from October 2026: an hour ago is after them, 3000 days ago long before.
+    assert_eq!(sessions(&["--since", "3000d", "--until", "1h"]), 2);
+    assert_eq!(sessions(&["--until", "3000d"]), 0);
+}
+
+#[test]
+fn until_not_after_since_fails_naming_both() {
+    let home = home();
+    agentlens(&home)
+        .args(["skills", "--since", "2026-10-02", "--until", "2026-10-01"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--until").and(predicate::str::contains("--since")));
+    agentlens(&home)
+        .args(["skills", "--since", "2026-10-02", "--until", "2026-10-02"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn invalid_until_fails_with_a_hint() {
+    let home = home();
+    agentlens(&home)
+        .args(["skills", "--until", "soon"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--until").and(predicate::str::contains("30d")));
+}
+
+#[test]
 fn project_filter_keeps_only_sessions_below_the_directory() {
     let home = home();
     let v = json(agentlens(&home).args(["skills", "--format", "json", "--project", "/work/demo"]));
@@ -186,6 +253,11 @@ fn invalid_since_fails_with_a_hint() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("30d"));
+    agentlens(&home)
+        .args(["skills", "--since", "soon"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--since: cannot parse"));
 }
 
 fn home_with_context() -> TempDir {
@@ -419,6 +491,36 @@ fn unused_window_is_set_with_days_and_overridden_by_since() {
         "json",
     ]));
     assert!(v["sessions"].as_u64().unwrap() > 0);
+}
+
+#[test]
+fn unused_days_are_counted_back_from_until_and_ignored_with_since() {
+    let home = home();
+    let sessions = |args: &[&str]| {
+        let mut cmd = agentlens(&home);
+        cmd.arg("unused").args(args).args(["--format", "json"]);
+        json(&mut cmd)["sessions"].clone()
+    };
+    // One day before 2026-10-02 holds the sessions of October 1; before 2026-10-01 nothing.
+    assert_eq!(sessions(&["--days", "1", "--until", "2026-10-02"]), 2);
+    assert_eq!(sessions(&["--days", "1", "--until", "2026-10-01"]), 0);
+    // The default of 30 days is counted from --until too, not from now: counted from now it would
+    // still reach the sessions of October 1 for the first and be empty for the second.
+    assert_eq!(sessions(&["--until", "2026-12-31"]), 0);
+    assert_eq!(sessions(&["--until", "2026-10-25"]), 2);
+    assert_eq!(sessions(&["--days", "100", "--until", "2027-06-01"]), 0);
+    // --since wins over --days.
+    assert_eq!(
+        sessions(&[
+            "--days",
+            "1",
+            "--since",
+            "2026-09-01",
+            "--until",
+            "2026-10-02"
+        ]),
+        2
+    );
 }
 
 #[test]

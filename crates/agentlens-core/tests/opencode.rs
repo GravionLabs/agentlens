@@ -180,7 +180,7 @@ fn since_filter_drops_old_sessions() {
     assert_eq!(all.len(), 2, "subagent session is merged into its parent");
     let f = SessionFilter {
         since: Some("2026-01-01T00:00:00Z".parse().unwrap()),
-        project: None,
+        ..SessionFilter::default()
     };
     let recent = read(&home, &f);
     assert_eq!(recent.len(), 1);

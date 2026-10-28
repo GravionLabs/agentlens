@@ -44,7 +44,7 @@ agentlens report --html report.html  # one self-contained page that works offlin
 agentlens mcp-setup                  # how to register the MCP server in your agent
 ```
 
-Every command takes `--since`, `--source`, `--project` and `--format table|json|csv`; `agentlens --help` lists them all.
+Every command takes `--since`, `--until` (closes the period, for example `--since 2026-10-01 --until 2026-11-01`), `--source`, `--project` and `--format table|json|csv`; `agentlens --help` lists them all.
 
 ## Layout
 

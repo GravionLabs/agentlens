@@ -2,10 +2,20 @@ import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { number, pathLabel, percent, shortId, sourceLabel, tokens } from "../../core/format";
-import type { CacheRow, EfficiencyReport, SubagentShare } from "../../core/types";
-import { type Column, DataTable } from "../../ui/data-table";
+import {
+  exactTokens,
+  number,
+  pathLabel,
+  percent,
+  shortId,
+  sourceLabel,
+  tokens,
+} from "../../core/format";
+import type { EfficiencyReport, SubagentShare } from "../../core/types";
+import { HelpLink, termTitle } from "../../ui/help-link";
+import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
+import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 type By = "source" | "project" | "session";
 
@@ -14,9 +24,35 @@ export function share(part: number, whole: number): number | null {
   return whole > 0 ? part / whole : null;
 }
 
+/** The label of a cache group: long ids are shortened, paths keep their last segments. */
+export function groupLabel(key: string): string {
+  return key.length > 30 && !key.startsWith("/") ? shortId(key) : pathLabel(key);
+}
+
+/** A subagent row with the shares precomputed, so the table can sort them (`null`: no total). */
+export interface SubagentView {
+  source: string;
+  requests: number;
+  subRequests: number | null;
+  subTokens: number | null;
+  subCost: number | null;
+  unpriced: number;
+}
+
+export function subagentView(s: SubagentShare): SubagentView {
+  return {
+    source: s.source,
+    requests: s.requests,
+    subRequests: share(s.subagent_requests, s.requests),
+    subTokens: share(s.subagent_tokens, s.tokens),
+    subCost: share(s.subagent_usd, s.usd),
+    unpriced: s.unpriced_requests,
+  };
+}
+
 @Component({
   selector: "app-efficiency",
-  imports: [PageHeader, Term, Status, DataTable],
+  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -46,20 +82,71 @@ export function share(part: number, whole: number): number | null {
         [warnings]="res.value()?.warnings ?? 0"
         [errors]="res.value()?.errors ?? []"
       />
-      <app-data-table
+      <hx-data-table
+        [value]="cacheViews()"
+        [sortFunction]="sort"
         [columns]="cacheColumns"
-        [data]="cache()"
-        [initialSort]="{ key: 'requests', descending: true }"
-        [limit]="25"
-        [filterable]="true"
-        placeholder="Filter by group"
-        empty="No usage found."
-      />
+        filterDisplay="row"
+        sortField="requests"
+        [sortOrder]="-1"
+        [paginator]="cache().length > 25"
+        [rows]="25"
+        [rowsPerPageOptions]="[25, 'all']"
+        allLabel="Show all"
+        emptyMessage="No usage found."
+        ariaLabel="Cache efficiency"
+      >
+        <ng-template hxColumnHeader="requests"
+          ><app-help-link term="request" label="Requests"
+        /></ng-template>
+        <ng-template hxColumnHeader="cache_read"
+          ><app-help-link term="cache-read" label="Cache read"
+        /></ng-template>
+        <ng-template hxColumnHeader="cache_write"
+          ><app-help-link term="cache-write" label="Cache write"
+        /></ng-template>
+        <ng-template hxColumnHeader="hit_rate"
+          ><app-help-link term="hit-rate" label="Hit rate"
+        /></ng-template>
+        <ng-template hxCell="groupName" let-row>
+          <span [attr.title]="row.key">{{ row.groupName }}</span>
+        </ng-template>
+        <ng-template hxCell="source" let-value="value">{{ label(value) }}</ng-template>
+        <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+        <ng-template hxCell="input" let-value="value">
+          <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+        </ng-template>
+        <ng-template hxCell="cache_read" let-value="value">
+          <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+        </ng-template>
+        <ng-template hxCell="cache_write" let-value="value">
+          <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+        </ng-template>
+        <ng-template hxCell="hit_rate" let-value="value">{{ percent(value) }}</ng-template>
+      </hx-data-table>
       <h3>Subagent share</h3>
       <p class="muted">
         Cost shares only cover requests with a price (reported or from the price table).
       </p>
-      <app-data-table [columns]="subagentColumns" [data]="subagents()" empty="No usage found." />
+      <hx-data-table
+        [value]="subagentViews()"
+        [sortFunction]="sort"
+        [columns]="subagentColumns"
+        emptyMessage="No usage found."
+        ariaLabel="Subagent share"
+      >
+        <ng-template hxColumnHeader="requests"
+          ><app-help-link term="request" label="Requests"
+        /></ng-template>
+        <ng-template hxColumnHeader="unpriced"
+          ><app-help-link term="unpriced" label="Unpriced requests"
+        /></ng-template>
+        <ng-template hxCell="source" let-value="value">{{ label(value) }}</ng-template>
+        <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+        <ng-template hxCell="subRequests" let-value="value">{{ percent(value) }}</ng-template>
+        <ng-template hxCell="subTokens" let-value="value">{{ percent(value) }}</ng-template>
+        <ng-template hxCell="subCost" let-value="value">{{ percent(value) }}</ng-template>
+      </hx-data-table>
     </section>
   `,
   styles: `
@@ -91,97 +178,70 @@ export class Efficiency {
   protected readonly cache = computed(() => this.res.value()?.data.cache ?? []);
   protected readonly subagents = computed(() => this.res.value()?.data.subagents ?? []);
 
-  protected readonly cacheColumns: Column<CacheRow>[] = [
+  protected readonly sort = nullsLast;
+  protected readonly n = number;
+  protected readonly tokens = tokens;
+  protected readonly tip = exactTokens;
+  protected readonly percent = percent;
+  protected readonly label = sourceLabel;
+  /** Cache rows with the group as shown, so the column filter matches the text the user sees. */
+  protected readonly cacheViews = computed(() =>
+    this.cache().map((c) => ({ ...c, groupName: groupLabel(c.key) })),
+  );
+  protected readonly subagentViews = computed(() => this.subagents().map(subagentView));
+
+  protected readonly cacheColumns: HxColumn[] = [
+    { field: "groupName", header: "Group", sortable: true, filter: true },
+    { field: "source", header: "Source", sortable: true },
     {
-      key: "key",
-      label: "Group",
-      value: (r) => r.key,
-      text: (r) =>
-        r.key.length > 30 && !r.key.startsWith("/") ? shortId(r.key) : pathLabel(r.key),
-      hover: (r) => r.key,
+      field: "requests",
+      header: "Requests",
+      title: termTitle("request"),
+      align: "right",
+      sortable: true,
     },
-    { key: "source", label: "Source", value: (r) => r.source, text: (r) => sourceLabel(r.source) },
+    { field: "input", header: "Input", align: "right", sortable: true },
     {
-      key: "requests",
-      label: "Requests",
-      term: "request",
-      value: (r) => r.requests,
-      text: (r) => number(r.requests),
-      numeric: true,
-    },
-    {
-      key: "input",
-      label: "Input",
-      value: (r) => r.input,
-      text: (r) => tokens(r.input),
-      numeric: true,
-      tokens: true,
-    },
-    {
-      key: "read",
-      label: "Cache read",
-      term: "cache-read",
-      value: (r) => r.cache_read,
-      text: (r) => tokens(r.cache_read),
-      numeric: true,
-      tokens: true,
+      field: "cache_read",
+      header: "Cache read",
+      title: termTitle("cache-read"),
+      align: "right",
+      sortable: true,
     },
     {
-      key: "write",
-      label: "Cache write",
-      term: "cache-write",
-      value: (r) => r.cache_write,
-      text: (r) => tokens(r.cache_write),
-      numeric: true,
-      tokens: true,
+      field: "cache_write",
+      header: "Cache write",
+      title: termTitle("cache-write"),
+      align: "right",
+      sortable: true,
     },
     {
-      key: "rate",
-      label: "Hit rate",
-      term: "hit-rate",
-      value: (r) => r.hit_rate,
-      text: (r) => percent(r.hit_rate),
-      numeric: true,
+      field: "hit_rate",
+      header: "Hit rate",
+      title: termTitle("hit-rate"),
+      align: "right",
+      sortable: true,
     },
   ];
 
-  protected readonly subagentColumns: Column<SubagentShare>[] = [
-    { key: "source", label: "Source", value: (s) => s.source, text: (s) => sourceLabel(s.source) },
+  protected readonly subagentColumns: HxColumn[] = [
+    { field: "source", header: "Source", sortable: true },
     {
-      key: "requests",
-      label: "Requests",
-      term: "request",
-      value: (s) => s.requests,
-      text: (s) => number(s.requests),
-      numeric: true,
+      field: "requests",
+      header: "Requests",
+      title: termTitle("request"),
+      align: "right",
+      sortable: true,
     },
+    { field: "subRequests", header: "Subagent requests", align: "right", sortable: true },
+    { field: "subTokens", header: "Subagent tokens", align: "right", sortable: true },
+    { field: "subCost", header: "Subagent cost", align: "right", sortable: true },
     {
-      key: "sub-requests",
-      label: "Subagent requests",
-      value: (s) => share(s.subagent_requests, s.requests),
-      text: (s) => percent(share(s.subagent_requests, s.requests)),
-      numeric: true,
-    },
-    {
-      key: "sub-tokens",
-      label: "Subagent tokens",
-      value: (s) => share(s.subagent_tokens, s.tokens),
-      text: (s) => percent(share(s.subagent_tokens, s.tokens)),
-      numeric: true,
-    },
-    {
-      key: "sub-cost",
-      label: "Subagent cost",
-      value: (s) => share(s.subagent_usd, s.usd),
-      text: (s) => percent(share(s.subagent_usd, s.usd)),
-      numeric: true,
-    },
-    {
-      key: "unpriced",
-      label: "Unpriced requests",
-      term: "unpriced",
-      value: (s) => s.unpriced_requests,
-      numeric: true,
+      field: "unpriced",
+      header: "Unpriced requests",
+      title: termTitle("unpriced"),
+      align: "right",
+      sortable: true,
     },
   ];
 
