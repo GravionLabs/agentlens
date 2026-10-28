@@ -215,7 +215,7 @@ impl Registry {
     /// Forgets cached sessions, so the next analysis reads the files again.
     pub fn clear_cache(&self) {
         if let Some(c) = &self.cache {
-            c.entries.lock().expect("cache lock").clear();
+            c.entries.lock().unwrap_or_else(|e| e.into_inner()).clear();
         }
     }
 
@@ -250,7 +250,7 @@ impl Registry {
         sources.sort();
         let key: CacheKey = (filter.since, filter.until, filter.project.clone(), sources);
         let fresh = {
-            let entries = cache.entries.lock().expect("cache lock");
+            let entries = cache.entries.lock().unwrap_or_else(|e| e.into_inner());
             entries
                 .get(&key)
                 .filter(|(at, _)| at.elapsed() < cache.ttl)
@@ -262,10 +262,14 @@ impl Registry {
                 .map(|r| r.map_err(|e| e.to_string()))
                 .collect();
             let read = std::sync::Arc::new(read);
-            cache.entries.lock().expect("cache lock").insert(
-                key,
-                (std::time::Instant::now(), std::sync::Arc::clone(&read)),
-            );
+            cache
+                .entries
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(
+                    key,
+                    (std::time::Instant::now(), std::sync::Arc::clone(&read)),
+                );
             read
         });
         Box::new((0..all.len()).map(move |i| all[i].clone().map_err(AdapterError::Other)))

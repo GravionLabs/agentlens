@@ -150,7 +150,7 @@ fn parse_all(files: &[SessionFile]) -> Vec<Result<SessionEvents, AdapterError>> 
                     let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let Some(f) = files.get(i) else { break };
                     let parsed = parse_session(&f.path, &f.subagents);
-                    results.lock().expect("results lock")[i] = Some(parsed);
+                    results.lock().unwrap_or_else(|e| e.into_inner())[i] = Some(parsed);
                 }
             });
         }
