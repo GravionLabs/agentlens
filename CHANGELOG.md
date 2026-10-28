@@ -5,6 +5,32 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.11.0] — 2026-10-28
+
+### Bug Fixes
+- Show a sample data label, guard the period and cover the helix views (#349)
+- Address review of until filter (#336)
+- Keep n/a last in both directions in the flow tables (#351)
+- Match column filters against the text shown (#351)
+- Show Refreshing while an analysis loads instead of a dead Refresh (#351)
+- Drop the source column filters, the filter bar filters by source (#351)
+- Hide the custom window preview in the filter bar (#428) (#429)
+
+
+### Documentation
+- Add ADR 0007 on helix-ui and chart.js (#348)
+- Address review of ADR 0007 (#348)
+- List the remaining hand-written components in ADR 0007 (#351)
+- Describe the new toolbar, tables and Refresh placement (#351)
+- Bring AGENTS.md, ADR 0007 and the chart spike to the state after #351 (#351)
+
+
+### Features
+- Add until to the session filter (#336)
+- Expose --until in the CLI and MCP server (#336)
+- Migrate the views to helix-ui (#351) (#382)
+
+
 ## [0.10.5] — 2026-10-14
 
 ### Bug Fixes
