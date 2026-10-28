@@ -40,10 +40,11 @@ The **Export** menu in the page header, next to the title of a view, saves it as
 
 ## The status bar
 
-The bar at the bottom shows the running version, the token format, the size of the interface and **Check for updates**.
+The bar at the bottom shows the running version, the token format, the size of the interface, **Install command line tools** (macOS and AppImage) and **Check for updates**. In a browser it shows a **sample data** badge instead of the last two, because the demo reads no client files.
 
 - **Size:** the magnifier buttons (minus and plus; or `Ctrl` `−` and `Ctrl` `+`, `Ctrl` `0` to reset) scale the whole interface from 70% to 160%. The size is remembered.
 - **Token format:** the button next to the size controls switches the token counts in tables, cards and sentences between full (`2,114,305`, the default) and rounded (`2.11 M`); while rounded, a table cell shows the exact count as a tooltip. Charts keep their own compact labels (`2.1M`) in both modes. It is a toggle (`aria-pressed`) and the choice is remembered on this machine. Exports (JSON, CSV, copied values) always keep the exact numbers.
+- **Command line tools:** on macOS and in an AppImage the action links `agentlens` and `agentlens-mcp` into `~/.local/bin`, and **Remove command line tools** undoes it. See [Download](download.md#install-command-line-tools-macos-and-appimage).
 - **Updates:** the check makes a network request only when you click it; if a newer release exists the bar offers **Install and restart**. See [Updating the application](../updater.md).
 
 ## From source

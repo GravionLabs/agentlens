@@ -46,7 +46,7 @@ For the application: `pnpm lint && pnpm format:check && pnpm test && pnpm build`
 
 ## Issue and PR conventions
 
-- Hierarchy: Epic → Feature → PBI → Task, linked as native sub-issues; dependencies as "blocked by". Titles carry the level prefix (`[PBI] feat: …`).
+- Hierarchy: Epic → Feature → PBI → Task, linked as native sub-issues; dependencies as "blocked by". Titles carry the level prefix (`[PBI] feat: …`). The shared `issues.yml` workflow of `GravionLabs/ci` sets it from the level label.
 - One branch and one PR per PBI; the PR body says `Closes #<PBI>` and lists the task numbers. Conventional commit messages.
 - Milestone work is integrated on `release/<milestone>` branches; `main` only receives a finished release branch.
 - Decisions get the `needs-decision` label. Write the ADR in `docs/adr/` with the next free number and Status: Proposed, then wait for the owner.

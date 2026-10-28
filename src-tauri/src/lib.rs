@@ -203,14 +203,14 @@ async fn update_check(
         notes: u.body.clone(),
         date: u.date.map(|d| d.to_string()),
     });
-    *pending.0.lock().unwrap() = update;
+    *pending.0.lock().unwrap_or_else(|e| e.into_inner()) = update;
     Ok(info)
 }
 
 /// Downloads and installs the update found by the last check, then restarts.
 #[tauri::command]
 async fn update_install(app: AppHandle, pending: State<'_, PendingUpdate>) -> Result<(), String> {
-    let update = pending.0.lock().unwrap().take();
+    let update = pending.0.lock().unwrap_or_else(|e| e.into_inner()).take();
     let Some(update) = update else {
         return Err("There is no update to install; check for updates first".into());
     };

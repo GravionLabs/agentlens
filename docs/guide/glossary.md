@@ -12,7 +12,7 @@ A measured value was read from the client's own data, for example the token coun
 
 ### Session
 
-A session is one conversation with a client such as Claude Code, OpenCode or Copilot CLI. Session time runs from the first to the last event, so idle time is included.
+A session is one conversation with a client such as Claude Code, OpenCode, Copilot CLI or VS Code Copilot. Session time runs from the first to the last event, so idle time is included.
 
 ### Request
 
@@ -24,7 +24,7 @@ Tokens are the unit in which models read input and write output, and in which us
 
 ### Source
 
-A source is one supported client: Claude Code, OpenCode or Copilot CLI. Use the source filter at the top to include or exclude them.
+A source is one supported client: Claude Code, OpenCode, Copilot CLI or VS Code Copilot. Use the source filter at the top to include or exclude them.
 
 ### Subagent
 
