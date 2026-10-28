@@ -66,8 +66,21 @@ pub struct Filters {
     pub project: Option<PathBuf>,
 }
 
+/// Length in days of the period the unused view looks at when no `since` is given.
+pub const DEFAULT_UNUSED_DAYS: u32 = 30;
+
 impl Filters {
     fn resolve(&self, now: Timestamp) -> Result<(SessionFilter, Vec<Source>), String> {
+        self.resolve_named(now, ("since", "until"))
+    }
+
+    /// Like the resolution every analysis does, with the labels `names` (`since`, `until`) in the errors
+    /// about the two bounds; a command line passes `--since` and `--until`.
+    pub fn resolve_named(
+        &self,
+        now: Timestamp,
+        names: (&str, &str),
+    ) -> Result<(SessionFilter, Vec<Source>), String> {
         // Relative periods count from a five-minute step, so that the views asking one
         // after the other share the sessions the registry cache holds for that selection.
         let now = Timestamp::from_second(now.as_second() - now.as_second().rem_euclid(300))
@@ -77,7 +90,7 @@ impl Filters {
             self.since.as_deref(),
             self.until.as_deref(),
             now,
-            ("since", "until"),
+            names,
         )?;
         let mut sources = Vec::new();
         for id in &self.sources {
@@ -229,16 +242,25 @@ pub fn context(ctx: &Context, f: &Filters) -> Result<Answer<ContextReport>, Stri
     answer(run.report, run.warnings, run.errors)
 }
 
-/// Defaults to the last 30 days if the filter has no period.
+/// Defaults to the last [`DEFAULT_UNUSED_DAYS`] days if the filter has no period.
 pub fn unused(ctx: &Context, f: &Filters) -> Result<Answer<UnusedReport>, String> {
     let now = Timestamp::now();
-    let (mut filter, only) = f.resolve(now)?;
-    if filter.since.is_none() {
-        // The default window is 30 days back from the end of the period.
-        filter.since = Some(window_start(30, filter.until, now)?);
-    }
+    let (filter, only) = f.resolve(now)?;
+    let filter = with_unused_window(filter, DEFAULT_UNUSED_DAYS, now)?;
     let run = pipeline::unused_run(&ctx.registry, &ctx.env, &filter, &only, &CharsPerToken);
     answer(run.report, run.warnings, run.errors)
+}
+
+/// Gives a filter without `since` the start of a period of `days` days that ends at its `until`, or now.
+pub fn with_unused_window(
+    mut filter: SessionFilter,
+    days: u32,
+    now: Timestamp,
+) -> Result<SessionFilter, String> {
+    if filter.since.is_none() {
+        filter.since = Some(window_start(days, filter.until, now)?);
+    }
+    Ok(filter)
 }
 
 #[derive(Debug, Serialize)]
@@ -608,6 +630,38 @@ mod tests {
             err.contains("until") && err.contains("cannot parse"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn resolve_named_labels_the_errors_with_the_given_names() {
+        let err = filters(Some("soon"), None)
+            .resolve_named(now(), ("--since", "--until"))
+            .unwrap_err();
+        assert!(err.starts_with("--since: cannot parse"), "{err}");
+        let err = filters(Some("2026-10-02"), Some("2026-10-01"))
+            .resolve_named(now(), ("--since", "--until"))
+            .unwrap_err();
+        assert!(err.starts_with("--until ("), "{err}");
+    }
+
+    #[test]
+    fn an_unknown_source_is_an_error() {
+        let f = Filters {
+            sources: vec!["nope".into()],
+            ..Filters::default()
+        };
+        assert_eq!(f.resolve(now()).unwrap_err(), "unknown source `nope`");
+    }
+
+    #[test]
+    fn the_unused_window_defaults_to_the_shared_thirty_days_and_keeps_a_given_since() {
+        assert_eq!(DEFAULT_UNUSED_DAYS, 30);
+        let (open, _) = filters(None, None).resolve(now()).unwrap();
+        let w = with_unused_window(open, DEFAULT_UNUSED_DAYS, now()).unwrap();
+        assert_eq!(w.since.unwrap().to_string(), "2026-09-10T12:03:20Z");
+        let (given, _) = filters(Some("2026-10-01"), None).resolve(now()).unwrap();
+        let w = with_unused_window(given, 7, now()).unwrap();
+        assert_eq!(w.since.unwrap().to_string(), "2026-10-01T00:00:00Z");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use agentlens_core::adapter::SessionFilter;
+use agentlens_core::api::{DEFAULT_UNUSED_DAYS, Filters};
 use agentlens_core::model::Source;
-use agentlens_core::since::parse_window;
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use jiff::Timestamp;
@@ -111,7 +111,7 @@ pub enum Command {
     /// List installed skills, agents and MCP servers that were not used
     Unused {
         /// Length of the period to look at (ignored if --since is given; counted back from --until if set)
-        #[arg(long, value_name = "DAYS", default_value_t = 30)]
+        #[arg(long, value_name = "DAYS", default_value_t = DEFAULT_UNUSED_DAYS)]
         days: u32,
         /// Also list items that were used
         #[arg(long)]
@@ -204,18 +204,22 @@ fn parse_source(s: &str) -> Result<Source, String> {
 }
 
 impl Cli {
-    pub fn filter(&self) -> Result<SessionFilter> {
-        let (since, until) = parse_window(
-            self.since.as_deref(),
-            self.until.as_deref(),
-            Timestamp::now(),
-            ("--since", "--until"),
-        )
-        .map_err(anyhow::Error::msg)?;
-        Ok(SessionFilter {
-            since,
-            until,
+    /// The filter flags as the filter of the application and the MCP server.
+    pub fn filters(&self) -> Filters {
+        Filters {
+            since: self.since.clone(),
+            until: self.until.clone(),
+            sources: self.source.iter().map(|s| s.id().to_owned()).collect(),
             project: self.project.clone(),
-        })
+        }
+    }
+
+    /// The session filter the core resolves from the flags; errors name `--since` and `--until`.
+    pub fn filter(&self) -> Result<SessionFilter> {
+        let (filter, _) = self
+            .filters()
+            .resolve_named(Timestamp::now(), ("--since", "--until"))
+            .map_err(anyhow::Error::msg)?;
+        Ok(filter)
     }
 }
