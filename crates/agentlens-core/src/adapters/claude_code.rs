@@ -1,5 +1,6 @@
 //! Claude Code: `<config dir>/projects/<slug>/<session>.jsonl`, plus subagent
-//! transcripts in `<slug>/<session>/subagents/*.jsonl`.
+//! transcripts in `<slug>/<session>/subagents/*.jsonl` and
+//! `subagents/workflows/<run>/*.jsonl` (with a `.meta.json` next to each).
 //!
 //! The format is not documented; the parser only relies on a handful of fields
 //! and skips everything it does not understand.
@@ -15,8 +16,8 @@ use serde_json::Value;
 use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
 use crate::env::Env;
 use crate::model::{
-    ContextItem, ContextKind, Event, EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger,
-    Source, ToolCall, ToolStatus, Usage, Warning,
+    AgentInfo, ContextItem, ContextKind, Event, EventKind, Session, SessionEvents, SkillInvoked,
+    SkillTrigger, Source, ToolCall, ToolStatus, Usage, Warning,
 };
 
 /// Slash commands that control the client itself and never load a skill.
@@ -170,6 +171,37 @@ fn io_err(path: &Path, source: std::io::Error) -> AdapterError {
     }
 }
 
+/// Subagent transcripts: directly under `subagents/` and in the run folders
+/// of `subagents/workflows/<run>/`.
+fn subagent_files(dir: &Path) -> Vec<PathBuf> {
+    let mut files = jsonl_files(dir);
+    let Ok(rd) = fs::read_dir(dir.join("workflows")) else {
+        return files;
+    };
+    let mut runs: Vec<PathBuf> = rd
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+    runs.sort();
+    for run in runs {
+        files.extend(jsonl_files(&run));
+    }
+    files
+}
+
+/// Reads `agent-<id>.meta.json` next to a subagent transcript, if any.
+fn read_agent_meta(path: &Path) -> Option<AgentInfo> {
+    let text = fs::read_to_string(path.with_extension("meta.json")).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+    let info = AgentInfo {
+        agent_type: str_of(&v, "agentType").map(str::to_owned),
+        description: str_of(&v, "description").map(str::to_owned),
+        workflow_phase: str_of(&v, "workflowPhase").map(str::to_owned),
+    };
+    (info != AgentInfo::default()).then_some(info)
+}
+
 fn jsonl_files(dir: &Path) -> Vec<PathBuf> {
     let Ok(rd) = fs::read_dir(dir) else {
         return Vec::new();
@@ -198,7 +230,7 @@ fn discover(projects: &Path, filter: &SessionFilter) -> Result<Vec<SessionFile>,
                 continue;
             }
             let stem = path.file_stem().map(PathBuf::from).unwrap_or_default();
-            let subagents = jsonl_files(&slug.join(stem).join("subagents"));
+            let subagents = subagent_files(&slug.join(stem).join("subagents"));
             out.push(SessionFile { path, subagents });
         }
     }
@@ -268,6 +300,7 @@ pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents
 struct Parser<'a> {
     file: String,
     force_subagent: bool,
+    agent: Option<AgentInfo>,
     events: &'a mut Vec<Event>,
     warnings: &'a mut Vec<Warning>,
     meta: &'a mut Meta,
@@ -295,6 +328,11 @@ fn parse_file(
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default(),
         force_subagent: subagent,
+        agent: if subagent {
+            read_agent_meta(path)
+        } else {
+            None
+        },
         events,
         warnings,
         meta,
@@ -528,6 +566,7 @@ impl Parser<'_> {
             subagent,
             premium_requests: None,
             skill: None,
+            agent: self.agent.clone(),
         };
         let key =
             str_of(msg, "id").map(|m| format!("{m}:{}", str_of(line, "requestId").unwrap_or("")));

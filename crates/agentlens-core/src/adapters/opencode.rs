@@ -484,6 +484,7 @@ fn usage_of(tokens: &Value, cost: Option<f64>, model: Option<String>, subagent: 
         subagent,
         premium_requests: None,
         skill: None,
+        agent: None,
     }
 }
 

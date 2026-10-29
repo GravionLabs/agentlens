@@ -232,6 +232,7 @@ fn read_usage_rows(path: &Path) -> (HashMap<String, Vec<UsageRow>>, Option<Strin
                         // Only requests the user started are charged; agent
                         // follow-ups ride along.
                         skill: None,
+                        agent: None,
                         premium_requests: r.get::<_, Option<f64>>(9)?.map(|m| {
                             match r.get::<_, Option<String>>(10).ok().flatten().as_deref() {
                                 Some("user") | None => m,
@@ -511,6 +512,7 @@ fn record_usage(u: &Value) -> Option<Usage> {
         // The records seen so far carry no agent fields, so this cannot be told apart.
         subagent: false,
         skill: None,
+        agent: None,
         premium_requests: u.get("cost").and_then(Value::as_f64).map(|m| {
             match str_of(u, "initiator") {
                 Some("user") | None => m,
@@ -546,6 +548,7 @@ fn shutdown_usage(data: &Value) -> Vec<Usage> {
                 measured: true,
                 subagent: false,
                 skill: None,
+                agent: None,
                 // `requests.cost` is the number of premium requests charged.
                 premium_requests: m
                     .get("requests")

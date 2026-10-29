@@ -416,6 +416,7 @@ fn copilot_spans(spans: &[Value], sessions: &mut Sessions, skipped: &mut BTreeMa
                         subagent: agent_depth(span_id, &index) >= 2,
                         premium_requests: attrs.get("github.copilot.cost").and_then(Value::as_f64),
                         skill: None,
+                        agent: None,
                     }),
                 );
             }

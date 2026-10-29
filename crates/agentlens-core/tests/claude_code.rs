@@ -391,3 +391,51 @@ fn a_typed_skill_command_is_a_user_invocation_with_the_content_the_client_inject
         .count();
     assert_eq!(turns, 3);
 }
+
+#[test]
+fn workflow_subagents_are_counted_with_their_meta() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/main_with_subagent.jsonl",
+        &format!("{SLUG}/main.jsonl"),
+    );
+    home.copy_fixture(
+        "claude_code/subagent.jsonl",
+        &format!("{SLUG}/main/subagents/workflows/run-1/agent-w1.jsonl"),
+    );
+    home.copy_fixture(
+        "claude_code/workflow_subagent.meta.json",
+        &format!("{SLUG}/main/subagents/workflows/run-1/agent-w1.meta.json"),
+    );
+    let se = read_all(&home).remove(0);
+    let u = usages(&se);
+    assert_eq!(u.len(), 3);
+    let sub: Vec<_> = u.iter().filter(|u| u.subagent).collect();
+    assert_eq!(sub.len(), 1);
+    let agent = sub[0].agent.as_ref().unwrap();
+    assert_eq!(agent.agent_type.as_deref(), Some("workflow-subagent"));
+    assert_eq!(agent.description.as_deref(), Some("implement #12"));
+    assert_eq!(agent.workflow_phase.as_deref(), Some("Implement"));
+    assert!(u.iter().filter(|u| !u.subagent).all(|u| u.agent.is_none()));
+}
+
+#[test]
+fn malformed_meta_is_ignored() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/main_with_subagent.jsonl",
+        &format!("{SLUG}/main.jsonl"),
+    );
+    home.copy_fixture(
+        "claude_code/subagent.jsonl",
+        &format!("{SLUG}/main/subagents/agent-1.jsonl"),
+    );
+    home.copy_fixture(
+        "claude_code/basic.jsonl",
+        &format!("{SLUG}/main/subagents/agent-1.meta.json"),
+    );
+    let se = read_all(&home).remove(0);
+    let u = usages(&se);
+    assert_eq!(u.iter().filter(|u| u.subagent).count(), 1);
+    assert!(u.iter().all(|u| u.agent.is_none()));
+}
