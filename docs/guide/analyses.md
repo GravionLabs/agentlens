@@ -1,6 +1,6 @@
 # The analyses
 
-Each analysis is a command of the CLI, a view of the [application](application.md) and a tool of the [MCP server](mcp-server.md), and all three show the same numbers (what you can rely on in their output is on the [Compatibility](compatibility.md) page). Every command takes the [filters](getting-started.md#narrowing-down) (`--since`, `--until`, `--source`, `--project`) and `--format table|json|csv`.
+Each analysis is a command of the CLI, a view of the [application](application.md) and a tool of the [MCP server](mcp-server.md), and all three show the same numbers (what you can rely on in their output is on the [Compatibility](compatibility.md) page). Every command takes the [filters](getting-started.md#narrowing-down) (`--since`, `--until`, `--source`, `--project`, `--session`) and `--format table|json|csv`.
 
 ## Skills
 

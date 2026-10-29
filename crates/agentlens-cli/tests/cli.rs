@@ -705,6 +705,17 @@ fn cost_uses_the_price_file_and_marks_computed_values() {
 }
 
 #[test]
+fn session_filter_limits_cost_to_one_session_and_unknown_ids_are_empty() {
+    let home = home();
+    let all = json(agentlens(&home).args(["cost", "--format", "json"]));
+    let one = json(agentlens(&home).args(["cost", "--format", "json", "--session", "basic"]));
+    assert!(one["total"]["requests"].as_u64() < all["total"]["requests"].as_u64());
+    assert!(one["total"]["requests"].as_u64() > Some(0));
+    let none = json(agentlens(&home).args(["cost", "--format", "json", "--session", "nope"]));
+    assert_eq!(none["total"]["requests"], 0);
+}
+
+#[test]
 fn cost_lists_models_without_a_price_instead_of_guessing() {
     let home = home_with_context();
     let v = json(agentlens(&home).args(["cost", "--format", "json"]));

@@ -59,6 +59,9 @@ pub struct SessionFilter {
     pub until: Option<Timestamp>,
     /// Only sessions whose project directory is this directory or inside it.
     pub project: Option<PathBuf>,
+    /// Only sessions with one of these ids. Unlike the other filters, a session
+    /// without an id does not pass. Empty: no restriction.
+    pub session: Vec<String>,
 }
 
 impl SessionFilter {
@@ -68,6 +71,9 @@ impl SessionFilter {
     /// A session counts at its end (its start if it has no end): it passes when
     /// that instant is at or after `since` and before `until`.
     pub fn matches(&self, session: &Session) -> bool {
+        if !self.session.is_empty() && !self.session.contains(&session.id) {
+            return false;
+        }
         if let Some(last) = session.ended_at.or(session.started_at) {
             if self.since.is_some_and(|since| last < since) {
                 return false;
@@ -178,6 +184,7 @@ type CacheKey = (
     Option<Timestamp>,
     Option<Timestamp>,
     Option<PathBuf>,
+    Vec<String>,
     Vec<Source>,
 );
 type Cached = (
@@ -249,7 +256,13 @@ impl Registry {
         };
         let mut sources = only.to_vec();
         sources.sort();
-        let key: CacheKey = (filter.since, filter.until, filter.project.clone(), sources);
+        let key: CacheKey = (
+            filter.since,
+            filter.until,
+            filter.project.clone(),
+            filter.session.clone(),
+            sources,
+        );
         let fresh = {
             let entries = cache.entries.lock().unwrap_or_else(|e| e.into_inner());
             entries
@@ -450,6 +463,18 @@ mod tests {
         );
         assert_eq!(found[0].worktree_dir, None);
         assert_eq!(found[1].worktree_dir.as_deref(), Some(wt.as_path()));
+    }
+
+    #[test]
+    fn session_filter_keeps_only_listed_ids() {
+        let f = SessionFilter {
+            session: vec!["a".into(), "c".into()],
+            ..SessionFilter::default()
+        };
+        assert!(f.matches(&Session::new("a", Source::ClaudeCode)));
+        assert!(!f.matches(&Session::new("b", Source::ClaudeCode)));
+        assert!(!f.matches(&Session::new("", Source::ClaudeCode)));
+        assert!(SessionFilter::default().matches(&Session::new("", Source::ClaudeCode)));
     }
 
     #[test]

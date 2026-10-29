@@ -64,6 +64,8 @@ pub struct Filters {
     pub sources: Vec<String>,
     /// Only sessions that ran in this directory or below it.
     pub project: Option<PathBuf>,
+    /// Only sessions with one of these ids; empty means all.
+    pub session: Vec<String>,
 }
 
 /// Length in days of the period the unused view looks at when no `since` is given.
@@ -97,6 +99,12 @@ impl Filters {
                 since,
                 until,
                 project: self.project.clone().filter(|p| !p.as_os_str().is_empty()),
+                session: self
+                    .session
+                    .iter()
+                    .filter(|s| !s.trim().is_empty())
+                    .cloned()
+                    .collect(),
             },
             sources,
         ))

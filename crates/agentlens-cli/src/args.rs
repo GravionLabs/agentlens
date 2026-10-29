@@ -28,6 +28,10 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "DIR")]
     pub project: Option<std::path::PathBuf>,
 
+    /// Only the session with this id (repeatable); the id of Claude Code's `session_id` or OpenCode's session
+    #[arg(long, global = true, value_name = "ID")]
+    pub session: Vec<String>,
+
     /// OpenTelemetry export (OTLP JSON lines of Claude Code logs) to analyze as well (repeatable)
     #[arg(long, global = true, value_name = "FILE")]
     pub otel: Vec<std::path::PathBuf>,
@@ -211,6 +215,7 @@ impl Cli {
             until: self.until.clone(),
             sources: self.source.iter().map(|s| s.id().to_owned()).collect(),
             project: self.project.clone(),
+            session: self.session.clone(),
         }
     }
 

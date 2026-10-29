@@ -202,6 +202,37 @@ fn skills_by_tool_call_slash_command_and_builtin() {
 }
 
 #[test]
+fn session_filter_reads_only_the_named_session_with_its_subagents() {
+    let home = TempHome::new();
+    home.copy_fixture("claude_code/basic.jsonl", &format!("{SLUG}/basic.jsonl"));
+    home.copy_fixture(
+        "claude_code/main_with_subagent.jsonl",
+        &format!("{SLUG}/main.jsonl"),
+    );
+    home.copy_fixture(
+        "claude_code/subagent.jsonl",
+        &format!("{SLUG}/main/subagents/agent-1.jsonl"),
+    );
+    let env = home.env();
+    let read = |ids: &[&str]| -> Vec<SessionEvents> {
+        let filter = SessionFilter {
+            session: ids.iter().map(|s| (*s).to_owned()).collect(),
+            ..SessionFilter::default()
+        };
+        ClaudeCodeAdapter
+            .sessions(&env, &filter)
+            .map(|r| r.unwrap())
+            .collect()
+    };
+    let one = read(&["main"]);
+    assert_eq!(one.len(), 1);
+    assert_eq!(one[0].session.id, "main");
+    assert_eq!(usages(&one[0]).iter().filter(|u| u.subagent).count(), 1);
+    assert_eq!(read(&["main", "basic"]).len(), 2);
+    assert!(read(&["unknown"]).is_empty());
+}
+
+#[test]
 fn subagent_transcripts_are_merged_and_flagged() {
     let home = TempHome::new();
     home.copy_fixture(
