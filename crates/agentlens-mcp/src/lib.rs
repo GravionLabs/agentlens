@@ -256,11 +256,12 @@ impl AgentLensServer {
         let since = args.since.as_deref().unwrap_or("30d");
         let text = format!(
             "Analyze how my coding agents use skills and what that costs in tokens, with the agentlens tools, and propose concrete changes. Look at the last {since} (pass it as `since`).\n\n\
-1. Call `advice` first. Its findings are computed from the numbers, not guessed: explain them in plain language and rank the suggestions by what they would save.\n\
+1. Call `advice` first. Its findings are computed from the numbers, not guessed, and come ranked by what each could have saved in the period (`rank`, `impact.saving`, `impact.saving_usd`, an estimate from the price table): explain them in plain language in that order.\n\
 2. If a field is unclear (load, carry, baseline, follow-on, file uses, overhead), read the resource {GLOSSARY_URI} instead of guessing.\n\
 3. Look closer at anything surprising with the other tools: `skills` for one skill, `unused` for agents and MCP servers, `context` for instruction files and tool definitions, `sessions` and `timeline` for a long session.\n\n\
 Rules for the conclusions:\n\
 - Trust a number without a tilde (`measured: true`); say so when a conclusion rests on an estimate (`~`, `measured: false`).\n\
+- `impact.confidence` says how sure a saving is: `measured`, `estimated`, or `inferred`. An `inferred` saving rests on an assumption (for the context size: that the work could have run in a fresh session); say so.\n\
 - A skill is only unused if both `invocations` and `file_uses` are 0, and one that is needed rarely can still be worth keeping.\n\
 - Follow-on is the activity after a skill, not cost the skill caused.\n\
 - Do not change anything yourself. List the changes, with the saving each would bring, and let me decide."

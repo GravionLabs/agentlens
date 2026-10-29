@@ -12,12 +12,22 @@ use serde::{Deserialize, Serialize};
 use crate::analyzers::context::ContextReport;
 use crate::analyzers::skills::{LARGE_CONTEXT_TOKENS, SkillReport, SkillStats};
 use crate::analyzers::unused::{calls_server, norm};
-use crate::model::{ContextKind, EventKind, SessionEvents, Source};
+use crate::model::{ContextKind, EventKind, SessionEvents, Source, Usage};
+use crate::prices::PriceTable;
 use crate::references::{Reference, References};
 use crate::tokens::Tokens;
 
 /// A description of about this many tokens is enough to tell when a skill applies.
 pub const DESCRIPTION_TARGET_TOKENS: u64 = 40;
+/// A skill body of about this many tokens holds what the model has to decide; what is above it is
+/// what moving deterministic steps into a script could save (the saving of Large skill bodies).
+pub const BODY_TARGET_TOKENS: u64 = 2_000;
+/// Without any price the findings are ordered by their saving in tokens, each token class weighted by
+/// what it costs next to uncached input on the usual price lists: input 1, cache write 1.25, cache
+/// read 0.1.
+pub const INPUT_WEIGHT: f64 = 1.0;
+pub const CACHE_WRITE_WEIGHT: f64 = 1.25;
+pub const CACHE_READ_WEIGHT: f64 = 0.1;
 /// Ranked findings list this many items; `count` says how many there were.
 pub const TOP: usize = 10;
 /// A skill needs this many requests after it for its average context size to mean something.
@@ -106,6 +116,226 @@ impl FindingKind {
     }
 }
 
+/// How sure the saving of a finding is.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Confidence {
+    /// Every number behind the saving was reported by the client (a finding without a saving too).
+    #[default]
+    Measured,
+    /// Some numbers behind the saving were computed from file sizes or heuristics.
+    Estimated,
+    /// The saving rests on an assumption about how the work could have run instead.
+    Inferred,
+}
+
+/// What the action of a finding could have saved in the period, not what the finding is about.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct Impact {
+    pub saving: Tokens,
+    /// The saving in USD; always computed, never reported. `None` without a price, and for the kinds
+    /// that have no saving.
+    pub saving_usd: Option<f64>,
+    pub confidence: Confidence,
+}
+
+impl Impact {
+    /// The impact of the kinds whose action saves nothing that can be counted.
+    fn none() -> Impact {
+        Impact {
+            saving: Tokens::measured(0),
+            saving_usd: None,
+            confidence: Confidence::Measured,
+        }
+    }
+}
+
+/// Saved tokens split by token class: what prices a saving, and what weighs it without a price.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct Split {
+    input: f64,
+    cache_read: f64,
+    cache_write: f64,
+}
+
+impl Split {
+    fn cache_read(tokens: u64) -> Split {
+        Split {
+            cache_read: tokens as f64,
+            ..Split::default()
+        }
+    }
+
+    /// The fallback weight: tokens weighted by class.
+    fn weight(&self) -> f64 {
+        self.input * INPUT_WEIGHT
+            + self.cache_write * CACHE_WRITE_WEIGHT
+            + self.cache_read * CACHE_READ_WEIGHT
+    }
+}
+
+/// The average price per token class over the period, in USD per million tokens: each class weighted
+/// with that class's tokens over all priced requests (a class without tokens in the period by the
+/// requests). It prices the savings of the findings that do not know their requests (skill listings,
+/// bodies, MCP servers).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Pricing {
+    pub input: f64,
+    pub cache_read: f64,
+    pub cache_write: f64,
+    /// The requests the averages were taken over.
+    pub priced_requests: u64,
+    /// Requests whose model has no price; they are left out of the averages.
+    pub unpriced_requests: u64,
+}
+
+impl Pricing {
+    /// The averages over all requests of the sessions, main agent and subagents.
+    pub fn from_sessions(sessions: &[SessionEvents], prices: &PriceTable) -> Pricing {
+        // Per class: price × tokens, tokens and the plain sum of the prices.
+        let mut sums = [(0.0f64, 0u64, 0.0f64); 3];
+        let mut pricing = Pricing::default();
+        for u in sessions
+            .iter()
+            .flat_map(|se| &se.events)
+            .filter_map(|e| match &e.kind {
+                EventKind::Usage(u) => Some(u),
+                _ => None,
+            })
+        {
+            let Some(r) = u
+                .model
+                .as_deref()
+                .and_then(|m| prices.rates(m, u.total_input()))
+            else {
+                pricing.unpriced_requests += 1;
+                continue;
+            };
+            pricing.priced_requests += 1;
+            for (sum, (rate, tokens)) in sums.iter_mut().zip([
+                (r.input, u.input),
+                (r.cache_read, u.cache_read),
+                (r.cache_write, u.cache_write),
+            ]) {
+                sum.0 += rate * tokens as f64;
+                sum.1 += tokens;
+                sum.2 += rate;
+            }
+        }
+        let average = |(weighted, tokens, plain): (f64, u64, f64)| {
+            if tokens > 0 {
+                weighted / tokens as f64
+            } else if pricing.priced_requests > 0 {
+                plain / pricing.priced_requests as f64
+            } else {
+                0.0
+            }
+        };
+        pricing.input = average(sums[0]);
+        pricing.cache_read = average(sums[1]);
+        pricing.cache_write = average(sums[2]);
+        pricing
+    }
+
+    /// `true` if at least one request of the period had a price.
+    pub fn is_priced(&self) -> bool {
+        self.priced_requests > 0
+    }
+
+    fn usd(&self, split: &Split) -> Option<f64> {
+        self.is_priced().then(|| {
+            (split.input * self.input
+                + split.cache_read * self.cache_read
+                + split.cache_write * self.cache_write)
+                / 1_000_000.0
+        })
+    }
+}
+
+/// What starting fresh sessions could have saved: on every main-agent request with at least
+/// [`LARGE_CONTEXT_TOKENS`] of input, the input above the size of its session's first main-agent request.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ContextSaving {
+    /// The saved tokens, split in each request's own input : cache read : cache write ratio.
+    pub input: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
+    /// The main-agent requests with at least `LARGE_CONTEXT_TOKENS` of input.
+    pub requests: u64,
+    /// The saving of the priced requests, each priced with its own model.
+    pub usd: f64,
+    /// Requests with a saving, with and without a price for their model.
+    pub priced_requests: u64,
+    pub unpriced_requests: u64,
+    /// The part of the saved tokens on requests without a price for their model, split like the rest;
+    /// [`analyze_with`] prices it with the period's average [`Pricing`].
+    pub unpriced_input: u64,
+    pub unpriced_cache_read: u64,
+    pub unpriced_cache_write: u64,
+}
+
+impl ContextSaving {
+    pub fn tokens(&self) -> u64 {
+        self.input + self.cache_read + self.cache_write
+    }
+}
+
+/// The saving of the Context size finding, from the requests the skill report does not keep.
+///
+/// When ContextHygiene (#346) lands, it subtracts what that finding already counts, so that nothing is
+/// counted twice.
+pub fn context_saving(sessions: &[SessionEvents], prices: &PriceTable) -> ContextSaving {
+    let mut out = ContextSaving::default();
+    for se in sessions {
+        let mut first: Option<u64> = None;
+        for u in se.events.iter().filter_map(|e| match &e.kind {
+            EventKind::Usage(u) if !u.subagent => Some(u),
+            _ => None,
+        }) {
+            let total = u.total_input();
+            let start = *first.get_or_insert(total);
+            if total < LARGE_CONTEXT_TOKENS {
+                continue;
+            }
+            out.requests += 1;
+            let saved = total.saturating_sub(start);
+            if saved == 0 {
+                continue;
+            }
+            let part =
+                |class: u64| (u128::from(saved) * u128::from(class) / u128::from(total)) as u64;
+            let (input, cache_write) = (part(u.input), part(u.cache_write));
+            let saved_usage = Usage {
+                model: u.model.clone(),
+                input,
+                cache_write,
+                cache_read: saved - input - cache_write,
+                ..Usage::default()
+            };
+            out.input += saved_usage.input;
+            out.cache_read += saved_usage.cache_read;
+            out.cache_write += saved_usage.cache_write;
+            match u
+                .model
+                .as_deref()
+                .and_then(|m| prices.compute(m, &saved_usage))
+            {
+                Some(usd) => {
+                    out.usd += usd;
+                    out.priced_requests += 1;
+                }
+                None => {
+                    out.unpriced_requests += 1;
+                    out.unpriced_input += saved_usage.input;
+                    out.unpriced_cache_read += saved_usage.cache_read;
+                    out.unpriced_cache_write += saved_usage.cache_write;
+                }
+            }
+        }
+    }
+    out
+}
+
 /// One skill in a finding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
@@ -123,6 +353,9 @@ pub struct Item {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Finding {
+    /// The place in the order of the findings, 1 for the largest saving.
+    #[serde(default)]
+    pub rank: u32,
     pub kind: FindingKind,
     pub explanation: String,
     pub action: String,
@@ -138,6 +371,9 @@ pub struct Finding {
     pub items: Vec<Item>,
     /// What the finding cannot know.
     pub notes: Vec<String>,
+    /// What the finding's action could have saved in the period.
+    #[serde(default)]
+    pub impact: Impact,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -186,6 +422,7 @@ fn share(part: u64, whole: u64) -> Option<f64> {
 
 fn finding(kind: FindingKind, count: usize, items: Vec<Item>, total: Option<Tokens>) -> Finding {
     Finding {
+        rank: 0,
         kind,
         explanation: kind.explanation().to_owned(),
         action: kind.action().to_owned(),
@@ -195,6 +432,7 @@ fn finding(kind: FindingKind, count: usize, items: Vec<Item>, total: Option<Toke
         share_of_total_tokens: None,
         items,
         notes: Vec::new(),
+        impact: Impact::none(),
     }
 }
 
@@ -206,8 +444,15 @@ fn per_request(s: &SkillStats) -> u64 {
         .unwrap_or(0)
 }
 
+/// The findings without references, MCP servers, requests or prices (for tests).
 pub fn analyze(report: &SkillReport) -> AdviceReport {
-    analyze_with(report, &References::new(), &[])
+    analyze_with(
+        report,
+        &References::new(),
+        &[],
+        &ContextSaving::default(),
+        &Pricing::default(),
+    )
 }
 
 /// What one MCP server costs in static context and how often its tools were called.
@@ -217,6 +462,9 @@ pub struct McpServerUse {
     /// Instructions, tool listing and tool definitions, per request times requests. Measured only if
     /// the client reported every size.
     pub tokens: Tokens,
+    /// The part of `tokens` in the (client, project) groups in which none of the server's tools was
+    /// called: what enabling the server only where it is used would have saved.
+    pub idle_tokens: Tokens,
     /// The main-agent requests that carried the server's context.
     pub requests: u64,
     /// Calls of the server's tools (`mcp__<server>__…`) in the period.
@@ -227,12 +475,17 @@ pub struct McpServerUse {
 /// clients do not report (nothing in the context rows) are not listed.
 pub fn mcp_servers(context: &ContextReport, sessions: &[SessionEvents]) -> Vec<McpServerUse> {
     #[derive(Default)]
+    struct Group {
+        /// The most requests of any row: the rows of a group cover the same requests.
+        requests: u64,
+        tokens: Option<Tokens>,
+    }
+    #[derive(Default)]
     struct Found {
         /// Tool rows name the server the way its tools do; their owner is preferred, then the smaller one.
         name: Option<(bool, String)>,
-        tokens: Option<Tokens>,
-        /// The most requests of any row, per client and project: those are disjoint sets of requests.
-        requests: BTreeMap<(Source, Option<PathBuf>), u64>,
+        /// Per client and project: those are disjoint sets of requests.
+        groups: BTreeMap<(Source, Option<PathBuf>), Group>,
     }
     let mut found: BTreeMap<String, Found> = BTreeMap::new();
     for r in context.rows.iter().filter(|r| {
@@ -250,47 +503,74 @@ pub fn mcp_servers(context: &ContextReport, sessions: &[SessionEvents]) -> Vec<M
         if entry.name.as_ref().is_none_or(|n| candidate < *n) {
             entry.name = Some(candidate);
         }
-        let tokens = entry.tokens.get_or_insert(Tokens::measured(0));
-        tokens.count += r.overhead_tokens.count;
-        tokens.measured &= r.overhead_tokens.measured;
-        let requests = entry
-            .requests
+        let group = entry
+            .groups
             .entry((r.source, r.project.clone()))
             .or_default();
-        *requests = (*requests).max(r.requests);
+        let tokens = group.tokens.get_or_insert(Tokens::measured(0));
+        tokens.count += r.overhead_tokens.count;
+        tokens.measured &= r.overhead_tokens.measured;
+        group.requests = group.requests.max(r.requests);
     }
+    let add = |a: Tokens, b: Tokens| Tokens {
+        count: a.count + b.count,
+        measured: a.measured && b.measured,
+    };
     found
         .into_iter()
         .map(|(key, f)| {
+            let in_group = |se: &SessionEvents, (source, project): &(Source, Option<PathBuf>)| {
+                *source == se.session.source
+                    && (project.is_none() || *project == se.session.project_dir)
+            };
+            let calls_in = |se: &SessionEvents| {
+                se.events
+                    .iter()
+                    .filter(|e| {
+                        matches!(&e.kind, EventKind::ToolCall(c) if calls_server(&c.name, &key))
+                    })
+                    .count() as u64
+            };
             // Only calls in the sessions whose context was reported: the ratio compares like with like.
             let calls = sessions
                 .iter()
-                .filter(|se| {
-                    f.requests.keys().any(|(source, project)| {
-                        *source == se.session.source
-                            && (project.is_none() || *project == se.session.project_dir)
-                    })
-                })
-                .flat_map(|se| &se.events)
-                .filter(
-                    |e| matches!(&e.kind, EventKind::ToolCall(c) if calls_server(&c.name, &key)),
-                )
-                .count() as u64;
+                .filter(|se| f.groups.keys().any(|g| in_group(se, g)))
+                .map(calls_in)
+                .sum();
+            let mut tokens = Tokens::measured(0);
+            let mut idle_tokens = Tokens::measured(0);
+            for (g, group) in &f.groups {
+                let group_tokens = group.tokens.unwrap_or(Tokens::measured(0));
+                tokens = add(tokens, group_tokens);
+                let group_calls: u64 = sessions
+                    .iter()
+                    .filter(|se| in_group(se, g))
+                    .map(calls_in)
+                    .sum();
+                if group_calls == 0 {
+                    idle_tokens = add(idle_tokens, group_tokens);
+                }
+            }
             McpServerUse {
                 server: f.name.map(|n| n.1).unwrap_or_default(),
-                tokens: f.tokens.unwrap_or(Tokens::measured(0)),
-                requests: f.requests.values().sum(),
+                tokens,
+                idle_tokens,
+                requests: f.groups.values().map(|g| g.requests).sum(),
                 calls,
             }
         })
         .collect()
 }
 
-/// Like [`analyze`], and marks the unused skills that an agent, a command or a skill names.
+/// Like [`analyze`], and marks the unused skills that an agent, a command or a skill names, adds the MCP
+/// servers, and gives every finding its impact, priced with `pricing` (the Context size finding with
+/// the prices of `context`). The findings come ranked by that impact.
 pub fn analyze_with(
     report: &SkillReport,
     references: &References,
     mcp: &[McpServerUse],
+    context: &ContextSaving,
+    pricing: &Pricing,
 ) -> AdviceReport {
     let installed: Vec<&SkillStats> = report.skills.iter().filter(|s| s.in_inventory).collect();
     let baseline_total = Tokens {
@@ -325,7 +605,37 @@ pub fn analyze_with(
         "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API."
             .to_owned()
     };
-    let mut findings = Vec::new();
+    // Each finding with the weight of its saving for the order without prices.
+    let mut findings: Vec<(Finding, f64)> = Vec::new();
+    let unpriced_note = |f: &mut Finding| {
+        if f.impact.saving.count > 0 && pricing.is_priced() && pricing.unpriced_requests > 0 {
+            f.notes.push(format!(
+                "The USD saving uses the average price per token class of the period; {} {} without a price {} left out of it.",
+                n(pricing.unpriced_requests),
+                if pricing.unpriced_requests == 1 { "request" } else { "requests" },
+                if pricing.unpriced_requests == 1 { "is" } else { "are" },
+            ));
+        }
+    };
+    // A saving that is all listing tokens, priced as cache read.
+    let listing_impact = |saving: Tokens, confidence: Confidence| {
+        let split = Split::cache_read(saving.count);
+        (
+            Impact {
+                saving,
+                saving_usd: pricing.usd(&split),
+                confidence,
+            },
+            split.weight(),
+        )
+    };
+    let confidence_of = |t: Tokens| {
+        if t.measured {
+            Confidence::Measured
+        } else {
+            Confidence::Estimated
+        }
+    };
 
     // Installed skills nobody used, neither by loading nor through their files.
     let mut unused: Vec<&SkillStats> = installed
@@ -378,7 +688,10 @@ pub fn analyze_with(
                 "Skills that an installed agent, command or skill names are listed last. A mention in a file does not prove that the skill is used, only that something is meant to use it.".to_owned(),
             );
         }
-        findings.push(f);
+        let (impact, weight) = listing_impact(total, confidence_of(total));
+        f.impact = impact;
+        unpriced_note(&mut f);
+        findings.push((f, weight));
     }
 
     // Installed skills that are read through their files but never loaded.
@@ -429,7 +742,10 @@ pub fn analyze_with(
         f.notes.push(
             "That the files were read on instruction of another skill is inferred: a file use does not prove who asked for it, and a skill that is also useful on its own can stay listed.".to_owned(),
         );
-        findings.push(f);
+        let (impact, weight) = listing_impact(total, confidence_of(total));
+        f.impact = impact;
+        unpriced_note(&mut f);
+        findings.push((f, weight));
     }
 
     // The descriptions that cost the most in every request.
@@ -474,7 +790,10 @@ pub fn analyze_with(
         f.notes.push(format!(
             "`total` is what shortening every listed description to {DESCRIPTION_TARGET_TOKENS} tokens would have saved in the period; it is an estimate."
         ));
-        findings.push(f);
+        let (impact, weight) = listing_impact(total, Confidence::Estimated);
+        f.impact = impact;
+        unpriced_note(&mut f);
+        findings.push((f, weight));
     }
 
     // Loaded but no longer installed.
@@ -503,7 +822,7 @@ pub fn analyze_with(
         f.notes.push(
             "Skills built into the client or supplied by a plugin are not in the folders AgentLens inventories and show up here too.".to_owned(),
         );
-        findings.push(f);
+        findings.push((f, 0.0));
     }
 
     // Loaded bodies that stay in the context.
@@ -547,7 +866,37 @@ pub fn analyze_with(
         f.notes.push(
             "Carry is an estimate: the body size times the requests after it; most of it is served from the cache, which is cheap.".to_owned(),
         );
-        findings.push(f);
+        // The body above the target, times the requests that carried it, split like the skill's carry.
+        let mut split = Split::default();
+        let mut saved = 0;
+        for s in &bodies {
+            let per_load = s
+                .load
+                .count
+                .checked_div(u64::from(s.invocations))
+                .unwrap_or(0);
+            let tokens = per_load.saturating_sub(BODY_TARGET_TOKENS) * s.carry.requests;
+            saved += tokens;
+            let carried = s.carry.cache_read_tokens + s.carry.uncached_tokens;
+            let read_share = if carried > 0 {
+                s.carry.cache_read_tokens as f64 / carried as f64
+            } else {
+                1.0
+            };
+            split.cache_read += tokens as f64 * read_share;
+            split.input += tokens as f64 * (1.0 - read_share);
+        }
+        f.impact = Impact {
+            saving: Tokens::estimated(saved),
+            saving_usd: pricing.usd(&split),
+            confidence: Confidence::Estimated,
+        };
+        f.notes.push(format!(
+            "The saving is the part of each body above {} tokens, times the requests that carried it.",
+            n(BODY_TARGET_TOKENS)
+        ));
+        unpriced_note(&mut f);
+        findings.push((f, split.weight()));
     }
 
     // The work that ran on the largest context.
@@ -586,7 +935,7 @@ pub fn analyze_with(
         f.notes.push(format!(
             "Only skills with at least {MIN_FOLLOW_ON_REQUESTS} requests after them are listed. The sizes are what the client reported."
         ));
-        findings.push(f);
+        findings.push((f, 0.0));
     }
 
     // MCP servers: static context against calls.
@@ -634,7 +983,17 @@ pub fn analyze_with(
         f.notes.push(
             "Only servers whose context the client reports are listed (Claude Code today). A server that is called a lot can be worth its context; the tokens per call show the ratio.".to_owned(),
         );
-        findings.push(f);
+        let idle = Tokens {
+            count: servers.iter().map(|m| m.idle_tokens.count).sum(),
+            measured: servers.iter().all(|m| m.idle_tokens.measured),
+        };
+        let (impact, weight) = listing_impact(idle, confidence_of(idle));
+        f.impact = impact;
+        f.notes.push(
+            "The saving is the context of each server in the clients and projects where none of its tools was called.".to_owned(),
+        );
+        unpriced_note(&mut f);
+        findings.push((f, weight));
     }
 
     // The scale of it all: the context of every request, not the skills.
@@ -686,8 +1045,70 @@ pub fn analyze_with(
             f.notes
                 .push("Some requests are estimated, not reported by the client.".to_owned());
         }
-        findings.push(f);
+        let saved = context.tokens();
+        let split = Split {
+            input: context.input as f64,
+            cache_read: context.cache_read as f64,
+            cache_write: context.cache_write as f64,
+        };
+        // A request with a price for its model is priced with it; one without at the period's average
+        // per token class, split in its own ratio. No USD only when the period has no price at all.
+        let unpriced = Split {
+            input: context.unpriced_input as f64,
+            cache_read: context.unpriced_cache_read as f64,
+            cache_write: context.unpriced_cache_write as f64,
+        };
+        f.impact = Impact {
+            saving: Tokens::estimated(saved),
+            saving_usd: (context.priced_requests > 0 || pricing.is_priced())
+                .then(|| context.usd + pricing.usd(&unpriced).unwrap_or(0.0)),
+            confidence: Confidence::Inferred,
+        };
+        f.notes.push(format!(
+            "The saving assumes that the work on requests of at least {} tokens could have run in a fresh session, at the size of the session's first request; it is inferred.",
+            n(LARGE_CONTEXT_TOKENS)
+        ));
+        if saved > 0 && context.unpriced_requests > 0 {
+            f.notes.push(if pricing.is_priced() {
+                format!(
+                    "{} of the requests with a saving had no price for their model; they are priced at the period's average price per token class.",
+                    n(context.unpriced_requests)
+                )
+            } else {
+                format!(
+                    "{} of the requests with a saving had no price for their model; their tokens are in the saving, not in the USD.",
+                    n(context.unpriced_requests)
+                )
+            });
+        }
+        findings.push((f, split.weight()));
     }
+
+    // Ranked by the USD saving, then by the weighted tokens, then in the order above; findings without
+    // a saving last, in the order above (the sort is stable).
+    findings.sort_by(|(a, wa), (b, wb)| {
+        let (sa, sb) = (a.impact.saving.count > 0, b.impact.saving.count > 0);
+        sb.cmp(&sa).then_with(|| {
+            if !(sa && sb) {
+                return std::cmp::Ordering::Equal;
+            }
+            let usd = match (a.impact.saving_usd, b.impact.saving_usd) {
+                (Some(x), Some(y)) => y.total_cmp(&x),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            };
+            usd.then_with(|| wb.total_cmp(wa))
+        })
+    });
+    let findings = findings
+        .into_iter()
+        .enumerate()
+        .map(|(i, (mut f, _))| {
+            f.rank = i as u32 + 1;
+            f
+        })
+        .collect();
 
     AdviceReport {
         sessions: report.sessions,
@@ -741,6 +1162,11 @@ mod tests {
             skills,
             ..SkillReport::default()
         }
+    }
+
+    /// `analyze_with` without requests and prices.
+    fn with(r: &SkillReport, refs: &References, mcp: &[McpServerUse]) -> AdviceReport {
+        analyze_with(r, refs, mcp, &ContextSaving::default(), &Pricing::default())
     }
 
     fn find(r: &AdviceReport, kind: FindingKind) -> &Finding {
@@ -1047,7 +1473,7 @@ mod tests {
             skill("small", true, 0, 0, (10, 100)),
             skill("mid", true, 0, 0, (10, 500)),
         ]);
-        let a = analyze_with(&r, &refs, &[]);
+        let a = with(&r, &refs, &[]);
         let f = find(&a, FindingKind::UnusedSkills);
         let names: Vec<&str> = f.items.iter().map(|i| i.name.as_str()).collect();
         assert_eq!(
@@ -1160,7 +1586,7 @@ mod tests {
 
         let mut r = report(vec![]);
         r.totals.tokens = 100_000;
-        let a = analyze_with(&r, &References::new(), &servers);
+        let a = with(&r, &References::new(), &servers);
         let f = find(&a, FindingKind::CostlyMcpServers);
         assert_eq!(f.count, 2);
         // 4,500 / 2 = 2,250 per call; 6,000 / 60 = 100 per call.
@@ -1186,16 +1612,18 @@ mod tests {
         let unused = McpServerUse {
             server: "idle".into(),
             tokens: Tokens::measured(700),
+            idle_tokens: Tokens::measured(700),
             requests: 7,
             calls: 0,
         };
         let busy = McpServerUse {
             server: "busy".into(),
             tokens: Tokens::measured(800),
+            idle_tokens: Tokens::measured(0),
             requests: 8,
             calls: 4,
         };
-        let a = analyze_with(&report(vec![]), &References::new(), &[busy, unused]);
+        let a = with(&report(vec![]), &References::new(), &[busy, unused]);
         let f = find(&a, FindingKind::CostlyMcpServers);
         assert_eq!(f.items[0].name, "idle");
         assert!(
@@ -1277,10 +1705,11 @@ mod tests {
         let server = |name: &str| McpServerUse {
             server: name.into(),
             tokens: Tokens::measured(100),
+            idle_tokens: Tokens::measured(0),
             requests: 1,
             calls: 1,
         };
-        let a = analyze_with(
+        let a = with(
             &report(vec![]),
             &References::new(),
             &[server("zeta"), server("alpha")],
@@ -1332,6 +1761,458 @@ mod tests {
                 .notes
                 .iter()
                 .all(|n| !n.contains("skill listings"))
+        );
+    }
+
+    // ---- impact and rank ----
+
+    /// Prices per million tokens: cache read 0.5, input 3, cache write 3.75.
+    fn pricing() -> Pricing {
+        Pricing {
+            input: 3.0,
+            cache_read: 0.5,
+            cache_write: 3.75,
+            priced_requests: 10,
+            unpriced_requests: 0,
+        }
+    }
+
+    fn close(a: Option<f64>, b: f64) -> bool {
+        a.is_some_and(|a| (a - b).abs() < 1e-9)
+    }
+
+    /// A price table with one test model: $2 input, $10 output, $2.50 cache write, $0.10 cache read.
+    fn prices() -> PriceTable {
+        PriceTable::parse(
+            r#"{"test-model": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.1}}"#,
+        )
+        .unwrap()
+    }
+
+    /// One request: (model, input, cache read, cache write, subagent).
+    type Req<'a> = (&'a str, u64, u64, u64, bool);
+
+    fn requests(id: &str, reqs: &[Req]) -> SessionEvents {
+        use crate::model::{Event, Session};
+        SessionEvents {
+            session: Session::new(id, Source::ClaudeCode),
+            events: reqs
+                .iter()
+                .map(|&(model, input, cache_read, cache_write, subagent)| Event {
+                    at: None,
+                    kind: EventKind::Usage(Usage {
+                        model: Some(model.into()),
+                        input,
+                        cache_read,
+                        cache_write,
+                        subagent,
+                        ..Usage::default()
+                    }),
+                })
+                .collect(),
+            warnings: Vec::new(),
+        }
+    }
+
+    fn priced(r: &SkillReport, mcp: &[McpServerUse], context: &ContextSaving) -> AdviceReport {
+        analyze_with(r, &References::new(), mcp, context, &pricing())
+    }
+
+    #[test]
+    fn listing_savings_are_their_totals_priced_as_cache_read() {
+        let mut measured = skill("idle", true, 0, 0, (100, 4_000));
+        measured.baseline.tokens = Tokens::measured(4_000);
+        let a = priced(
+            &report(vec![
+                measured,
+                skill("by-hand", true, 0, 2, (100, 2_000)),
+                skill("long", true, 3, 0, (100, 13_200)), // 132 per request
+            ]),
+            &[],
+            &ContextSaving::default(),
+        );
+        let unused = find(&a, FindingKind::UnusedSkills);
+        assert_eq!(unused.impact.saving, Tokens::measured(4_000));
+        assert_eq!(unused.impact.confidence, Confidence::Measured);
+        // 4,000 × $0.50 / M
+        assert!(close(unused.impact.saving_usd, 0.002));
+        let by_hand = find(&a, FindingKind::ListedButLoadedByHand);
+        assert_eq!(by_hand.impact.saving, Tokens::estimated(2_000));
+        assert_eq!(by_hand.impact.confidence, Confidence::Estimated);
+        assert!(close(by_hand.impact.saving_usd, 0.001));
+        let costly = find(&a, FindingKind::CostlyDescriptions);
+        // Per request: idle 40, by-hand 20, long 132. Only `long` is above the target:
+        // (132 - 40) × 100 = 9,200.
+        assert_eq!(costly.impact.saving, Tokens::estimated(9_200));
+        assert_eq!(costly.impact.confidence, Confidence::Estimated);
+        assert!(close(costly.impact.saving_usd, 0.0046));
+    }
+
+    #[test]
+    fn large_bodies_save_the_body_above_the_target_times_its_requests() {
+        // 10,000 tokens in 2 loads = 5,000 per load; (5,000 - 2,000) × 40 requests = 120,000.
+        let mut big = skill("big", true, 2, 0, (10, 100));
+        big.load = Tokens::measured(10_000);
+        big.carry = CarryCost {
+            requests: 40,
+            tokens: Tokens::estimated(200_000),
+            cache_read_tokens: 150_000,
+            uncached_tokens: 50_000,
+        };
+        // 1,500 per load is below the target: nothing to save.
+        let mut small = skill("small", true, 1, 0, (10, 100));
+        small.load = Tokens::measured(1_500);
+        small.carry = CarryCost {
+            requests: 30,
+            tokens: Tokens::estimated(45_000),
+            cache_read_tokens: 45_000,
+            uncached_tokens: 0,
+        };
+        let a = priced(&report(vec![big, small]), &[], &ContextSaving::default());
+        let f = find(&a, FindingKind::LargeBodies);
+        assert_eq!(f.impact.saving, Tokens::estimated(120_000));
+        assert_eq!(f.impact.confidence, Confidence::Estimated);
+        // 75% of the carry was cache read: 90,000 × $0.50 + 30,000 × $3 per M = $0.135.
+        assert!(close(f.impact.saving_usd, 0.135), "{:?}", f.impact);
+        assert!(f.notes.iter().any(|n| n.contains("above 2,000 tokens")));
+    }
+
+    #[test]
+    fn mcp_servers_save_their_context_where_they_were_not_called() {
+        use crate::analyzers::context::ContextReport;
+        use crate::model::Session;
+        let mut a = mcp_row("srv", ContextKind::ToolListing, 40, 400, true);
+        a.project = Some("/work/a".into());
+        let mut b = mcp_row("srv", ContextKind::ToolListing, 60, 600, true);
+        b.project = Some("/work/b".into());
+        let mut b_def = mcp_row("srv", ContextKind::ToolDefinition, 60, 900, false);
+        b_def.project = Some("/work/b".into());
+        let context = ContextReport {
+            rows: vec![a, b, b_def],
+            ..ContextReport::default()
+        };
+        let mut called = calls("mcp__srv__run", 3);
+        called.session = Session::new("x", Source::ClaudeCode);
+        called.session.project_dir = Some("/work/a".into());
+        let servers = mcp_servers(&context, &[called]);
+        assert_eq!(servers[0].tokens.count, 1_900);
+        assert_eq!(servers[0].calls, 3);
+        assert_eq!(
+            servers[0].idle_tokens,
+            Tokens::estimated(1_500),
+            "called in a, idle in b: only b saves"
+        );
+
+        let f = priced(&report(vec![]), &servers, &ContextSaving::default());
+        let f = find(&f, FindingKind::CostlyMcpServers);
+        assert_eq!(f.impact.saving, Tokens::estimated(1_500));
+        assert_eq!(f.impact.confidence, Confidence::Estimated);
+        assert!(close(f.impact.saving_usd, 0.00075));
+    }
+
+    #[test]
+    fn a_server_called_everywhere_saves_nothing() {
+        let busy = McpServerUse {
+            server: "busy".into(),
+            tokens: Tokens::measured(800),
+            idle_tokens: Tokens::measured(0),
+            requests: 8,
+            calls: 4,
+        };
+        let a = priced(&report(vec![]), &[busy], &ContextSaving::default());
+        let f = find(&a, FindingKind::CostlyMcpServers);
+        assert_eq!(f.impact.saving, Tokens::measured(0));
+        assert_eq!(f.impact.confidence, Confidence::Measured);
+    }
+
+    #[test]
+    fn context_saving_counts_the_input_above_the_first_request_of_the_session() {
+        let sessions = [
+            requests(
+                "s1",
+                &[
+                    ("test-model", 50_000, 0, 0, false),
+                    // Below the threshold: nothing.
+                    ("test-model", 1_000, 150_000, 0, false),
+                    // A subagent's large request is not the main context.
+                    ("test-model", 0, 400_000, 0, true),
+                    // 250,000 - 50,000 = 200,000, split 10k : 230k : 10k of 250k.
+                    ("test-model", 10_000, 230_000, 10_000, false),
+                    // No price: counted, not priced. 300,000 - 50,000 = 250,000, all cache read.
+                    ("other-model", 0, 300_000, 0, false),
+                ],
+            ),
+            // Starts large and stays below its start: nothing to save.
+            requests(
+                "s2",
+                &[
+                    ("test-model", 0, 300_000, 0, false),
+                    ("test-model", 0, 250_000, 0, false),
+                ],
+            ),
+        ];
+        let c = context_saving(&sessions, &prices());
+        assert_eq!(c.requests, 4, "main-agent requests of at least 200,000");
+        assert_eq!(
+            (c.input, c.cache_read, c.cache_write),
+            (8_000, 184_000 + 250_000, 8_000)
+        );
+        assert_eq!(c.tokens(), 450_000);
+        assert_eq!((c.priced_requests, c.unpriced_requests), (1, 1));
+        assert_eq!(
+            (
+                c.unpriced_input,
+                c.unpriced_cache_read,
+                c.unpriced_cache_write
+            ),
+            (0, 250_000, 0)
+        );
+        // 8,000 × $2 + 184,000 × $0.10 + 8,000 × $2.50 per M
+        assert!((c.usd - 0.0544).abs() < 1e-9, "{}", c.usd);
+
+        let mut r = report(vec![]);
+        r.totals.requests = 7;
+        let a = priced(&r, &[], &c);
+        let f = find(&a, FindingKind::ContextSize);
+        assert_eq!(f.impact.saving, Tokens::estimated(450_000));
+        assert_eq!(f.impact.confidence, Confidence::Inferred);
+        // The unpriced 250,000 cache read at the period average of $0.50: 0.0544 + 0.125.
+        assert!(
+            close(f.impact.saving_usd, 0.1794),
+            "{:?}",
+            f.impact.saving_usd
+        );
+        assert!(f.notes.iter().any(|n| n.contains("it is inferred")));
+        assert!(f.notes.iter().any(|n| n.starts_with(
+            "1 of the requests with a saving had no price for their model; they are priced at the period's average"
+        )));
+    }
+
+    #[test]
+    fn a_context_saving_on_unpriced_models_is_priced_at_the_period_average_and_ranks_by_it() {
+        // Only a model without a price: 260,000 - 20,000 = 240,000 saved, split in the request's own
+        // 26k : 208k : 26k ratio.
+        let c = context_saving(
+            &[requests(
+                "s",
+                &[
+                    ("other-model", 20_000, 0, 0, false),
+                    ("other-model", 26_000, 208_000, 26_000, false),
+                ],
+            )],
+            &prices(),
+        );
+        assert_eq!((c.priced_requests, c.unpriced_requests), (0, 1));
+        assert_eq!(
+            (
+                c.unpriced_input,
+                c.unpriced_cache_read,
+                c.unpriced_cache_write
+            ),
+            (24_000, 192_000, 24_000)
+        );
+        // An unused skill of 400,000 listing tokens: more tokens, but 400,000 × $0.50 = $0.20.
+        let mut r = report(vec![skill("idle", true, 0, 0, (20_000, 400_000))]);
+        r.totals.requests = 2;
+        let a = priced(&r, &[], &c);
+        let f = find(&a, FindingKind::ContextSize);
+        assert_eq!(f.impact.saving, Tokens::estimated(240_000));
+        // 24,000 × $3 + 192,000 × $0.50 + 24,000 × $3.75 per M = 0.072 + 0.096 + 0.09.
+        assert!(
+            close(f.impact.saving_usd, 0.258),
+            "{:?}",
+            f.impact.saving_usd
+        );
+        let kinds: Vec<FindingKind> = a.findings.iter().map(|f| f.kind).collect();
+        assert_eq!(kinds, [FindingKind::ContextSize, FindingKind::UnusedSkills]);
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("priced at the period's average"))
+        );
+        // Ranked by that USD: 600,000 listing tokens × $0.50 = $0.30 outranks it.
+        let mut r = report(vec![skill("idle", true, 0, 0, (20_000, 600_000))]);
+        r.totals.requests = 2;
+        let kinds: Vec<FindingKind> = priced(&r, &[], &c)
+            .findings
+            .iter()
+            .map(|f| f.kind)
+            .collect();
+        assert_eq!(kinds, [FindingKind::UnusedSkills, FindingKind::ContextSize]);
+
+        // Without any price in the period: no USD, the tokens still counted.
+        let a = analyze_with(&r, &References::new(), &[], &c, &Pricing::default());
+        let f = find(&a, FindingKind::ContextSize);
+        assert_eq!(f.impact.saving_usd, None);
+        assert!(f.notes.iter().any(|n| n.contains("not in the USD")));
+    }
+
+    #[test]
+    fn a_session_whose_large_requests_stay_below_its_start_saves_nothing() {
+        let c = context_saving(
+            &[requests(
+                "s",
+                &[
+                    ("test-model", 0, 320_000, 0, false),
+                    ("test-model", 0, 210_000, 0, false),
+                    ("test-model", 0, 320_000, 0, false),
+                ],
+            )],
+            &prices(),
+        );
+        assert_eq!(c.requests, 3);
+        assert_eq!(c.tokens(), 0);
+        let mut r = report(vec![]);
+        r.totals.requests = 3;
+        let a = priced(&r, &[], &c);
+        let f = find(&a, FindingKind::ContextSize);
+        assert_eq!(f.impact.saving.count, 0);
+        assert_eq!(
+            f.impact.saving_usd,
+            Some(0.0),
+            "priced period, nothing to price"
+        );
+    }
+
+    #[test]
+    fn a_large_context_saving_outranks_unused_skills_and_findings_without_saving_come_last() {
+        let mut r = report(vec![
+            skill("idle", true, 0, 0, (100, 4_000)),
+            skill("gone", false, 2, 0, (0, 0)),
+        ]);
+        r.totals.requests = 100;
+        let context = ContextSaving {
+            cache_read: 1_000_000,
+            requests: 5,
+            usd: 0.1,
+            priced_requests: 5,
+            ..ContextSaving::default()
+        };
+        let a = priced(&r, &[], &context);
+        let kinds: Vec<FindingKind> = a.findings.iter().map(|f| f.kind).collect();
+        assert_eq!(
+            kinds,
+            [
+                FindingKind::ContextSize,
+                FindingKind::UnusedSkills,
+                FindingKind::UsedButNotInstalled
+            ]
+        );
+        let ranks: Vec<u32> = a.findings.iter().map(|f| f.rank).collect();
+        assert_eq!(ranks, [1, 2, 3]);
+        let gone = find(&a, FindingKind::UsedButNotInstalled);
+        assert_eq!(gone.impact.saving, Tokens::measured(0));
+        assert_eq!(gone.impact.saving_usd, None);
+    }
+
+    #[test]
+    fn without_prices_the_order_falls_back_to_weighted_tokens() {
+        // Unused: 4,000 listing tokens × 0.1 = 400. Context: 1,000 input × 1 = 1,000. So context first,
+        // although it has fewer tokens; and no finding has a USD saving.
+        let mut r = report(vec![skill("idle", true, 0, 0, (100, 4_000))]);
+        r.totals.requests = 10;
+        let context = ContextSaving {
+            input: 1_000,
+            requests: 1,
+            unpriced_requests: 1,
+            ..ContextSaving::default()
+        };
+        let a = analyze_with(&r, &References::new(), &[], &context, &Pricing::default());
+        assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
+        assert_eq!(a.findings[1].kind, FindingKind::UnusedSkills);
+        assert!(a.findings.iter().all(|f| f.impact.saving_usd.is_none()));
+        // Cache write weighs 1.25: 900 cache write (1,125) beats 1,000 input.
+        let write = ContextSaving {
+            cache_write: 900,
+            ..context
+        };
+        let mut unused = skill("idle", true, 0, 0, (100, 10_500)); // 1,050 weighted
+        unused.baseline.tokens = Tokens::estimated(10_500);
+        let mut r = report(vec![unused]);
+        r.totals.requests = 10;
+        let a = analyze_with(&r, &References::new(), &[], &write, &Pricing::default());
+        assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
+        let a = analyze_with(
+            &r,
+            &References::new(),
+            &[],
+            &ContextSaving {
+                input: 1_000,
+                ..ContextSaving::default()
+            },
+            &Pricing::default(),
+        );
+        assert_eq!(
+            a.findings[0].kind,
+            FindingKind::UnusedSkills,
+            "1,050 beats 1,000"
+        );
+    }
+
+    #[test]
+    fn pricing_averages_each_token_class_over_the_priced_requests() {
+        let table = PriceTable::parse(
+            r#"{
+                "cheap": {"input": 1.0, "output": 5.0, "cache_write": 1.25, "cache_read": 0.1},
+                "dear": {"input": 3.0, "output": 15.0, "cache_write": 3.75, "cache_read": 0.3}
+            }"#,
+        )
+        .unwrap();
+        let p = Pricing::from_sessions(
+            &[requests(
+                "s",
+                &[
+                    ("cheap", 1_000, 3_000, 0, false),
+                    ("dear", 3_000, 1_000, 0, true),
+                    ("unknown", 9_000, 9_000, 9_000, false),
+                ],
+            )],
+            &table,
+        );
+        assert_eq!((p.priced_requests, p.unpriced_requests), (2, 1));
+        // Input: (1,000 × 1 + 3,000 × 3) / 4,000 = 2.5; cache read: (3,000 × 0.1 + 1,000 × 0.3) / 4,000.
+        assert!((p.input - 2.5).abs() < 1e-9);
+        assert!((p.cache_read - 0.15).abs() < 1e-9);
+        // No cache write tokens: the plain average of the two prices.
+        assert!((p.cache_write - 2.5).abs() < 1e-9);
+        assert!(p.is_priced());
+
+        let none = Pricing::from_sessions(&[requests("s", &[("unknown", 1, 1, 1, false)])], &table);
+        assert!(!none.is_priced());
+        assert_eq!(none.unpriced_requests, 1);
+    }
+
+    #[test]
+    fn unpriced_requests_are_named_in_a_note() {
+        let p = Pricing {
+            unpriced_requests: 3,
+            ..pricing()
+        };
+        let a = analyze_with(
+            &report(vec![skill("idle", true, 0, 0, (10, 100))]),
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &p,
+        );
+        let f = find(&a, FindingKind::UnusedSkills);
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("3 requests without a price are left out")),
+            "{:?}",
+            f.notes
+        );
+        let quiet = priced(
+            &report(vec![skill("idle", true, 0, 0, (10, 100))]),
+            &[],
+            &ContextSaving::default(),
+        );
+        assert!(
+            find(&quiet, FindingKind::UnusedSkills)
+                .notes
+                .iter()
+                .all(|n| !n.contains("without a price"))
         );
     }
 }

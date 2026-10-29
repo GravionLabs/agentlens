@@ -182,6 +182,27 @@ export const GLOSSARY: GlossaryEntry[] = [
     long: "Shows what the period would have cost on a different model. “Excluded” requests have no actual price and are left out of both sides.",
   },
   {
+    id: "impact",
+    term: "Impact",
+    group: "Cost",
+    short: "What an advice finding could have saved: tokens, ~USD and a confidence.",
+    long: "Every advice finding has an impact: its saving in tokens, the saving in USD (always an estimate, computed from the price table) and the confidence of the saving. The findings are ranked by it: by the USD saving, without any price by the tokens weighted by class (input 1, cache write 1.25, cache read 0.1); findings without a saving come last.",
+  },
+  {
+    id: "saving",
+    term: "Saving",
+    group: "Cost",
+    short: "What a finding's action could have saved in the period, not what the finding is about.",
+    long: "For unused skills and costly descriptions the listing tokens that removing or shortening would have saved; for large skill bodies the body above 2,000 tokens times the requests that carried it; for MCP servers their context where none of their tools was called; for the context size the input above each session's first request on requests of at least 200,000 tokens. Findings that know their requests price each with its own model, the others with the period's average price per token class.",
+  },
+  {
+    id: "confidence",
+    term: "Confidence",
+    group: "Cost",
+    short: "How sure a saving is: measured, estimated or inferred.",
+    long: "Measured: every number behind the saving came from the client. Estimated: some were computed from file sizes or heuristics. Inferred: the saving rests on an assumption about how the work could have run instead, for example that it could have started in a fresh session.",
+  },
+  {
     id: "cache-read",
     term: "Cache read",
     group: "Efficiency",

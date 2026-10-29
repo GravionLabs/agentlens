@@ -1520,9 +1520,17 @@ fn advise_lists_what_to_change_in_json_csv_and_a_table() {
     let text = String::from_utf8(out).unwrap();
     assert_eq!(
         text.lines().next().unwrap(),
-        "finding,skill,tokens,tokens_measured,requests,detail"
+        "finding,skill,tokens,tokens_measured,requests,detail,rank,saving_tokens,saving_usd,confidence"
     );
     assert!(text.contains("unused-skills,unused,"));
+    let unused_row = text
+        .lines()
+        .find(|l| l.starts_with("unused-skills,unused,"))
+        .unwrap();
+    assert!(
+        unused_row.ends_with(",estimated"),
+        "estimated listings give an estimated saving: {unused_row}"
+    );
 
     agentlens(&home)
         .arg("advise")
@@ -1530,7 +1538,35 @@ fn advise_lists_what_to_change_in_json_csv_and_a_table() {
         .success()
         .stdout(predicate::str::contains("Unused skills"))
         .stdout(predicate::str::contains("What to do:"))
+        .stdout(predicate::str::contains("Could save ~"))
+        .stdout(predicate::str::contains("ranked by what they could save"))
         .stdout(predicate::str::contains("~ estimated"));
+    let ranks: Vec<u64> = findings
+        .iter()
+        .map(|f| f["rank"].as_u64().unwrap())
+        .collect();
+    assert_eq!(ranks, (1..=findings.len() as u64).collect::<Vec<_>>());
+    assert!(unused["impact"]["saving"]["count"].as_u64().unwrap() > 0);
+}
+
+#[test]
+fn advise_falls_back_to_the_bundled_prices_when_the_price_file_is_broken() {
+    let home = home();
+    let file = home.path().join(".config/agentlens/prices.json");
+    fs::create_dir_all(file.parent().unwrap()).unwrap();
+    fs::write(&file, "{ nope").unwrap();
+    let out = agentlens(&home)
+        .args(["advise", "--format", "json"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning: cannot load prices"))
+        .stderr(predicate::str::contains("prices.json"))
+        .stderr(predicate::str::contains("the bundled prices are used"))
+        .get_output()
+        .stdout
+        .clone();
+    let v: Value = serde_json::from_slice(&out).expect("valid JSON on stdout");
+    assert!(!v["findings"].as_array().unwrap().is_empty());
 }
 
 #[test]

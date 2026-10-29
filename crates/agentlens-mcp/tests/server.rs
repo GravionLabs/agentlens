@@ -402,6 +402,8 @@ fn the_optimize_prompt_tells_an_agent_how_to_analyze_a_skill_setup() {
         "agentlens://glossary",
         "file_uses",
         "Do not change anything",
+        "ranked by what each could have saved",
+        "An `inferred` saving rests on an assumption",
     ] {
         assert!(text.contains(needle), "{needle} missing in {text}");
     }

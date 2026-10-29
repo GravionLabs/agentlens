@@ -128,7 +128,20 @@ export interface AdviceItem {
   detail: string;
 }
 
+/** How sure the saving of a finding is; `inferred` rests on an assumption. */
+export type Confidence = "measured" | "estimated" | "inferred";
+
+/** What the finding's action could have saved in the period. */
+export interface Impact {
+  saving: Tokens;
+  /** Always an estimate (computed from the price table); null without a price or a saving. */
+  saving_usd: number | null;
+  confidence: Confidence;
+}
+
 export interface Finding {
+  /** 1 for the largest saving; the findings come in this order. */
+  rank: number;
   kind: FindingKind;
   explanation: string;
   action: string;
@@ -138,6 +151,7 @@ export interface Finding {
   share_of_total_tokens: number | null;
   items: AdviceItem[];
   notes: string[];
+  impact: Impact;
 }
 
 export interface AdviceReport {

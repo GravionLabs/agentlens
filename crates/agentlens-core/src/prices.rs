@@ -47,6 +47,15 @@ pub struct Tier {
     pub cache_read: Option<f64>,
 }
 
+/// The prices one request pays per token class, in USD per million tokens (the tier already chosen).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rates {
+    pub input: f64,
+    pub output: f64,
+    pub cache_write: f64,
+    pub cache_read: f64,
+}
+
 /// Where a request's cost comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct RequestCost {
@@ -108,27 +117,33 @@ impl PriceTable {
             .map(|(_, p)| p)
     }
 
+    /// The prices per token class (USD per million) that a request of `model` with `total_input`
+    /// tokens of input pays; `None` if the model has no price.
+    pub fn rates(&self, model: &str, total_input: u64) -> Option<Rates> {
+        let p = self.lookup(model)?;
+        Some(match &p.above {
+            Some(t) if total_input > t.over_tokens => Rates {
+                input: t.input,
+                output: t.output,
+                cache_write: t.cache_write.unwrap_or(t.input),
+                cache_read: t.cache_read.unwrap_or(t.input),
+            },
+            _ => Rates {
+                input: p.input,
+                output: p.output,
+                cache_write: p.cache_write.unwrap_or(p.input),
+                cache_read: p.cache_read.unwrap_or(p.input),
+            },
+        })
+    }
+
     /// Cost computed from the table; `None` if the model has no price.
     pub fn compute(&self, model: &str, usage: &Usage) -> Option<f64> {
-        let p = self.lookup(model)?;
-        let (input, output, cache_write, cache_read) = match &p.above {
-            Some(t) if usage.total_input() > t.over_tokens => (
-                t.input,
-                t.output,
-                t.cache_write.unwrap_or(t.input),
-                t.cache_read.unwrap_or(t.input),
-            ),
-            _ => (
-                p.input,
-                p.output,
-                p.cache_write.unwrap_or(p.input),
-                p.cache_read.unwrap_or(p.input),
-            ),
-        };
-        let per_million = usage.input as f64 * input
-            + usage.cache_write as f64 * cache_write
-            + usage.cache_read as f64 * cache_read
-            + usage.output as f64 * output;
+        let r = self.rates(model, usage.total_input())?;
+        let per_million = usage.input as f64 * r.input
+            + usage.cache_write as f64 * r.cache_write
+            + usage.cache_read as f64 * r.cache_read
+            + usage.output as f64 * r.output;
         Some(per_million / 1_000_000.0)
     }
 
@@ -170,6 +185,20 @@ pub fn load(env: &Env, file: Option<&Path>) -> Result<PriceTable, String> {
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let overrides = PriceTable::parse(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(table.with_overrides(overrides))
+}
+
+/// Like [`load`], but never fails: for an analysis that only ranks by price (advice), a broken or
+/// unreadable price file falls back to the bundled table, with a warning that names the file and the error.
+pub fn load_or_bundled(env: &Env, file: Option<&Path>) -> (PriceTable, Option<String>) {
+    match load(env, file) {
+        Ok(table) => (table, None),
+        Err(e) => (
+            PriceTable::bundled(),
+            Some(format!(
+                "cannot load prices: {e}; the bundled prices are used"
+            )),
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -259,6 +288,33 @@ mod tests {
         );
         let unknown = usage("mystery", 10, 10, 0, 0);
         assert_eq!(t.cost(&unknown), None);
+    }
+
+    #[test]
+    fn load_or_bundled_falls_back_to_the_bundled_table_with_a_warning() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = Env::for_home(dir.path());
+        // No user file: the bundled table, no warning.
+        let (t, w) = load_or_bundled(&env, None);
+        assert_eq!((t.len(), w), (PriceTable::bundled().len(), None));
+
+        let file = user_file(&env);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "{ nope").unwrap();
+        assert!(load(&env, None).is_err(), "load itself still fails");
+        let (t, w) = load_or_bundled(&env, None);
+        assert_eq!(t.len(), PriceTable::bundled().len());
+        let w = w.expect("a warning");
+        assert!(w.starts_with("cannot load prices: "), "{w}");
+        assert!(
+            w.contains(&file.display().to_string()),
+            "names the file: {w}"
+        );
+        assert!(w.ends_with("; the bundled prices are used"), "{w}");
+
+        // An unreadable file (a directory) as well.
+        let (_, w) = load_or_bundled(&env, Some(dir.path()));
+        assert!(w.is_some());
     }
 
     #[test]

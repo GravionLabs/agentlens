@@ -1,9 +1,10 @@
 use agentlens_core::adapter::{Registry, SessionFilter};
-use agentlens_core::analyzers::advice::{AdviceReport, Finding, FindingKind};
+use agentlens_core::analyzers::advice::{AdviceReport, Confidence, Finding, FindingKind};
 use agentlens_core::env::Env;
 use agentlens_core::export;
 use agentlens_core::model::Source;
 use agentlens_core::pipeline::advice_run;
+use agentlens_core::prices;
 use agentlens_core::tokens::TokenEstimator;
 use anyhow::Result;
 
@@ -21,6 +22,25 @@ fn title(f: &Finding) -> String {
         FindingKind::CostlyMcpServers => format!("Costly MCP servers ({})", f.count),
         FindingKind::ContextSize => format!("Context size ({})", f.count),
     }
+}
+
+/// "Could save ~$1.23 (~45,678 tokens, estimated)." or `None` for a finding without a saving.
+fn saving(f: &Finding, display: output::Display) -> Option<String> {
+    let impact = &f.impact;
+    if impact.saving.count == 0 {
+        return None;
+    }
+    let confidence = match impact.confidence {
+        Confidence::Measured => "measured",
+        Confidence::Estimated => "estimated",
+        Confidence::Inferred => "inferred",
+    };
+    let tokens = display.tokens(impact.saving);
+    Some(match impact.saving_usd {
+        // Always computed from the price table: an estimate.
+        Some(usd) => format!("Could save ~${usd:.2} ({tokens} tokens, {confidence})."),
+        None => format!("Could save {tokens} tokens ({confidence}; no price known)."),
+    })
 }
 
 fn print(report: &AdviceReport, display: output::Display) {
@@ -41,7 +61,10 @@ fn print(report: &AdviceReport, display: output::Display) {
         return;
     }
     for f in &report.findings {
-        println!("\n{}", title(f));
+        println!("\n{}. {}", f.rank, title(f));
+        if let Some(saving) = saving(f, display) {
+            println!("{saving}");
+        }
         println!("{}", f.explanation);
         if let Some(total) = f.total {
             let baseline = f
@@ -93,7 +116,9 @@ fn print(report: &AdviceReport, display: output::Display) {
             println!("Note: {note}");
         }
     }
-    println!("\n~ estimated; no ~ means measured.");
+    println!(
+        "\nFindings are ranked by what they could save; ~ estimated, no ~ means measured; inferred savings rest on an assumption."
+    );
 }
 
 pub fn run(
@@ -104,7 +129,12 @@ pub fn run(
     estimator: &dyn TokenEstimator,
     display: output::Display,
 ) -> Result<()> {
-    let run = advice_run(registry, env, filter, only, estimator);
+    // Advice only ranks by price: a broken price file falls back to the bundled table (fail soft).
+    let (prices, price_warning) = prices::load_or_bundled(env, None);
+    if let Some(w) = &price_warning {
+        eprintln!("warning: {w}");
+    }
+    let run = advice_run(registry, env, filter, only, estimator, &prices);
     match display.format {
         Format::Json => println!("{}", serde_json::to_string_pretty(&run.report)?),
         Format::Csv => print!("{}", export::csv::advice(&run.report)?),
