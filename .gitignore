@@ -23,5 +23,5 @@ site/.vitepress/cache
 # APM dependencies
 apm_modules/
 
-# dromos worktrees
+# git worktrees of the deliver workflow
 /.worktrees/

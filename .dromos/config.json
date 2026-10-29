@@ -1,7 +1,0 @@
-{
-  "format": "pnpm run format && cargo fmt --all",
-  "test": {
-    "full": "cargo fmt --all --check && cargo clippy --workspace --exclude agentlens-app --all-targets -- -D warnings && cargo test --workspace --exclude agentlens-app && pnpm lint && pnpm format:check && pnpm test && pnpm build"
-  },
-  "allow": ["cargo"]
-}

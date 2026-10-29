@@ -49,7 +49,7 @@ For the application: `pnpm lint && pnpm format:check && pnpm test && pnpm build`
 - Hierarchy: Epic → Feature → PBI → Task, linked as native sub-issues; dependencies as "blocked by". Titles carry the level prefix (`[PBI] feat: …`). The shared `issues.yml` workflow of `GravionLabs/ci` sets it from the level label.
 - One branch and one PR per PBI; the PR body says `Closes #<PBI>` and lists the task numbers. Conventional commit messages.
 - Work is integrated on `release/next`: every PBI branch is cut from it and its PR targets it; `main` only receives a finished `release/next` (the `github-release` skill cuts and finishes it). Milestones are named after the version the release gets.
-- PBIs can run unattended through [dromos](https://github.com/GravionLabs/dromos) (`dromos run pbi <nr>`): it takes `release/next` as base, works in a git-ignored worktree under `.worktrees/`, and reads `.dromos/config.json` for the format step, the verification commands of this file and `cargo` on top of its allowlist. The role skills (`planner`, `implementation`, `code-review`, `retro`) come from apm-hub 3; `apm.yml` installs the Angular and Rust stack skills.
+- The role skills (`planner`, `implementation`, `code-review`, `retro`) come from apm-hub 3; `apm.yml` installs the Angular and Rust stack skills. Worktrees go to the git-ignored `.worktrees/`.
 - Decisions get the `needs-decision` label. Write the ADR in `docs/adr/` with the next free number and Status: Proposed, then wait for the owner.
 
 ## Releases
