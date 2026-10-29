@@ -86,14 +86,10 @@ pub fn run(cli: Cli) -> Result<()> {
             flow::run(&registry, &env, &filter, &cli.source, section, top, display)
         }
         Command::Unused { days, all } => {
-            let mut filter = filter;
-            if cli.since.is_none() {
-                // The period ends at --until, or now.
-                filter.since = Some(
-                    agentlens_core::since::window_start(days, filter.until, jiff::Timestamp::now())
-                        .map_err(anyhow::Error::msg)?,
-                );
-            }
+            // The period ends at --until, or now.
+            let filter =
+                agentlens_core::api::with_unused_window(filter, days, jiff::Timestamp::now())
+                    .map_err(anyhow::Error::msg)?;
             unused::run(&registry, &env, &filter, &cli.source, est, all, display)
         }
         Command::Report { html } => report::run(&registry, &env, &filter, &cli.source, est, &html),
