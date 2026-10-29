@@ -5,6 +5,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.11.2] — 2026-10-29
+
+### Documentation
+- Integrate on release/next and run CI on pull requests into it (#425)
+- Roadmap for 0.12 to 1.0 after the move to apm-hub 3 (#438)
+- Roadmap for 0.12 to 1.0 after the move to apm-hub 3
+- Keep 0.12 small, periods and trends move to 0.13
+
+
 ## [0.11.0] — 2026-10-28
 
 ### Bug Fixes
