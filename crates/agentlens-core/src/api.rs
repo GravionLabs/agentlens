@@ -305,7 +305,7 @@ pub struct CostData {
     pub what_if: Option<WhatIfReport>,
 }
 
-/// `by` is `model`, `project`, `branch` or `issue`; `what_if` is a model id prefix.
+/// `by` is `model`, `project`, `branch`, `issue` or `session`; `what_if` is a model id prefix.
 pub fn cost(
     ctx: &Context,
     f: &Filters,
@@ -317,6 +317,7 @@ pub fn cost(
         "project" => Grouping::Project,
         "branch" => Grouping::Branch,
         "issue" => Grouping::Issue,
+        "session" => Grouping::Session,
         other => return Err(format!("unknown grouping `{other}`")),
     };
     let (filter, only) = f.resolve(Timestamp::now())?;

@@ -63,6 +63,13 @@ export const GLOSSARY: GlossaryEntry[] = [
     long: "Subagents work in their own context. Their requests are counted separately from the main agent's, which is why context size only covers main-agent requests.",
   },
   {
+    id: "subagent-share",
+    term: "Subagent share",
+    group: "Cost",
+    short: "The part of a session's cost that its subagents caused.",
+    long: "Cost of the requests made by subagents divided by the cost of all requests of the session (`cost --by session`). It is n/a when the session has no priced request, because an unknown cost is not zero.",
+  },
+  {
     id: "context",
     term: "Static context",
     group: "Context",

@@ -88,6 +88,10 @@ An assumption: everything that happens until something else takes over is attrib
 
 ## Cost
 
+### Subagent share
+
+Cost of the requests made by subagents divided by the cost of all requests of the session (`cost --by session`). It is n/a when the session has no priced request, because an unknown cost is not zero.
+
 ### Cost
 
 Reported cost is shown as is. Otherwise the tokens are priced with the price table. Cache writes are priced as 5-minute writes. Add prices for unknown models to ~/.config/agentlens/prices.json.

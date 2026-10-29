@@ -1,0 +1,170 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "schema_version": 2,
+  "data": {
+    "report": {
+      "rows": [
+        {
+          "key": "context",
+          "requests": 3,
+          "input": 40,
+          "output": 15,
+          "cache_read": 1000,
+          "cache_write": 1850,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 3,
+          "premium_requests": 0.0
+        },
+        {
+          "key": "cp-1",
+          "requests": 1,
+          "input": 99999,
+          "output": 9999,
+          "cache_read": 0,
+          "cache_write": 0,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 1,
+          "premium_requests": 1.0
+        },
+        {
+          "key": "skill_files",
+          "requests": 6,
+          "input": 60,
+          "output": 30,
+          "cache_read": 600,
+          "cache_write": 0,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 6,
+          "premium_requests": 0.0
+        },
+        {
+          "key": "typed_skill",
+          "requests": 1,
+          "input": 10,
+          "output": 5,
+          "cache_read": 100,
+          "cache_write": 0,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 1,
+          "premium_requests": 0.0
+        }
+      ],
+      "total": {
+        "key": "total",
+        "requests": 11,
+        "input": 100109,
+        "output": 10049,
+        "cache_read": 1700,
+        "cache_write": 1850,
+        "measured_usd": 0.0,
+        "estimated_usd": 0.0,
+        "unpriced_requests": 11,
+        "premium_requests": 1.0
+      },
+      "unpriced_models": {
+        "claude-test-1": 10,
+        "model-a": 1
+      },
+      "sessions": [
+        {
+          "source": "claude-code",
+          "session": "context",
+          "project": "/work/demo",
+          "started_at": "2026-10-02T09:00:00Z",
+          "duration_ms": 30000,
+          "issue": null,
+          "models": [
+            "claude-test-1"
+          ],
+          "requests": 3,
+          "main_requests": 3,
+          "peak_context": 1060,
+          "input": 40,
+          "cache_read": 1000,
+          "cache_write": 1850,
+          "output": 15,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 3,
+          "subagent_usd": 0.0
+        },
+        {
+          "source": "copilot-cli",
+          "session": "cp-1",
+          "project": "/work/demo",
+          "started_at": "2026-07-15T04:00:00Z",
+          "duration_ms": 10000,
+          "issue": null,
+          "models": [
+            "model-a"
+          ],
+          "requests": 1,
+          "main_requests": 1,
+          "peak_context": 99999,
+          "input": 99999,
+          "cache_read": 0,
+          "cache_write": 0,
+          "output": 9999,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 1,
+          "subagent_usd": 0.0
+        },
+        {
+          "source": "claude-code",
+          "session": "skill_files",
+          "project": "/work/demo",
+          "started_at": "2026-10-02T10:00:00Z",
+          "duration_ms": 6000,
+          "issue": null,
+          "models": [
+            "claude-test-1"
+          ],
+          "requests": 6,
+          "main_requests": 6,
+          "peak_context": 110,
+          "input": 60,
+          "cache_read": 600,
+          "cache_write": 0,
+          "output": 30,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 6,
+          "subagent_usd": 0.0
+        },
+        {
+          "source": "claude-code",
+          "session": "typed_skill",
+          "project": "/work/demo",
+          "started_at": "2026-10-02T11:00:00Z",
+          "duration_ms": 120000,
+          "issue": null,
+          "models": [
+            "claude-test-1"
+          ],
+          "requests": 1,
+          "main_requests": 1,
+          "peak_context": 110,
+          "input": 10,
+          "cache_read": 100,
+          "cache_write": 0,
+          "output": 5,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 1,
+          "subagent_usd": 0.0
+        }
+      ]
+    },
+    "what_if": null
+  },
+  "warnings": 2,
+  "errors": []
+}

@@ -112,6 +112,10 @@ fn the_json_of_every_analysis_keeps_its_shape() {
         text(&home, &api::cost(&ctx, &all(), "model", None).unwrap()),
     );
     snap(
+        "cost_by_session",
+        text(&home, &api::cost(&ctx, &all(), "session", None).unwrap()),
+    );
+    snap(
         "cost_what_if",
         text(
             &home,
