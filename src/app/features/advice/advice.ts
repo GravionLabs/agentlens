@@ -2,7 +2,7 @@ import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed } from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { exactTokens, number, tokens } from "../../core/format";
+import { exactTokens, number, tokens, usd } from "../../core/format";
 import type { AdviceItem, AdviceReport, Finding, FindingKind } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
 import { Status } from "../../ui/status";
@@ -59,6 +59,16 @@ export function findingTotal(f: Finding): string | null {
   return `Together they ${what} ${tokens(f.total.count, !f.total.measured)} tokens${share}${overall}.`;
 }
 
+/** “Could save ~$1.23 (~45,678 tokens, estimated).”, or null for a finding without a saving. */
+export function findingSaving(f: Finding): string | null {
+  const { saving, saving_usd, confidence } = f.impact;
+  if (saving.count === 0) return null;
+  const amount = tokens(saving.count, !saving.measured);
+  return saving_usd === null
+    ? `Could save ${amount} tokens (${confidence}; no price known).`
+    : `Could save ${usd(saving_usd, true)} (${amount} tokens, ${confidence}).`;
+}
+
 @Component({
   selector: "app-advice",
   imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
@@ -74,8 +84,10 @@ export function findingTotal(f: Finding): string | null {
         <p>
           Findings made from the <app-term id="baseline">baseline</app-term>, load and
           <app-term id="carry">carry</app-term> of your skills. No model is involved: the same
-          numbers always give the same findings. <span class="est">~</span> marks estimates; a
-          finding says what it cannot know.
+          numbers always give the same findings, ranked by what each could have
+          <app-term id="saving">saved</app-term> (its <app-term id="impact">impact</app-term>, with
+          its <app-term id="confidence">confidence</app-term>). <span class="est">~</span> marks
+          estimates; a finding says what it cannot know.
         </p>
       </app-page-header>
       <app-status
@@ -97,7 +109,14 @@ export function findingTotal(f: Finding): string | null {
         </p>
         @for (f of r.findings; track f.kind) {
           <section class="finding">
-            <h3>{{ title(f.kind) }} ({{ f.count }})</h3>
+            <h3>
+              <span class="rank">{{ f.rank }}.</span> {{ title(f.kind) }} ({{ f.count }})
+            </h3>
+            @if (saving(f); as s) {
+              <p class="saving" [attr.title]="exact(f.impact.saving.count)">
+                <strong>{{ s }}</strong>
+              </p>
+            }
             <p class="muted">{{ f.explanation }}</p>
             @if (total(f); as t) {
               <p class="total" [attr.title]="exact(f.total?.count)">{{ t }}</p>
@@ -148,8 +167,12 @@ export function findingTotal(f: Finding): string | null {
       margin: 0 0 4px;
     }
     .total,
+    .saving,
     .action {
       margin: 6px 0;
+    }
+    .rank {
+      color: var(--muted);
     }
     .note {
       margin: 2px 0;
@@ -167,6 +190,7 @@ export class Advice {
   protected readonly exact = exactTokens;
   protected readonly title = findingTitle;
   protected readonly total = findingTotal;
+  protected readonly saving = findingSaving;
 
   protected readonly n = number;
   protected readonly views = (items: AdviceItem[]): ItemView[] => items.map(itemView);

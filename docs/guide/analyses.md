@@ -46,6 +46,24 @@ What to change to save tokens, made from the skill numbers above. No model is in
 
 Every sum is also given as a share of all tokens of the period (`share_of_total_tokens`, input, output and cache together), so that a small share is not read as the main lever (the carry of **Large skill bodies** now has a sum and a share too; the skill report's `totals` holds the period's request, subagent and context numbers): the descriptions of all installed skills are often well under 1% of the tokens, while the size of the context decides the rest. The **Context size** finding is that scale: it ends with the fixed advice to start new work in a fresh session, to clear the context between tasks and to delegate exploration and review to subagents, whose context stays separate.
 
+### Ranking by impact
+
+Every finding has an *impact*: what its action could have saved in the period (`saving`, in tokens), the same in USD (`saving_usd`) and a `confidence` (`measured`, `estimated` or `inferred`). The saving is what the action saves, not what the finding is about: the **Context size** finding is about all the context of the period, its saving only the part a fresh session would have avoided. The findings come sorted by `saving_usd`, largest first, and `rank` numbers them from 1; equal savings keep the order of the table above. Findings without a saving come last, in that order.
+
+| Kind | Saving | Priced as | Confidence |
+| :-- | :-- | :-- | :-- |
+| **Unused skills** | the listing tokens of all unused skills (= `total`) | cache read | measured if all listings were measured, else estimated |
+| **Listed but loaded by hand** | the listing tokens (= `total`) | cache read | as above |
+| **Costly descriptions** | what shortening to 40 tokens would have saved (= `total`) | cache read | estimated |
+| **Large skill bodies** | per skill, the body above 2,000 tokens (its load divided by its invocations) times the requests that carried it | split like the skill's own carry into cache read and uncached (priced as input) | estimated |
+| **Costly MCP servers** | per server, its static context in the (client, project) groups in which none of its tools was called; a group with a call saves nothing | cache read | measured if the sizes were, else estimated |
+| **Context size** | per session, on every main-agent request of at least 200,000 tokens, the input above the size of the session's first main-agent request (never below 0) | each request in its own input : cache read : cache write ratio, with its own model | inferred |
+| **Used but not installed**, **Work on a large context** | none (`saving` 0, `saving_usd` null) | – | – |
+
+`saving_usd` is always an estimate, computed from the [price table](#cost) and never reported by a client, so the CLI and the application show it with a tilde. Where a finding knows its requests (**Context size**), each request is priced with its own model. The others are priced with the period's average price per token class (input, cache read, cache write), each class weighted with its tokens over all priced requests. Requests without a price are left out and a note says how many. Without any price `saving_usd` is null and the order falls back to the tokens weighted by class: input 1, cache write 1.25, cache read 0.1.
+
+An `inferred` saving rests on an assumption: for **Context size**, that the work on the large requests could have run in a fresh session that started at the size of the session's first request. The constants are `DESCRIPTION_TARGET_TOKENS` (40), `BODY_TARGET_TOKENS` (2,000), `LARGE_CONTEXT_TOKENS` (200,000) and the weights `INPUT_WEIGHT`, `CACHE_WRITE_WEIGHT` and `CACHE_READ_WEIGHT` (1, 1.25 and 0.1). The CLI table puts the rank before each finding and its saving below the title (`Could save ~$1.23 (~45,678 tokens, estimated).`); `--format csv` repeats `rank`, `saving_tokens`, `saving_usd` and `confidence` on every row.
+
 A finding says what it cannot know: a skill that is needed only now and then may be worth keeping although it shows up as unused, and the work after a skill is activity, not cost the skill caused. The CLI prints the findings as a table (`--format json` and `--format csv` have all of them), the application has an **Advice** view, and the [MCP server](mcp-server.md) has an `advice` tool, so an agent gets the findings and only has to explain and act on them.
 
 ## Context
