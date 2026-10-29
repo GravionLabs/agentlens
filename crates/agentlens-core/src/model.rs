@@ -54,7 +54,11 @@ impl Source {
 pub struct Session {
     pub id: String,
     pub source: Source,
+    /// The main repository when the session ran in a git worktree of it.
     pub project_dir: Option<PathBuf>,
+    /// The worktree the session ran in, if `project_dir` was resolved from it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree_dir: Option<PathBuf>,
     pub branch: Option<String>,
     /// The main model, if the client records one.
     pub model: Option<String>,
@@ -68,6 +72,7 @@ impl Session {
             id: id.into(),
             source,
             project_dir: None,
+            worktree_dir: None,
             branch: None,
             model: None,
             started_at: None,
