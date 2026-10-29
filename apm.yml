@@ -3,7 +3,11 @@ version: 1.0.0
 dependencies:
   apm:
     - GravionLabs/apm-hub/packages/ng#>=3.0.0
-    - GravionLabs/apm-hub/packages/rust#>=3.0.0
+    - GravionLabs/apm-hub/packages/rust#release/next
+    - GravionLabs/apm-hub/packages/ts#release/next
+    - GravionLabs/apm-hub/packages/delivery#release/next
+    - GravionLabs/apm-hub/packages/shared#release/next
+    - GravionLabs/apm-hub/packages/github#release/next
 targets:
   - claude
   - copilot

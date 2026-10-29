@@ -1,13 +1,196 @@
-lockfile_version: '2'
+lockfile_version: '1'
 apm_version: 0.35.0
 dependencies:
 - repo_url: gravionlabs/apm-hub
   materialization_repo_url: GravionLabs/apm-hub
+  name: delivery
+  host: github.com
+  resolved_commit: 7cf21fe6f28153691aea2f35fedd24a9d1af764b
+  resolved_ref: release/next
+  version: 3.2.0
+  virtual_path: packages/delivery
+  is_virtual: true
+  package_type: apm_package
+  deployed_files:
+  - .agents/skills/apm-install
+  - .agents/skills/apm-install/SKILL.md
+  - .agents/skills/apm-install/references/after-install.md
+  - .agents/skills/apm-install/references/packages.md
+  - .agents/skills/apm-install/scripts/Install-HubPackages.ps1
+  - .agents/skills/deliver
+  - .agents/skills/deliver/SKILL.md
+  - .agents/skills/deliver/references/roles.md
+  - .agents/skills/deliver/workflow.js
+  - .agents/skills/grill-me
+  - .agents/skills/grill-me/SKILL.md
+  - .agents/skills/planner
+  - .agents/skills/planner/SKILL.md
+  - .agents/skills/planner/references/invariants.md
+  - .agents/skills/planner/references/plan-schema.md
+  - .agents/skills/planner/references/questions.md
+  - .agents/skills/planner/references/slicing.md
+  - .agents/skills/planner/schema/plan.schema.json
+  - .agents/skills/retro
+  - .agents/skills/retro/SKILL.md
+  - .agents/skills/retro/references/categories.md
+  - .agents/skills/retro/references/metrics-sources.md
+  - .claude/skills/apm-install
+  - .claude/skills/apm-install/SKILL.md
+  - .claude/skills/apm-install/references/after-install.md
+  - .claude/skills/apm-install/references/packages.md
+  - .claude/skills/apm-install/scripts/Install-HubPackages.ps1
+  - .claude/skills/deliver
+  - .claude/skills/deliver/SKILL.md
+  - .claude/skills/deliver/references/roles.md
+  - .claude/skills/deliver/workflow.js
+  - .claude/skills/grill-me
+  - .claude/skills/grill-me/SKILL.md
+  - .claude/skills/planner
+  - .claude/skills/planner/SKILL.md
+  - .claude/skills/planner/references/invariants.md
+  - .claude/skills/planner/references/plan-schema.md
+  - .claude/skills/planner/references/questions.md
+  - .claude/skills/planner/references/slicing.md
+  - .claude/skills/planner/schema/plan.schema.json
+  - .claude/skills/retro
+  - .claude/skills/retro/SKILL.md
+  - .claude/skills/retro/references/categories.md
+  - .claude/skills/retro/references/metrics-sources.md
+  deployed_file_hashes:
+    .agents/skills/apm-install/SKILL.md: sha256:642d469639d0b3f37ca12800f4d2d3fdd83caf51078f76dde82df53ec5f9741d
+    .agents/skills/apm-install/references/after-install.md: sha256:fdd95f46d4fa84270bde0be26173201c077f619eda66d6569908bb6bbc2bffc1
+    .agents/skills/apm-install/references/packages.md: sha256:cb0efdaa6e12c5b8c2d24f51ac354db22c903940496a4af7372865c6079aaf6f
+    .agents/skills/apm-install/scripts/Install-HubPackages.ps1: sha256:67ae285e9392262c12a5318eed183f3d2b4ea7f96d01286001a30b0ff5ab0f75
+    .agents/skills/deliver/SKILL.md: sha256:7a6171066a43c399c98bb7991feb20f413922762841af25a953c1091d61f1270
+    .agents/skills/deliver/references/roles.md: sha256:a7cc34b5e5e49c0112cda97d0a145e9d4895d46f753fa59bc58aa0acfd421b79
+    .agents/skills/deliver/workflow.js: sha256:4ee0f793b18255672877c0d1d2148be7e0f253f19fcb215a07f8e6cc1685c964
+    .agents/skills/grill-me/SKILL.md: sha256:b2244659d50cf0cb72d716e3f33e363c77814c489d0b7fe60ac0d1ac70bc9c5b
+    .agents/skills/planner/SKILL.md: sha256:2f07447c3c7fd6ed54614b435bd4485205ecadd0df524cb1efb6ac837181fdf9
+    .agents/skills/planner/references/invariants.md: sha256:853ae6e91a7fb6c1f46b5905972484272480fee455f4936f0be21e5d339b0a3f
+    .agents/skills/planner/references/plan-schema.md: sha256:a1af0f9285eb2b9aa162c0698c69813a8b1943e19399cf07d0f573f8be53930c
+    .agents/skills/planner/references/questions.md: sha256:bc9d5b9a8d8586c1698eefabee7a4ca14aa6cfc9085c58c97331fc35eaca5b87
+    .agents/skills/planner/references/slicing.md: sha256:edb4a9eab628f3fa29351386a2fcfa8277be09c5e7507db4dfecb41ad2625791
+    .agents/skills/planner/schema/plan.schema.json: sha256:417de88d7c226265263415388f0141c38b5756d6a8a1b629f450aa1cbfe672fd
+    .agents/skills/retro/SKILL.md: sha256:2f657736b4b7d4d85c1aa0619a3fcbd0ef50b336cc208c64c7aefe64757bce25
+    .agents/skills/retro/references/categories.md: sha256:9aa6518eb8170d19c894fac97ef15ed809e32c3dcf4952b29c00cb8b40065012
+    .agents/skills/retro/references/metrics-sources.md: sha256:c56dce71d563a21a937b11a571098a714187a8e2c5fe1b67e78516a56241e776
+    .claude/skills/apm-install/SKILL.md: sha256:642d469639d0b3f37ca12800f4d2d3fdd83caf51078f76dde82df53ec5f9741d
+    .claude/skills/apm-install/references/after-install.md: sha256:fdd95f46d4fa84270bde0be26173201c077f619eda66d6569908bb6bbc2bffc1
+    .claude/skills/apm-install/references/packages.md: sha256:cb0efdaa6e12c5b8c2d24f51ac354db22c903940496a4af7372865c6079aaf6f
+    .claude/skills/apm-install/scripts/Install-HubPackages.ps1: sha256:67ae285e9392262c12a5318eed183f3d2b4ea7f96d01286001a30b0ff5ab0f75
+    .claude/skills/deliver/SKILL.md: sha256:7a6171066a43c399c98bb7991feb20f413922762841af25a953c1091d61f1270
+    .claude/skills/deliver/references/roles.md: sha256:a7cc34b5e5e49c0112cda97d0a145e9d4895d46f753fa59bc58aa0acfd421b79
+    .claude/skills/deliver/workflow.js: sha256:4ee0f793b18255672877c0d1d2148be7e0f253f19fcb215a07f8e6cc1685c964
+    .claude/skills/grill-me/SKILL.md: sha256:b2244659d50cf0cb72d716e3f33e363c77814c489d0b7fe60ac0d1ac70bc9c5b
+    .claude/skills/planner/SKILL.md: sha256:2f07447c3c7fd6ed54614b435bd4485205ecadd0df524cb1efb6ac837181fdf9
+    .claude/skills/planner/references/invariants.md: sha256:853ae6e91a7fb6c1f46b5905972484272480fee455f4936f0be21e5d339b0a3f
+    .claude/skills/planner/references/plan-schema.md: sha256:a1af0f9285eb2b9aa162c0698c69813a8b1943e19399cf07d0f573f8be53930c
+    .claude/skills/planner/references/questions.md: sha256:bc9d5b9a8d8586c1698eefabee7a4ca14aa6cfc9085c58c97331fc35eaca5b87
+    .claude/skills/planner/references/slicing.md: sha256:edb4a9eab628f3fa29351386a2fcfa8277be09c5e7507db4dfecb41ad2625791
+    .claude/skills/planner/schema/plan.schema.json: sha256:417de88d7c226265263415388f0141c38b5756d6a8a1b629f450aa1cbfe672fd
+    .claude/skills/retro/SKILL.md: sha256:2f657736b4b7d4d85c1aa0619a3fcbd0ef50b336cc208c64c7aefe64757bce25
+    .claude/skills/retro/references/categories.md: sha256:9aa6518eb8170d19c894fac97ef15ed809e32c3dcf4952b29c00cb8b40065012
+    .claude/skills/retro/references/metrics-sources.md: sha256:c56dce71d563a21a937b11a571098a714187a8e2c5fe1b67e78516a56241e776
+  content_hash: sha256:0cb1cfdc514e360a1fe80807d2fd9309f6829141deec32189717ca0235630dc7
+  extensions:
+    x-skills:
+    - apm-install
+    - deliver
+    - grill-me
+    - planner
+    - retro
+- repo_url: gravionlabs/apm-hub
+  materialization_repo_url: GravionLabs/apm-hub
+  name: github
+  host: github.com
+  resolved_commit: 7cf21fe6f28153691aea2f35fedd24a9d1af764b
+  resolved_ref: release/next
+  version: 3.2.0
+  virtual_path: packages/github
+  is_virtual: true
+  package_type: apm_package
+  deployed_files:
+  - .agents/skills/github-issue
+  - .agents/skills/github-issue/SKILL.md
+  - .agents/skills/github-issue/references/conventional-commits.md
+  - .agents/skills/github-issue/references/create-from-plan.md
+  - .agents/skills/github-issue/references/release-branches.md
+  - .agents/skills/github-issue/references/standalone-issue.md
+  - .agents/skills/github-issue/references/sub-issues.md
+  - .agents/skills/github-issue/references/task-issues.md
+  - .agents/skills/github-pull-request
+  - .agents/skills/github-pull-request/SKILL.md
+  - .agents/skills/github-pull-request/references/release-mode.md
+  - .agents/skills/github-release
+  - .agents/skills/github-release/SKILL.md
+  - .agents/skills/github-release/references/cliff-setup.md
+  - .agents/skills/github-release/references/merged-label.md
+  - .agents/skills/github-release/scripts/Get-ReleaseState.ps1
+  - .agents/skills/github-release/templates/cliff.toml
+  - .agents/skills/github-release/templates/release-branch.yml
+  - .claude/skills/github-issue
+  - .claude/skills/github-issue/SKILL.md
+  - .claude/skills/github-issue/references/conventional-commits.md
+  - .claude/skills/github-issue/references/create-from-plan.md
+  - .claude/skills/github-issue/references/release-branches.md
+  - .claude/skills/github-issue/references/standalone-issue.md
+  - .claude/skills/github-issue/references/sub-issues.md
+  - .claude/skills/github-issue/references/task-issues.md
+  - .claude/skills/github-pull-request
+  - .claude/skills/github-pull-request/SKILL.md
+  - .claude/skills/github-pull-request/references/release-mode.md
+  - .claude/skills/github-release
+  - .claude/skills/github-release/SKILL.md
+  - .claude/skills/github-release/references/cliff-setup.md
+  - .claude/skills/github-release/references/merged-label.md
+  - .claude/skills/github-release/scripts/Get-ReleaseState.ps1
+  - .claude/skills/github-release/templates/cliff.toml
+  - .claude/skills/github-release/templates/release-branch.yml
+  deployed_file_hashes:
+    .agents/skills/github-issue/SKILL.md: sha256:9fe213ab97d0cd6a4b4df218811a847c11af6a7abdf69301d9eb44df6ee2c1c5
+    .agents/skills/github-issue/references/conventional-commits.md: sha256:26ba297cbe22b98ba9f9761f00e63182c53da88b190db70a44ce7fca807a08c3
+    .agents/skills/github-issue/references/create-from-plan.md: sha256:2c692c3183d0bdc92aa1aee15beae4c789a7696fe1bbb60d49768df06d48330c
+    .agents/skills/github-issue/references/release-branches.md: sha256:7c3f7e83adf20542d9626532ab0cb4835fd32f2a9c1296094b4627297ef72d10
+    .agents/skills/github-issue/references/standalone-issue.md: sha256:dda4cb4efbab200e9032800ff6a743ae104eb323886142244bab0bac0bd46513
+    .agents/skills/github-issue/references/sub-issues.md: sha256:efa89efdc8e2f25ce2a9b0162ea0e07cd35333451d7ab72c84c108534b49f820
+    .agents/skills/github-issue/references/task-issues.md: sha256:4d14945596e2ae348acfac00b8624c870320841d86c449d6311286ae0473496f
+    .agents/skills/github-pull-request/SKILL.md: sha256:0fdf33259fc2878b941c34397ec8705308d21c846062ced5948f21b616ef3272
+    .agents/skills/github-pull-request/references/release-mode.md: sha256:5d401d42550f5910d93c5abbe33dc38a7f6d14b831d1262a6dbb0a4744194d9b
+    .agents/skills/github-release/SKILL.md: sha256:38c9814762047803cc997d43f6938d5d3e56c3cf596c86e5d55fc12fb04423f0
+    .agents/skills/github-release/references/cliff-setup.md: sha256:1db92cf148db2936289d6e7ccb0c70bd4cbac776f9770e9a2a458fffb30114e8
+    .agents/skills/github-release/references/merged-label.md: sha256:4d781d0038e4205cd3324e2d1ac51493816a9d2f2b6f34b773f5ae09981fca68
+    .agents/skills/github-release/scripts/Get-ReleaseState.ps1: sha256:f9dff144f3ebf690da2d97fb00814471ad77fdfd602309af44d958a5ef7d1254
+    .agents/skills/github-release/templates/cliff.toml: sha256:b08f37151ff46f5c61506151d889622538cdd7bee4ef9faedbc8e580811385a5
+    .agents/skills/github-release/templates/release-branch.yml: sha256:6b56fca2235bbcbcd657a8372e8d9b4e2ec8fc795368f2f95c57586061443300
+    .claude/skills/github-issue/SKILL.md: sha256:9fe213ab97d0cd6a4b4df218811a847c11af6a7abdf69301d9eb44df6ee2c1c5
+    .claude/skills/github-issue/references/conventional-commits.md: sha256:26ba297cbe22b98ba9f9761f00e63182c53da88b190db70a44ce7fca807a08c3
+    .claude/skills/github-issue/references/create-from-plan.md: sha256:2c692c3183d0bdc92aa1aee15beae4c789a7696fe1bbb60d49768df06d48330c
+    .claude/skills/github-issue/references/release-branches.md: sha256:7c3f7e83adf20542d9626532ab0cb4835fd32f2a9c1296094b4627297ef72d10
+    .claude/skills/github-issue/references/standalone-issue.md: sha256:dda4cb4efbab200e9032800ff6a743ae104eb323886142244bab0bac0bd46513
+    .claude/skills/github-issue/references/sub-issues.md: sha256:efa89efdc8e2f25ce2a9b0162ea0e07cd35333451d7ab72c84c108534b49f820
+    .claude/skills/github-issue/references/task-issues.md: sha256:4d14945596e2ae348acfac00b8624c870320841d86c449d6311286ae0473496f
+    .claude/skills/github-pull-request/SKILL.md: sha256:0fdf33259fc2878b941c34397ec8705308d21c846062ced5948f21b616ef3272
+    .claude/skills/github-pull-request/references/release-mode.md: sha256:5d401d42550f5910d93c5abbe33dc38a7f6d14b831d1262a6dbb0a4744194d9b
+    .claude/skills/github-release/SKILL.md: sha256:38c9814762047803cc997d43f6938d5d3e56c3cf596c86e5d55fc12fb04423f0
+    .claude/skills/github-release/references/cliff-setup.md: sha256:1db92cf148db2936289d6e7ccb0c70bd4cbac776f9770e9a2a458fffb30114e8
+    .claude/skills/github-release/references/merged-label.md: sha256:4d781d0038e4205cd3324e2d1ac51493816a9d2f2b6f34b773f5ae09981fca68
+    .claude/skills/github-release/scripts/Get-ReleaseState.ps1: sha256:f9dff144f3ebf690da2d97fb00814471ad77fdfd602309af44d958a5ef7d1254
+    .claude/skills/github-release/templates/cliff.toml: sha256:b08f37151ff46f5c61506151d889622538cdd7bee4ef9faedbc8e580811385a5
+    .claude/skills/github-release/templates/release-branch.yml: sha256:6b56fca2235bbcbcd657a8372e8d9b4e2ec8fc795368f2f95c57586061443300
+  content_hash: sha256:0a31793a651a75ad8d1ca940ea398b71fac41ee9b3ee960b803ded6c082a78b6
+  declared_license: MIT
+  extensions:
+    x-skills:
+    - github-issue
+    - github-pull-request
+    - github-release
+- repo_url: gravionlabs/apm-hub
+  materialization_repo_url: GravionLabs/apm-hub
   name: ng
   host: github.com
-  resolved_commit: 963096651950b54a0f7a6d9cecde471f84a45d1e
-  resolved_ref: v3.1.0
-  version: 3.1.0
+  resolved_commit: d1609a69c1908e4f1031bf05e33c75c591171e4b
+  resolved_ref: '>=3.0.0'
+  version: 3.2.0
   virtual_path: packages/ng
   is_virtual: true
   package_type: apm_package
@@ -105,10 +288,7 @@ dependencies:
     .claude/skills/ng-implementation/references/signal-store.md: sha256:9a0b3bcc68fa32de9a32c681705cd461051ade094b897dcbd584527c1db211f4
     .claude/skills/ng-implementation/references/version-notes.md: sha256:7c6544ac65bd38cf21a4d211b03745413df9815c9ccaec6bf1178a7eaec6b700
     .claude/skills/ng-test/SKILL.md: sha256:e03da5de3daf5518da13c6bc25418b18991400cebed2e6a1896743acf15543f0
-  content_hash: sha256:adc1629e43f9dc564fb63a5d3d6b4c0648294a48d3c20e2f3b7e10ea94949a31
-  constraint: '>=3.0.0'
-  resolved_tag: v3.1.0
-  resolved_at: '2026-10-28T08:02:13+00:00'
+  content_hash: sha256:bd7d19b8cf1538278a711e34f1a2b70be7985eceedf2499a60c75548b10252d4
   declared_license: MIT
   extensions:
     x-skills:
@@ -120,9 +300,9 @@ dependencies:
   materialization_repo_url: GravionLabs/apm-hub
   name: rust
   host: github.com
-  resolved_commit: 963096651950b54a0f7a6d9cecde471f84a45d1e
-  resolved_ref: v3.1.0
-  version: 3.1.0
+  resolved_commit: 7cf21fe6f28153691aea2f35fedd24a9d1af764b
+  resolved_ref: release/next
+  version: 3.2.0
   virtual_path: packages/rust
   is_virtual: true
   package_type: apm_package
@@ -152,15 +332,253 @@ dependencies:
     .claude/skills/rust-implementation/references/tauri.md: sha256:74925a7f7ee1dabeeb39718ad74e9cb04c489f571e02e36c878704925bba5720
     .claude/skills/rust-test/SKILL.md: sha256:a572a7df01e524e7431a9b8400131611359fd6f238ad927783e96e227aa4447b
     .claude/skills/rust-test/references/mocking-and-properties.md: sha256:16f852c641b37230e1ea7522102206ba105f3616341ad176ec459aa1b0e0c07a
-  content_hash: sha256:407b6527c1c138e7c38d1dbd57da6b1c069459c4b4b88b2f6b02a1c09e917ecf
-  constraint: '>=3.0.0'
-  resolved_tag: v3.1.0
-  resolved_at: '2026-10-28T08:02:44+00:00'
+  content_hash: sha256:3c7883da4388b44f0cdcc85e7f501b81d74c4be1ede7969a908993a96e5d9982
   declared_license: MIT
   extensions:
     x-skills:
     - rust-implementation
     - rust-test
+- repo_url: gravionlabs/apm-hub
+  materialization_repo_url: GravionLabs/apm-hub
+  name: shared
+  host: github.com
+  resolved_commit: 7cf21fe6f28153691aea2f35fedd24a9d1af764b
+  resolved_ref: release/next
+  version: 3.2.0
+  virtual_path: packages/shared
+  is_virtual: true
+  package_type: apm_package
+  deployed_files:
+  - .agents/skills/code-review
+  - .agents/skills/code-review/SKILL.md
+  - .agents/skills/code-review/references/reviewer-contract.md
+  - .agents/skills/code-review/schema/review.schema.json
+  - .agents/skills/detect-techstack
+  - .agents/skills/detect-techstack/SKILL.md
+  - .agents/skills/detect-techstack/scripts/Detect-TechStack.ps1
+  - .agents/skills/diagnose
+  - .agents/skills/diagnose/SKILL.md
+  - .agents/skills/diagnose/references/loops.md
+  - .agents/skills/implementation
+  - .agents/skills/implementation/SKILL.md
+  - .agents/skills/implementation/references/format.md
+  - .agents/skills/implementation/references/runner-contract.md
+  - .agents/skills/implementation/references/test-quality.md
+  - .agents/skills/implementation/schema/config.schema.json
+  - .agents/skills/implementation/schema/implementer.schema.json
+  - .agents/skills/implementation/scripts/Format-Changed.ps1
+  - .claude/skills/code-review
+  - .claude/skills/code-review/SKILL.md
+  - .claude/skills/code-review/references/reviewer-contract.md
+  - .claude/skills/code-review/schema/review.schema.json
+  - .claude/skills/detect-techstack
+  - .claude/skills/detect-techstack/SKILL.md
+  - .claude/skills/detect-techstack/scripts/Detect-TechStack.ps1
+  - .claude/skills/diagnose
+  - .claude/skills/diagnose/SKILL.md
+  - .claude/skills/diagnose/references/loops.md
+  - .claude/skills/implementation
+  - .claude/skills/implementation/SKILL.md
+  - .claude/skills/implementation/references/format.md
+  - .claude/skills/implementation/references/runner-contract.md
+  - .claude/skills/implementation/references/test-quality.md
+  - .claude/skills/implementation/schema/config.schema.json
+  - .claude/skills/implementation/schema/implementer.schema.json
+  - .claude/skills/implementation/scripts/Format-Changed.ps1
+  deployed_file_hashes:
+    .agents/skills/code-review/SKILL.md: sha256:e529fe7b22cc285c4b8008a267c8a7cded3a01b7c3b03eed2a17dbc6b4edfddc
+    .agents/skills/code-review/references/reviewer-contract.md: sha256:18bab7c56b33a9f169d53ca717e3f9eadf85fbcacc71a64d801aef968016576a
+    .agents/skills/code-review/schema/review.schema.json: sha256:1f694cd21365ad501db61b16e7887ea26e07eeecad27c2dbb9a7a0839633ff6b
+    .agents/skills/detect-techstack/SKILL.md: sha256:48c6b4d5e52ed0c4fd63f53402e1fb2e2e31528b873327c0472d04a99cfbbfcd
+    .agents/skills/detect-techstack/scripts/Detect-TechStack.ps1: sha256:782fe34f3fc9506f4e253c55250b5958edb6365c14da2dc8abb664408bbad5be
+    .agents/skills/diagnose/SKILL.md: sha256:747e6c54c29580b6432479816f6a813b1216e784ecabeb629e43b445920c36f4
+    .agents/skills/diagnose/references/loops.md: sha256:0af3aabf6e7bd69d5de7d8bc7e31596dbac1ae6274fd2b5d3273d16f38d1a787
+    .agents/skills/implementation/SKILL.md: sha256:cc3ad376c58adcdb96a441f25012ae80c125d6314b3d333d8c2c456daf184452
+    .agents/skills/implementation/references/format.md: sha256:d0846086efdf2e15fd65a99016076130e3a51f8afaebf673fc973ea7396d2a44
+    .agents/skills/implementation/references/runner-contract.md: sha256:bacb51fcacbad7abb744ef7d00599ee27a172230667772dc92da6977e98657e6
+    .agents/skills/implementation/references/test-quality.md: sha256:5f64308b29548143439201b43535276630e8fbd5d8787ea69c74a91f0dcfc1b3
+    .agents/skills/implementation/schema/config.schema.json: sha256:c6c2208db7f74ea6817f77f7c06fd41106a74b591ef7ba244240faba7c1613fb
+    .agents/skills/implementation/schema/implementer.schema.json: sha256:e4f726ec2a7a50edca1e1a8c62c8bf2f89baf986f6cdea2846b27927448374d1
+    .agents/skills/implementation/scripts/Format-Changed.ps1: sha256:9bacd9f6da74132135ecc574bb019c0852d350446ddfec9dca4e80ce9254d29b
+    .claude/skills/code-review/SKILL.md: sha256:e529fe7b22cc285c4b8008a267c8a7cded3a01b7c3b03eed2a17dbc6b4edfddc
+    .claude/skills/code-review/references/reviewer-contract.md: sha256:18bab7c56b33a9f169d53ca717e3f9eadf85fbcacc71a64d801aef968016576a
+    .claude/skills/code-review/schema/review.schema.json: sha256:1f694cd21365ad501db61b16e7887ea26e07eeecad27c2dbb9a7a0839633ff6b
+    .claude/skills/detect-techstack/SKILL.md: sha256:48c6b4d5e52ed0c4fd63f53402e1fb2e2e31528b873327c0472d04a99cfbbfcd
+    .claude/skills/detect-techstack/scripts/Detect-TechStack.ps1: sha256:782fe34f3fc9506f4e253c55250b5958edb6365c14da2dc8abb664408bbad5be
+    .claude/skills/diagnose/SKILL.md: sha256:747e6c54c29580b6432479816f6a813b1216e784ecabeb629e43b445920c36f4
+    .claude/skills/diagnose/references/loops.md: sha256:0af3aabf6e7bd69d5de7d8bc7e31596dbac1ae6274fd2b5d3273d16f38d1a787
+    .claude/skills/implementation/SKILL.md: sha256:cc3ad376c58adcdb96a441f25012ae80c125d6314b3d333d8c2c456daf184452
+    .claude/skills/implementation/references/format.md: sha256:d0846086efdf2e15fd65a99016076130e3a51f8afaebf673fc973ea7396d2a44
+    .claude/skills/implementation/references/runner-contract.md: sha256:bacb51fcacbad7abb744ef7d00599ee27a172230667772dc92da6977e98657e6
+    .claude/skills/implementation/references/test-quality.md: sha256:5f64308b29548143439201b43535276630e8fbd5d8787ea69c74a91f0dcfc1b3
+    .claude/skills/implementation/schema/config.schema.json: sha256:c6c2208db7f74ea6817f77f7c06fd41106a74b591ef7ba244240faba7c1613fb
+    .claude/skills/implementation/schema/implementer.schema.json: sha256:e4f726ec2a7a50edca1e1a8c62c8bf2f89baf986f6cdea2846b27927448374d1
+    .claude/skills/implementation/scripts/Format-Changed.ps1: sha256:9bacd9f6da74132135ecc574bb019c0852d350446ddfec9dca4e80ce9254d29b
+  content_hash: sha256:e19de9fff3c4e3056ab8047c49c6ffeb5914eba6b5b5e685414e586c3610eac2
+  declared_license: MIT
+  extensions:
+    x-skills:
+    - code-review
+    - detect-techstack
+    - diagnose
+    - implementation
+- repo_url: gravionlabs/apm-hub
+  materialization_repo_url: GravionLabs/apm-hub
+  name: ts
+  host: github.com
+  resolved_commit: 7cf21fe6f28153691aea2f35fedd24a9d1af764b
+  resolved_ref: release/next
+  version: 3.2.0
+  virtual_path: packages/ts
+  is_virtual: true
+  package_type: apm_package
+  deployed_files:
+  - .agents/skills/setup-biome-husky
+  - .agents/skills/setup-biome-husky/SKILL.md
+  - .agents/skills/setup-biome-husky/scripts/Setup-Biome.ps1
+  - .agents/skills/setup-biome-husky/templates/.husky/pre-commit
+  - .agents/skills/setup-biome-husky/templates/biome.json.template
+  - .agents/skills/setup-prettier-eslint-husky
+  - .agents/skills/setup-prettier-eslint-husky/SKILL.md
+  - .agents/skills/setup-prettier-eslint-husky/scripts/Setup-CodeQuality.ps1
+  - .agents/skills/setup-prettier-eslint-husky/templates/.husky/pre-commit
+  - .agents/skills/setup-prettier-eslint-husky/templates/.prettierignore
+  - .agents/skills/setup-prettier-eslint-husky/templates/.prettierrc
+  - .agents/skills/setup-prettier-eslint-husky/templates/angular/eslint.config.mjs
+  - .agents/skills/setup-prettier-eslint-husky/templates/plain-ts/eslint.config.mjs
+  - .agents/skills/ts-create-project
+  - .agents/skills/ts-create-project/SKILL.md
+  - .agents/skills/ts-create-project/scripts/New-NodeProject.ps1
+  - .agents/skills/ts-create-project/templates/.github/workflows/ci.yml
+  - .agents/skills/ts-create-project/templates/.gitignore
+  - .agents/skills/ts-create-project/templates/package.json
+  - .agents/skills/ts-create-project/templates/src/index.ts
+  - .agents/skills/ts-create-project/templates/tsconfig.json
+  - .agents/skills/ts-create-project/templates/vitest.config.ts
+  - .agents/skills/ts-implementation
+  - .agents/skills/ts-implementation/SKILL.md
+  - .agents/skills/ts-mcp-server-generator
+  - .agents/skills/ts-mcp-server-generator/SKILL.md
+  - .agents/skills/ts-mcp-server-generator/scripts/New-McpServer.ps1
+  - .agents/skills/ts-mcp-server-generator/templates/examples/resource-prompt-registration.ts
+  - .agents/skills/ts-mcp-server-generator/templates/examples/tool-registration.ts
+  - .agents/skills/ts-mcp-server-generator/templates/examples/transport-config.ts
+  - .agents/skills/ts-mcp-server-generator/templates/package.json
+  - .agents/skills/ts-mcp-server-generator/templates/src/index.ts
+  - .agents/skills/ts-mcp-server-generator/templates/tsconfig.json
+  - .agents/skills/ts-pnpm-workflow
+  - .agents/skills/ts-pnpm-workflow/SKILL.md
+  - .agents/skills/ts-test
+  - .agents/skills/ts-test/SKILL.md
+  - .claude/skills/setup-biome-husky
+  - .claude/skills/setup-biome-husky/SKILL.md
+  - .claude/skills/setup-biome-husky/scripts/Setup-Biome.ps1
+  - .claude/skills/setup-biome-husky/templates/.husky/pre-commit
+  - .claude/skills/setup-biome-husky/templates/biome.json.template
+  - .claude/skills/setup-prettier-eslint-husky
+  - .claude/skills/setup-prettier-eslint-husky/SKILL.md
+  - .claude/skills/setup-prettier-eslint-husky/scripts/Setup-CodeQuality.ps1
+  - .claude/skills/setup-prettier-eslint-husky/templates/.husky/pre-commit
+  - .claude/skills/setup-prettier-eslint-husky/templates/.prettierignore
+  - .claude/skills/setup-prettier-eslint-husky/templates/.prettierrc
+  - .claude/skills/setup-prettier-eslint-husky/templates/angular/eslint.config.mjs
+  - .claude/skills/setup-prettier-eslint-husky/templates/plain-ts/eslint.config.mjs
+  - .claude/skills/ts-create-project
+  - .claude/skills/ts-create-project/SKILL.md
+  - .claude/skills/ts-create-project/scripts/New-NodeProject.ps1
+  - .claude/skills/ts-create-project/templates/.github/workflows/ci.yml
+  - .claude/skills/ts-create-project/templates/.gitignore
+  - .claude/skills/ts-create-project/templates/package.json
+  - .claude/skills/ts-create-project/templates/src/index.ts
+  - .claude/skills/ts-create-project/templates/tsconfig.json
+  - .claude/skills/ts-create-project/templates/vitest.config.ts
+  - .claude/skills/ts-implementation
+  - .claude/skills/ts-implementation/SKILL.md
+  - .claude/skills/ts-mcp-server-generator
+  - .claude/skills/ts-mcp-server-generator/SKILL.md
+  - .claude/skills/ts-mcp-server-generator/scripts/New-McpServer.ps1
+  - .claude/skills/ts-mcp-server-generator/templates/examples/resource-prompt-registration.ts
+  - .claude/skills/ts-mcp-server-generator/templates/examples/tool-registration.ts
+  - .claude/skills/ts-mcp-server-generator/templates/examples/transport-config.ts
+  - .claude/skills/ts-mcp-server-generator/templates/package.json
+  - .claude/skills/ts-mcp-server-generator/templates/src/index.ts
+  - .claude/skills/ts-mcp-server-generator/templates/tsconfig.json
+  - .claude/skills/ts-pnpm-workflow
+  - .claude/skills/ts-pnpm-workflow/SKILL.md
+  - .claude/skills/ts-test
+  - .claude/skills/ts-test/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/setup-biome-husky/SKILL.md: sha256:86b41e9c606fcc551db85dde14022c33c8b80c45fa757d2bb9d4c966ccd9c8c7
+    .agents/skills/setup-biome-husky/scripts/Setup-Biome.ps1: sha256:899c06cb472f256a75fafa77310218569759884b259d7825d5722581fd51271a
+    .agents/skills/setup-biome-husky/templates/.husky/pre-commit: sha256:e2b7c9733375d7182af2033bda9a7d2a05d0db5eef5be53d26eb7b5f3df8fbc3
+    .agents/skills/setup-biome-husky/templates/biome.json.template: sha256:3fd79153b890d4a72d8864b0d1dcc76c89999b73b17cee08724e12d8e8c26420
+    .agents/skills/setup-prettier-eslint-husky/SKILL.md: sha256:3f0fb796291058076eb8b1e60bf6d7e8384ed20581d2afdb8beff1829620d2ae
+    .agents/skills/setup-prettier-eslint-husky/scripts/Setup-CodeQuality.ps1: sha256:dcd71545c7bc91411434d00783104ca467d5529143694c81c2aef79caedda921
+    .agents/skills/setup-prettier-eslint-husky/templates/.husky/pre-commit: sha256:e2b7c9733375d7182af2033bda9a7d2a05d0db5eef5be53d26eb7b5f3df8fbc3
+    .agents/skills/setup-prettier-eslint-husky/templates/.prettierignore: sha256:9f785d8952df55f9d82cba01521160f57b600a67d79867ac4bb79f9fca8a5f72
+    .agents/skills/setup-prettier-eslint-husky/templates/.prettierrc: sha256:f6fafa846d03c980c71bc9d43abafde1975fa0c24beadae504baac28e1f4afc6
+    .agents/skills/setup-prettier-eslint-husky/templates/angular/eslint.config.mjs: sha256:8a403172a3d3546a2a3a1ec25bd144e792d59ab38ded782934c6736f692d5815
+    .agents/skills/setup-prettier-eslint-husky/templates/plain-ts/eslint.config.mjs: sha256:1fe52b7a8f187ff88818ea6fdac2fab4c5149477ac06d05e3a4b3d938b189e5e
+    .agents/skills/ts-create-project/SKILL.md: sha256:d90ff87ab37f1f088f8e846046605b50a4bfad154775af9e8907fa1175724fe1
+    .agents/skills/ts-create-project/scripts/New-NodeProject.ps1: sha256:7eb22b67b38fe9698afe7822f20c6d267b10ccb92c024f7047596470d09754e6
+    .agents/skills/ts-create-project/templates/.github/workflows/ci.yml: sha256:614b454d646e263caa45212f7f879896ad99e10405d13120b14eafb205331700
+    .agents/skills/ts-create-project/templates/.gitignore: sha256:0ed39e05f7c8137f6da46acb9653598f86637b6fcddc93ccbe38a5d3650cde58
+    .agents/skills/ts-create-project/templates/package.json: sha256:751b041ab8fa9c404081f47f990c8789c39cb6b8fda19fbd25b319092db3a1d4
+    .agents/skills/ts-create-project/templates/src/index.ts: sha256:6162f9ff13fded7d72bbb26710586310017f19fe4b55d11d0661fe042637ae86
+    .agents/skills/ts-create-project/templates/tsconfig.json: sha256:620bbd5f984f48eefc5aed87c398e44c3d305c9ae7ea5f9e5957ace8b3d7b880
+    .agents/skills/ts-create-project/templates/vitest.config.ts: sha256:c5f2611ada29990609ef68d3fe2b89110e2426265a3c01765c6a48d20f424193
+    .agents/skills/ts-implementation/SKILL.md: sha256:c0246df1164b91a4c56ffc6646b5512ddd8bd197e4c472a305c93e58b6f39379
+    .agents/skills/ts-mcp-server-generator/SKILL.md: sha256:0cb27b589478dcb72cf9708b2d857649001cd77e975abfd4187c5462f7e8becc
+    .agents/skills/ts-mcp-server-generator/scripts/New-McpServer.ps1: sha256:02eb65ebb08301a58cd8f1eaf07f743a386c07d69d8568584f167c281ec65774
+    .agents/skills/ts-mcp-server-generator/templates/examples/resource-prompt-registration.ts: sha256:88a3b79c6f807bdb8afdb6daee087f0d71440d167736dc7241149c335ca1c5c0
+    .agents/skills/ts-mcp-server-generator/templates/examples/tool-registration.ts: sha256:8f680c7c36b7e83e16dafe3f900fb433dca2389eb744436903aa46af45d5eb22
+    .agents/skills/ts-mcp-server-generator/templates/examples/transport-config.ts: sha256:64285c3ca0766fd3fdbd6c0904765de8b533595366283b2e3a9a87a965143f6e
+    .agents/skills/ts-mcp-server-generator/templates/package.json: sha256:737b263e49aa75296c0af8a52a9d2149ed43e1947ddd0e027f505e7498b70845
+    .agents/skills/ts-mcp-server-generator/templates/src/index.ts: sha256:bee7ed0ad78770c0c9362c09f8c193898c51b41587a3c971da7028dcf3af6d0f
+    .agents/skills/ts-mcp-server-generator/templates/tsconfig.json: sha256:8a6003512cc075acb2f7457a31fec5334469923d89a2650414a6a92977c9fec1
+    .agents/skills/ts-pnpm-workflow/SKILL.md: sha256:1cb1ee2a4cc4a2b1c6700dac51832f8851b903c5b6f942054e8a725fd1795ee8
+    .agents/skills/ts-test/SKILL.md: sha256:aebb8e8c2ba0c4fe82e35092950ff798d652658e82d3fbb2983815682e48bd1d
+    .claude/skills/setup-biome-husky/SKILL.md: sha256:86b41e9c606fcc551db85dde14022c33c8b80c45fa757d2bb9d4c966ccd9c8c7
+    .claude/skills/setup-biome-husky/scripts/Setup-Biome.ps1: sha256:899c06cb472f256a75fafa77310218569759884b259d7825d5722581fd51271a
+    .claude/skills/setup-biome-husky/templates/.husky/pre-commit: sha256:e2b7c9733375d7182af2033bda9a7d2a05d0db5eef5be53d26eb7b5f3df8fbc3
+    .claude/skills/setup-biome-husky/templates/biome.json.template: sha256:3fd79153b890d4a72d8864b0d1dcc76c89999b73b17cee08724e12d8e8c26420
+    .claude/skills/setup-prettier-eslint-husky/SKILL.md: sha256:3f0fb796291058076eb8b1e60bf6d7e8384ed20581d2afdb8beff1829620d2ae
+    .claude/skills/setup-prettier-eslint-husky/scripts/Setup-CodeQuality.ps1: sha256:dcd71545c7bc91411434d00783104ca467d5529143694c81c2aef79caedda921
+    .claude/skills/setup-prettier-eslint-husky/templates/.husky/pre-commit: sha256:e2b7c9733375d7182af2033bda9a7d2a05d0db5eef5be53d26eb7b5f3df8fbc3
+    .claude/skills/setup-prettier-eslint-husky/templates/.prettierignore: sha256:9f785d8952df55f9d82cba01521160f57b600a67d79867ac4bb79f9fca8a5f72
+    .claude/skills/setup-prettier-eslint-husky/templates/.prettierrc: sha256:f6fafa846d03c980c71bc9d43abafde1975fa0c24beadae504baac28e1f4afc6
+    .claude/skills/setup-prettier-eslint-husky/templates/angular/eslint.config.mjs: sha256:8a403172a3d3546a2a3a1ec25bd144e792d59ab38ded782934c6736f692d5815
+    .claude/skills/setup-prettier-eslint-husky/templates/plain-ts/eslint.config.mjs: sha256:1fe52b7a8f187ff88818ea6fdac2fab4c5149477ac06d05e3a4b3d938b189e5e
+    .claude/skills/ts-create-project/SKILL.md: sha256:d90ff87ab37f1f088f8e846046605b50a4bfad154775af9e8907fa1175724fe1
+    .claude/skills/ts-create-project/scripts/New-NodeProject.ps1: sha256:7eb22b67b38fe9698afe7822f20c6d267b10ccb92c024f7047596470d09754e6
+    .claude/skills/ts-create-project/templates/.github/workflows/ci.yml: sha256:614b454d646e263caa45212f7f879896ad99e10405d13120b14eafb205331700
+    .claude/skills/ts-create-project/templates/.gitignore: sha256:0ed39e05f7c8137f6da46acb9653598f86637b6fcddc93ccbe38a5d3650cde58
+    .claude/skills/ts-create-project/templates/package.json: sha256:751b041ab8fa9c404081f47f990c8789c39cb6b8fda19fbd25b319092db3a1d4
+    .claude/skills/ts-create-project/templates/src/index.ts: sha256:6162f9ff13fded7d72bbb26710586310017f19fe4b55d11d0661fe042637ae86
+    .claude/skills/ts-create-project/templates/tsconfig.json: sha256:620bbd5f984f48eefc5aed87c398e44c3d305c9ae7ea5f9e5957ace8b3d7b880
+    .claude/skills/ts-create-project/templates/vitest.config.ts: sha256:c5f2611ada29990609ef68d3fe2b89110e2426265a3c01765c6a48d20f424193
+    .claude/skills/ts-implementation/SKILL.md: sha256:c0246df1164b91a4c56ffc6646b5512ddd8bd197e4c472a305c93e58b6f39379
+    .claude/skills/ts-mcp-server-generator/SKILL.md: sha256:0cb27b589478dcb72cf9708b2d857649001cd77e975abfd4187c5462f7e8becc
+    .claude/skills/ts-mcp-server-generator/scripts/New-McpServer.ps1: sha256:02eb65ebb08301a58cd8f1eaf07f743a386c07d69d8568584f167c281ec65774
+    .claude/skills/ts-mcp-server-generator/templates/examples/resource-prompt-registration.ts: sha256:88a3b79c6f807bdb8afdb6daee087f0d71440d167736dc7241149c335ca1c5c0
+    .claude/skills/ts-mcp-server-generator/templates/examples/tool-registration.ts: sha256:8f680c7c36b7e83e16dafe3f900fb433dca2389eb744436903aa46af45d5eb22
+    .claude/skills/ts-mcp-server-generator/templates/examples/transport-config.ts: sha256:64285c3ca0766fd3fdbd6c0904765de8b533595366283b2e3a9a87a965143f6e
+    .claude/skills/ts-mcp-server-generator/templates/package.json: sha256:737b263e49aa75296c0af8a52a9d2149ed43e1947ddd0e027f505e7498b70845
+    .claude/skills/ts-mcp-server-generator/templates/src/index.ts: sha256:bee7ed0ad78770c0c9362c09f8c193898c51b41587a3c971da7028dcf3af6d0f
+    .claude/skills/ts-mcp-server-generator/templates/tsconfig.json: sha256:8a6003512cc075acb2f7457a31fec5334469923d89a2650414a6a92977c9fec1
+    .claude/skills/ts-pnpm-workflow/SKILL.md: sha256:1cb1ee2a4cc4a2b1c6700dac51832f8851b903c5b6f942054e8a725fd1795ee8
+    .claude/skills/ts-test/SKILL.md: sha256:aebb8e8c2ba0c4fe82e35092950ff798d652658e82d3fbb2983815682e48bd1d
+  content_hash: sha256:c2ba72e3a957b70cb8454a03bda601af7d679ae26f488cc41f7331d7ec57ee74
+  declared_license: MIT
+  extensions:
+    x-skills:
+    - setup-biome-husky
+    - setup-prettier-eslint-husky
+    - ts-create-project
+    - ts-implementation
+    - ts-mcp-server-generator
+    - ts-pnpm-workflow
+    - ts-test
 - repo_url: angular/skills
   name: angular-developer
   host: github.com
@@ -722,6 +1140,429 @@ deployments:
   content_hash: sha256:8f48c2392d99487934edf977c0d1b87a4e83ff9761db493bbcccc10f574bcb5a
 - kind: project-relative
   target: claude
+  value: .claude/skills/apm-install
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/apm-install/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:642d469639d0b3f37ca12800f4d2d3fdd83caf51078f76dde82df53ec5f9741d
+- kind: project-relative
+  target: claude
+  value: .claude/skills/apm-install/references/after-install.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:fdd95f46d4fa84270bde0be26173201c077f619eda66d6569908bb6bbc2bffc1
+- kind: project-relative
+  target: claude
+  value: .claude/skills/apm-install/references/packages.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:cb0efdaa6e12c5b8c2d24f51ac354db22c903940496a4af7372865c6079aaf6f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/apm-install/scripts/Install-HubPackages.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:67ae285e9392262c12a5318eed183f3d2b4ea7f96d01286001a30b0ff5ab0f75
+- kind: project-relative
+  target: claude
+  value: .claude/skills/code-review
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/code-review/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:e529fe7b22cc285c4b8008a267c8a7cded3a01b7c3b03eed2a17dbc6b4edfddc
+- kind: project-relative
+  target: claude
+  value: .claude/skills/code-review/references/reviewer-contract.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:18bab7c56b33a9f169d53ca717e3f9eadf85fbcacc71a64d801aef968016576a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/code-review/schema/review.schema.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:1f694cd21365ad501db61b16e7887ea26e07eeecad27c2dbb9a7a0839633ff6b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/deliver
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/deliver/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:7a6171066a43c399c98bb7991feb20f413922762841af25a953c1091d61f1270
+- kind: project-relative
+  target: claude
+  value: .claude/skills/deliver/references/roles.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:a7cc34b5e5e49c0112cda97d0a145e9d4895d46f753fa59bc58aa0acfd421b79
+- kind: project-relative
+  target: claude
+  value: .claude/skills/deliver/workflow.js
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:4ee0f793b18255672877c0d1d2148be7e0f253f19fcb215a07f8e6cc1685c964
+- kind: project-relative
+  target: claude
+  value: .claude/skills/detect-techstack
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/detect-techstack/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:48c6b4d5e52ed0c4fd63f53402e1fb2e2e31528b873327c0472d04a99cfbbfcd
+- kind: project-relative
+  target: claude
+  value: .claude/skills/detect-techstack/scripts/Detect-TechStack.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:782fe34f3fc9506f4e253c55250b5958edb6365c14da2dc8abb664408bbad5be
+- kind: project-relative
+  target: claude
+  value: .claude/skills/diagnose
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/diagnose/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:747e6c54c29580b6432479816f6a813b1216e784ecabeb629e43b445920c36f4
+- kind: project-relative
+  target: claude
+  value: .claude/skills/diagnose/references/loops.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:0af3aabf6e7bd69d5de7d8bc7e31596dbac1ae6274fd2b5d3273d16f38d1a787
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-issue
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-issue/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:9fe213ab97d0cd6a4b4df218811a847c11af6a7abdf69301d9eb44df6ee2c1c5
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-issue/references/conventional-commits.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:26ba297cbe22b98ba9f9761f00e63182c53da88b190db70a44ce7fca807a08c3
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-issue/references/create-from-plan.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:2c692c3183d0bdc92aa1aee15beae4c789a7696fe1bbb60d49768df06d48330c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-issue/references/release-branches.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:7c3f7e83adf20542d9626532ab0cb4835fd32f2a9c1296094b4627297ef72d10
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-issue/references/standalone-issue.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:dda4cb4efbab200e9032800ff6a743ae104eb323886142244bab0bac0bd46513
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-issue/references/sub-issues.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:efa89efdc8e2f25ce2a9b0162ea0e07cd35333451d7ab72c84c108534b49f820
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-issue/references/task-issues.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:4d14945596e2ae348acfac00b8624c870320841d86c449d6311286ae0473496f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-pull-request
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-pull-request/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:0fdf33259fc2878b941c34397ec8705308d21c846062ced5948f21b616ef3272
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-pull-request/references/release-mode.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:5d401d42550f5910d93c5abbe33dc38a7f6d14b831d1262a6dbb0a4744194d9b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-release
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-release/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:38c9814762047803cc997d43f6938d5d3e56c3cf596c86e5d55fc12fb04423f0
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-release/references/cliff-setup.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:1db92cf148db2936289d6e7ccb0c70bd4cbac776f9770e9a2a458fffb30114e8
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-release/references/merged-label.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:4d781d0038e4205cd3324e2d1ac51493816a9d2f2b6f34b773f5ae09981fca68
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-release/scripts/Get-ReleaseState.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:f9dff144f3ebf690da2d97fb00814471ad77fdfd602309af44d958a5ef7d1254
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-release/templates/cliff.toml
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:b08f37151ff46f5c61506151d889622538cdd7bee4ef9faedbc8e580811385a5
+- kind: project-relative
+  target: claude
+  value: .claude/skills/github-release/templates/release-branch.yml
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:6b56fca2235bbcbcd657a8372e8d9b4e2ec8fc795368f2f95c57586061443300
+- kind: project-relative
+  target: claude
+  value: .claude/skills/grill-me
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/grill-me/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:b2244659d50cf0cb72d716e3f33e363c77814c489d0b7fe60ac0d1ac70bc9c5b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implementation
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implementation/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:cc3ad376c58adcdb96a441f25012ae80c125d6314b3d333d8c2c456daf184452
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implementation/references/format.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:d0846086efdf2e15fd65a99016076130e3a51f8afaebf673fc973ea7396d2a44
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implementation/references/runner-contract.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:bacb51fcacbad7abb744ef7d00599ee27a172230667772dc92da6977e98657e6
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implementation/references/test-quality.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:5f64308b29548143439201b43535276630e8fbd5d8787ea69c74a91f0dcfc1b3
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implementation/schema/config.schema.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:c6c2208db7f74ea6817f77f7c06fd41106a74b591ef7ba244240faba7c1613fb
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implementation/schema/implementer.schema.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:e4f726ec2a7a50edca1e1a8c62c8bf2f89baf986f6cdea2846b27927448374d1
+- kind: project-relative
+  target: claude
+  value: .claude/skills/implementation/scripts/Format-Changed.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:9bacd9f6da74132135ecc574bb019c0852d350446ddfec9dca4e80ce9254d29b
+- kind: project-relative
+  target: claude
   value: .claude/skills/ng-ag-grid-developer
   runtime: null
   scope: project
@@ -947,6 +1788,105 @@ deployments:
   content_hash: sha256:e03da5de3daf5518da13c6bc25418b18991400cebed2e6a1896743acf15543f0
 - kind: project-relative
   target: claude
+  value: .claude/skills/planner
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/planner/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:2f07447c3c7fd6ed54614b435bd4485205ecadd0df524cb1efb6ac837181fdf9
+- kind: project-relative
+  target: claude
+  value: .claude/skills/planner/references/invariants.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:853ae6e91a7fb6c1f46b5905972484272480fee455f4936f0be21e5d339b0a3f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/planner/references/plan-schema.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:a1af0f9285eb2b9aa162c0698c69813a8b1943e19399cf07d0f573f8be53930c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/planner/references/questions.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:bc9d5b9a8d8586c1698eefabee7a4ca14aa6cfc9085c58c97331fc35eaca5b87
+- kind: project-relative
+  target: claude
+  value: .claude/skills/planner/references/slicing.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:edb4a9eab628f3fa29351386a2fcfa8277be09c5e7507db4dfecb41ad2625791
+- kind: project-relative
+  target: claude
+  value: .claude/skills/planner/schema/plan.schema.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:417de88d7c226265263415388f0141c38b5756d6a8a1b629f450aa1cbfe672fd
+- kind: project-relative
+  target: claude
+  value: .claude/skills/retro
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/retro/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:2f657736b4b7d4d85c1aa0619a3fcbd0ef50b336cc208c64c7aefe64757bce25
+- kind: project-relative
+  target: claude
+  value: .claude/skills/retro/references/categories.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:9aa6518eb8170d19c894fac97ef15ed809e32c3dcf4952b29c00cb8b40065012
+- kind: project-relative
+  target: claude
+  value: .claude/skills/retro/references/metrics-sources.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:c56dce71d563a21a937b11a571098a714187a8e2c5fe1b67e78516a56241e776
+- kind: project-relative
+  target: claude
   value: .claude/skills/rust-implementation
   runtime: null
   scope: project
@@ -1008,6 +1948,339 @@ deployments:
   - gravionlabs/apm-hub/packages/rust
   active_owner: gravionlabs/apm-hub/packages/rust
   content_hash: sha256:16f852c641b37230e1ea7522102206ba105f3616341ad176ec459aa1b0e0c07a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-biome-husky
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-biome-husky/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:86b41e9c606fcc551db85dde14022c33c8b80c45fa757d2bb9d4c966ccd9c8c7
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-biome-husky/scripts/Setup-Biome.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:899c06cb472f256a75fafa77310218569759884b259d7825d5722581fd51271a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-biome-husky/templates/.husky/pre-commit
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:e2b7c9733375d7182af2033bda9a7d2a05d0db5eef5be53d26eb7b5f3df8fbc3
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-biome-husky/templates/biome.json.template
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:3fd79153b890d4a72d8864b0d1dcc76c89999b73b17cee08724e12d8e8c26420
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-prettier-eslint-husky
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-prettier-eslint-husky/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:3f0fb796291058076eb8b1e60bf6d7e8384ed20581d2afdb8beff1829620d2ae
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-prettier-eslint-husky/scripts/Setup-CodeQuality.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:dcd71545c7bc91411434d00783104ca467d5529143694c81c2aef79caedda921
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-prettier-eslint-husky/templates/.husky/pre-commit
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:e2b7c9733375d7182af2033bda9a7d2a05d0db5eef5be53d26eb7b5f3df8fbc3
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-prettier-eslint-husky/templates/.prettierignore
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:9f785d8952df55f9d82cba01521160f57b600a67d79867ac4bb79f9fca8a5f72
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-prettier-eslint-husky/templates/.prettierrc
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:f6fafa846d03c980c71bc9d43abafde1975fa0c24beadae504baac28e1f4afc6
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-prettier-eslint-husky/templates/angular/eslint.config.mjs
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:8a403172a3d3546a2a3a1ec25bd144e792d59ab38ded782934c6736f692d5815
+- kind: project-relative
+  target: claude
+  value: .claude/skills/setup-prettier-eslint-husky/templates/plain-ts/eslint.config.mjs
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:1fe52b7a8f187ff88818ea6fdac2fab4c5149477ac06d05e3a4b3d938b189e5e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-create-project
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-create-project/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:d90ff87ab37f1f088f8e846046605b50a4bfad154775af9e8907fa1175724fe1
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-create-project/scripts/New-NodeProject.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:7eb22b67b38fe9698afe7822f20c6d267b10ccb92c024f7047596470d09754e6
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-create-project/templates/.github/workflows/ci.yml
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:614b454d646e263caa45212f7f879896ad99e10405d13120b14eafb205331700
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-create-project/templates/.gitignore
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:0ed39e05f7c8137f6da46acb9653598f86637b6fcddc93ccbe38a5d3650cde58
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-create-project/templates/package.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:751b041ab8fa9c404081f47f990c8789c39cb6b8fda19fbd25b319092db3a1d4
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-create-project/templates/src/index.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:6162f9ff13fded7d72bbb26710586310017f19fe4b55d11d0661fe042637ae86
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-create-project/templates/tsconfig.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:620bbd5f984f48eefc5aed87c398e44c3d305c9ae7ea5f9e5957ace8b3d7b880
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-create-project/templates/vitest.config.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:c5f2611ada29990609ef68d3fe2b89110e2426265a3c01765c6a48d20f424193
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-implementation
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-implementation/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:c0246df1164b91a4c56ffc6646b5512ddd8bd197e4c472a305c93e58b6f39379
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-mcp-server-generator
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-mcp-server-generator/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:0cb27b589478dcb72cf9708b2d857649001cd77e975abfd4187c5462f7e8becc
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-mcp-server-generator/scripts/New-McpServer.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:02eb65ebb08301a58cd8f1eaf07f743a386c07d69d8568584f167c281ec65774
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-mcp-server-generator/templates/examples/resource-prompt-registration.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:88a3b79c6f807bdb8afdb6daee087f0d71440d167736dc7241149c335ca1c5c0
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-mcp-server-generator/templates/examples/tool-registration.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:8f680c7c36b7e83e16dafe3f900fb433dca2389eb744436903aa46af45d5eb22
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-mcp-server-generator/templates/examples/transport-config.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:64285c3ca0766fd3fdbd6c0904765de8b533595366283b2e3a9a87a965143f6e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-mcp-server-generator/templates/package.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:737b263e49aa75296c0af8a52a9d2149ed43e1947ddd0e027f505e7498b70845
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-mcp-server-generator/templates/src/index.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:bee7ed0ad78770c0c9362c09f8c193898c51b41587a3c971da7028dcf3af6d0f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-mcp-server-generator/templates/tsconfig.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:8a6003512cc075acb2f7457a31fec5334469923d89a2650414a6a92977c9fec1
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-pnpm-workflow
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-pnpm-workflow/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:1cb1ee2a4cc4a2b1c6700dac51832f8851b903c5b6f942054e8a725fd1795ee8
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-test
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/ts-test/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:aebb8e8c2ba0c4fe82e35092950ff798d652658e82d3fbb2983815682e48bd1d
 - kind: project-relative
   target: copilot
   value: .agents/skills/angular-developer
@@ -1388,6 +2661,429 @@ deployments:
   content_hash: sha256:8f48c2392d99487934edf977c0d1b87a4e83ff9761db493bbcccc10f574bcb5a
 - kind: project-relative
   target: copilot
+  value: .agents/skills/apm-install
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/apm-install/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:642d469639d0b3f37ca12800f4d2d3fdd83caf51078f76dde82df53ec5f9741d
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/apm-install/references/after-install.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:fdd95f46d4fa84270bde0be26173201c077f619eda66d6569908bb6bbc2bffc1
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/apm-install/references/packages.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:cb0efdaa6e12c5b8c2d24f51ac354db22c903940496a4af7372865c6079aaf6f
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/apm-install/scripts/Install-HubPackages.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:67ae285e9392262c12a5318eed183f3d2b4ea7f96d01286001a30b0ff5ab0f75
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/code-review
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/code-review/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:e529fe7b22cc285c4b8008a267c8a7cded3a01b7c3b03eed2a17dbc6b4edfddc
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/code-review/references/reviewer-contract.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:18bab7c56b33a9f169d53ca717e3f9eadf85fbcacc71a64d801aef968016576a
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/code-review/schema/review.schema.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:1f694cd21365ad501db61b16e7887ea26e07eeecad27c2dbb9a7a0839633ff6b
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/deliver
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/deliver/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:7a6171066a43c399c98bb7991feb20f413922762841af25a953c1091d61f1270
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/deliver/references/roles.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:a7cc34b5e5e49c0112cda97d0a145e9d4895d46f753fa59bc58aa0acfd421b79
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/deliver/workflow.js
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:4ee0f793b18255672877c0d1d2148be7e0f253f19fcb215a07f8e6cc1685c964
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/detect-techstack
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/detect-techstack/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:48c6b4d5e52ed0c4fd63f53402e1fb2e2e31528b873327c0472d04a99cfbbfcd
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/detect-techstack/scripts/Detect-TechStack.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:782fe34f3fc9506f4e253c55250b5958edb6365c14da2dc8abb664408bbad5be
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/diagnose
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/diagnose/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:747e6c54c29580b6432479816f6a813b1216e784ecabeb629e43b445920c36f4
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/diagnose/references/loops.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:0af3aabf6e7bd69d5de7d8bc7e31596dbac1ae6274fd2b5d3273d16f38d1a787
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-issue
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-issue/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:9fe213ab97d0cd6a4b4df218811a847c11af6a7abdf69301d9eb44df6ee2c1c5
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-issue/references/conventional-commits.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:26ba297cbe22b98ba9f9761f00e63182c53da88b190db70a44ce7fca807a08c3
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-issue/references/create-from-plan.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:2c692c3183d0bdc92aa1aee15beae4c789a7696fe1bbb60d49768df06d48330c
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-issue/references/release-branches.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:7c3f7e83adf20542d9626532ab0cb4835fd32f2a9c1296094b4627297ef72d10
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-issue/references/standalone-issue.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:dda4cb4efbab200e9032800ff6a743ae104eb323886142244bab0bac0bd46513
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-issue/references/sub-issues.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:efa89efdc8e2f25ce2a9b0162ea0e07cd35333451d7ab72c84c108534b49f820
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-issue/references/task-issues.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:4d14945596e2ae348acfac00b8624c870320841d86c449d6311286ae0473496f
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-pull-request
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-pull-request/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:0fdf33259fc2878b941c34397ec8705308d21c846062ced5948f21b616ef3272
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-pull-request/references/release-mode.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:5d401d42550f5910d93c5abbe33dc38a7f6d14b831d1262a6dbb0a4744194d9b
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-release
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-release/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:38c9814762047803cc997d43f6938d5d3e56c3cf596c86e5d55fc12fb04423f0
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-release/references/cliff-setup.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:1db92cf148db2936289d6e7ccb0c70bd4cbac776f9770e9a2a458fffb30114e8
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-release/references/merged-label.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:4d781d0038e4205cd3324e2d1ac51493816a9d2f2b6f34b773f5ae09981fca68
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-release/scripts/Get-ReleaseState.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:f9dff144f3ebf690da2d97fb00814471ad77fdfd602309af44d958a5ef7d1254
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-release/templates/cliff.toml
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:b08f37151ff46f5c61506151d889622538cdd7bee4ef9faedbc8e580811385a5
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-release/templates/release-branch.yml
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/github
+  active_owner: gravionlabs/apm-hub/packages/github
+  content_hash: sha256:6b56fca2235bbcbcd657a8372e8d9b4e2ec8fc795368f2f95c57586061443300
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/grill-me
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/grill-me/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:b2244659d50cf0cb72d716e3f33e363c77814c489d0b7fe60ac0d1ac70bc9c5b
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/implementation
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/implementation/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:cc3ad376c58adcdb96a441f25012ae80c125d6314b3d333d8c2c456daf184452
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/implementation/references/format.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:d0846086efdf2e15fd65a99016076130e3a51f8afaebf673fc973ea7396d2a44
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/implementation/references/runner-contract.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:bacb51fcacbad7abb744ef7d00599ee27a172230667772dc92da6977e98657e6
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/implementation/references/test-quality.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:5f64308b29548143439201b43535276630e8fbd5d8787ea69c74a91f0dcfc1b3
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/implementation/schema/config.schema.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:c6c2208db7f74ea6817f77f7c06fd41106a74b591ef7ba244240faba7c1613fb
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/implementation/schema/implementer.schema.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:e4f726ec2a7a50edca1e1a8c62c8bf2f89baf986f6cdea2846b27927448374d1
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/implementation/scripts/Format-Changed.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/shared
+  active_owner: gravionlabs/apm-hub/packages/shared
+  content_hash: sha256:9bacd9f6da74132135ecc574bb019c0852d350446ddfec9dca4e80ce9254d29b
+- kind: project-relative
+  target: copilot
   value: .agents/skills/ng-ag-grid-developer
   runtime: null
   scope: project
@@ -1613,6 +3309,105 @@ deployments:
   content_hash: sha256:e03da5de3daf5518da13c6bc25418b18991400cebed2e6a1896743acf15543f0
 - kind: project-relative
   target: copilot
+  value: .agents/skills/planner
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/planner/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:2f07447c3c7fd6ed54614b435bd4485205ecadd0df524cb1efb6ac837181fdf9
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/planner/references/invariants.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:853ae6e91a7fb6c1f46b5905972484272480fee455f4936f0be21e5d339b0a3f
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/planner/references/plan-schema.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:a1af0f9285eb2b9aa162c0698c69813a8b1943e19399cf07d0f573f8be53930c
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/planner/references/questions.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:bc9d5b9a8d8586c1698eefabee7a4ca14aa6cfc9085c58c97331fc35eaca5b87
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/planner/references/slicing.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:edb4a9eab628f3fa29351386a2fcfa8277be09c5e7507db4dfecb41ad2625791
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/planner/schema/plan.schema.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:417de88d7c226265263415388f0141c38b5756d6a8a1b629f450aa1cbfe672fd
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/retro
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/retro/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:2f657736b4b7d4d85c1aa0619a3fcbd0ef50b336cc208c64c7aefe64757bce25
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/retro/references/categories.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:9aa6518eb8170d19c894fac97ef15ed809e32c3dcf4952b29c00cb8b40065012
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/retro/references/metrics-sources.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/delivery
+  active_owner: gravionlabs/apm-hub/packages/delivery
+  content_hash: sha256:c56dce71d563a21a937b11a571098a714187a8e2c5fe1b67e78516a56241e776
+- kind: project-relative
+  target: copilot
   value: .agents/skills/rust-implementation
   runtime: null
   scope: project
@@ -1674,3 +3469,336 @@ deployments:
   - gravionlabs/apm-hub/packages/rust
   active_owner: gravionlabs/apm-hub/packages/rust
   content_hash: sha256:16f852c641b37230e1ea7522102206ba105f3616341ad176ec459aa1b0e0c07a
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-biome-husky
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-biome-husky/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:86b41e9c606fcc551db85dde14022c33c8b80c45fa757d2bb9d4c966ccd9c8c7
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-biome-husky/scripts/Setup-Biome.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:899c06cb472f256a75fafa77310218569759884b259d7825d5722581fd51271a
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-biome-husky/templates/.husky/pre-commit
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:e2b7c9733375d7182af2033bda9a7d2a05d0db5eef5be53d26eb7b5f3df8fbc3
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-biome-husky/templates/biome.json.template
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:3fd79153b890d4a72d8864b0d1dcc76c89999b73b17cee08724e12d8e8c26420
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-prettier-eslint-husky
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-prettier-eslint-husky/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:3f0fb796291058076eb8b1e60bf6d7e8384ed20581d2afdb8beff1829620d2ae
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-prettier-eslint-husky/scripts/Setup-CodeQuality.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:dcd71545c7bc91411434d00783104ca467d5529143694c81c2aef79caedda921
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-prettier-eslint-husky/templates/.husky/pre-commit
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:e2b7c9733375d7182af2033bda9a7d2a05d0db5eef5be53d26eb7b5f3df8fbc3
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-prettier-eslint-husky/templates/.prettierignore
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:9f785d8952df55f9d82cba01521160f57b600a67d79867ac4bb79f9fca8a5f72
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-prettier-eslint-husky/templates/.prettierrc
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:f6fafa846d03c980c71bc9d43abafde1975fa0c24beadae504baac28e1f4afc6
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-prettier-eslint-husky/templates/angular/eslint.config.mjs
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:8a403172a3d3546a2a3a1ec25bd144e792d59ab38ded782934c6736f692d5815
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/setup-prettier-eslint-husky/templates/plain-ts/eslint.config.mjs
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:1fe52b7a8f187ff88818ea6fdac2fab4c5149477ac06d05e3a4b3d938b189e5e
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-create-project
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-create-project/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:d90ff87ab37f1f088f8e846046605b50a4bfad154775af9e8907fa1175724fe1
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-create-project/scripts/New-NodeProject.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:7eb22b67b38fe9698afe7822f20c6d267b10ccb92c024f7047596470d09754e6
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-create-project/templates/.github/workflows/ci.yml
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:614b454d646e263caa45212f7f879896ad99e10405d13120b14eafb205331700
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-create-project/templates/.gitignore
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:0ed39e05f7c8137f6da46acb9653598f86637b6fcddc93ccbe38a5d3650cde58
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-create-project/templates/package.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:751b041ab8fa9c404081f47f990c8789c39cb6b8fda19fbd25b319092db3a1d4
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-create-project/templates/src/index.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:6162f9ff13fded7d72bbb26710586310017f19fe4b55d11d0661fe042637ae86
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-create-project/templates/tsconfig.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:620bbd5f984f48eefc5aed87c398e44c3d305c9ae7ea5f9e5957ace8b3d7b880
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-create-project/templates/vitest.config.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:c5f2611ada29990609ef68d3fe2b89110e2426265a3c01765c6a48d20f424193
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-implementation
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-implementation/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:c0246df1164b91a4c56ffc6646b5512ddd8bd197e4c472a305c93e58b6f39379
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-mcp-server-generator
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-mcp-server-generator/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:0cb27b589478dcb72cf9708b2d857649001cd77e975abfd4187c5462f7e8becc
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-mcp-server-generator/scripts/New-McpServer.ps1
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:02eb65ebb08301a58cd8f1eaf07f743a386c07d69d8568584f167c281ec65774
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-mcp-server-generator/templates/examples/resource-prompt-registration.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:88a3b79c6f807bdb8afdb6daee087f0d71440d167736dc7241149c335ca1c5c0
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-mcp-server-generator/templates/examples/tool-registration.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:8f680c7c36b7e83e16dafe3f900fb433dca2389eb744436903aa46af45d5eb22
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-mcp-server-generator/templates/examples/transport-config.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:64285c3ca0766fd3fdbd6c0904765de8b533595366283b2e3a9a87a965143f6e
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-mcp-server-generator/templates/package.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:737b263e49aa75296c0af8a52a9d2149ed43e1947ddd0e027f505e7498b70845
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-mcp-server-generator/templates/src/index.ts
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:bee7ed0ad78770c0c9362c09f8c193898c51b41587a3c971da7028dcf3af6d0f
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-mcp-server-generator/templates/tsconfig.json
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:8a6003512cc075acb2f7457a31fec5334469923d89a2650414a6a92977c9fec1
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-pnpm-workflow
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-pnpm-workflow/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:1cb1ee2a4cc4a2b1c6700dac51832f8851b903c5b6f942054e8a725fd1795ee8
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-test
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/ts-test/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gravionlabs/apm-hub/packages/ts
+  active_owner: gravionlabs/apm-hub/packages/ts
+  content_hash: sha256:aebb8e8c2ba0c4fe82e35092950ff798d652658e82d3fbb2983815682e48bd1d
