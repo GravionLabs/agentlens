@@ -267,6 +267,11 @@ pub struct ContextSaving {
     /// Requests with a saving, with and without a price for their model.
     pub priced_requests: u64,
     pub unpriced_requests: u64,
+    /// The part of the saved tokens on requests without a price for their model, split like the rest;
+    /// [`analyze_with`] prices it with the period's average [`Pricing`].
+    pub unpriced_input: u64,
+    pub unpriced_cache_read: u64,
+    pub unpriced_cache_write: u64,
 }
 
 impl ContextSaving {
@@ -319,7 +324,12 @@ pub fn context_saving(sessions: &[SessionEvents], prices: &PriceTable) -> Contex
                     out.usd += usd;
                     out.priced_requests += 1;
                 }
-                None => out.unpriced_requests += 1,
+                None => {
+                    out.unpriced_requests += 1;
+                    out.unpriced_input += saved_usage.input;
+                    out.unpriced_cache_read += saved_usage.cache_read;
+                    out.unpriced_cache_write += saved_usage.cache_write;
+                }
             }
         }
     }
@@ -1041,11 +1051,17 @@ pub fn analyze_with(
             cache_read: context.cache_read as f64,
             cache_write: context.cache_write as f64,
         };
+        // A request with a price for its model is priced with it; one without at the period's average
+        // per token class, split in its own ratio. No USD only when the period has no price at all.
+        let unpriced = Split {
+            input: context.unpriced_input as f64,
+            cache_read: context.unpriced_cache_read as f64,
+            cache_write: context.unpriced_cache_write as f64,
+        };
         f.impact = Impact {
             saving: Tokens::estimated(saved),
-            // Each request priced with its own model; nothing to price is a priced 0.
-            saving_usd: (context.priced_requests > 0 || (saved == 0 && pricing.is_priced()))
-                .then_some(context.usd),
+            saving_usd: (context.priced_requests > 0 || pricing.is_priced())
+                .then(|| context.usd + pricing.usd(&unpriced).unwrap_or(0.0)),
             confidence: Confidence::Inferred,
         };
         f.notes.push(format!(
@@ -1053,10 +1069,17 @@ pub fn analyze_with(
             n(LARGE_CONTEXT_TOKENS)
         ));
         if saved > 0 && context.unpriced_requests > 0 {
-            f.notes.push(format!(
-                "{} of the requests with a saving had no price for their model; their tokens are in the saving, not in the USD.",
-                n(context.unpriced_requests)
-            ));
+            f.notes.push(if pricing.is_priced() {
+                format!(
+                    "{} of the requests with a saving had no price for their model; they are priced at the period's average price per token class.",
+                    n(context.unpriced_requests)
+                )
+            } else {
+                format!(
+                    "{} of the requests with a saving had no price for their model; their tokens are in the saving, not in the USD.",
+                    n(context.unpriced_requests)
+                )
+            });
         }
         findings.push((f, split.weight()));
     }
@@ -1936,6 +1959,14 @@ mod tests {
         );
         assert_eq!(c.tokens(), 450_000);
         assert_eq!((c.priced_requests, c.unpriced_requests), (1, 1));
+        assert_eq!(
+            (
+                c.unpriced_input,
+                c.unpriced_cache_read,
+                c.unpriced_cache_write
+            ),
+            (0, 250_000, 0)
+        );
         // 8,000 × $2 + 184,000 × $0.10 + 8,000 × $2.50 per M
         assert!((c.usd - 0.0544).abs() < 1e-9, "{}", c.usd);
 
@@ -1945,13 +1976,75 @@ mod tests {
         let f = find(&a, FindingKind::ContextSize);
         assert_eq!(f.impact.saving, Tokens::estimated(450_000));
         assert_eq!(f.impact.confidence, Confidence::Inferred);
-        assert!(close(f.impact.saving_usd, 0.0544));
+        // The unpriced 250,000 cache read at the period average of $0.50: 0.0544 + 0.125.
+        assert!(
+            close(f.impact.saving_usd, 0.1794),
+            "{:?}",
+            f.impact.saving_usd
+        );
         assert!(f.notes.iter().any(|n| n.contains("it is inferred")));
+        assert!(f.notes.iter().any(|n| n.starts_with(
+            "1 of the requests with a saving had no price for their model; they are priced at the period's average"
+        )));
+    }
+
+    #[test]
+    fn a_context_saving_on_unpriced_models_is_priced_at_the_period_average_and_ranks_by_it() {
+        // Only a model without a price: 260,000 - 20,000 = 240,000 saved, split in the request's own
+        // 26k : 208k : 26k ratio.
+        let c = context_saving(
+            &[requests(
+                "s",
+                &[
+                    ("other-model", 20_000, 0, 0, false),
+                    ("other-model", 26_000, 208_000, 26_000, false),
+                ],
+            )],
+            &prices(),
+        );
+        assert_eq!((c.priced_requests, c.unpriced_requests), (0, 1));
+        assert_eq!(
+            (
+                c.unpriced_input,
+                c.unpriced_cache_read,
+                c.unpriced_cache_write
+            ),
+            (24_000, 192_000, 24_000)
+        );
+        // An unused skill of 400,000 listing tokens: more tokens, but 400,000 × $0.50 = $0.20.
+        let mut r = report(vec![skill("idle", true, 0, 0, (20_000, 400_000))]);
+        r.totals.requests = 2;
+        let a = priced(&r, &[], &c);
+        let f = find(&a, FindingKind::ContextSize);
+        assert_eq!(f.impact.saving, Tokens::estimated(240_000));
+        // 24,000 × $3 + 192,000 × $0.50 + 24,000 × $3.75 per M = 0.072 + 0.096 + 0.09.
+        assert!(
+            close(f.impact.saving_usd, 0.258),
+            "{:?}",
+            f.impact.saving_usd
+        );
+        let kinds: Vec<FindingKind> = a.findings.iter().map(|f| f.kind).collect();
+        assert_eq!(kinds, [FindingKind::ContextSize, FindingKind::UnusedSkills]);
         assert!(
             f.notes
                 .iter()
-                .any(|n| n.starts_with("1 of the requests with a saving had no price"))
+                .any(|n| n.contains("priced at the period's average"))
         );
+        // Ranked by that USD: 600,000 listing tokens × $0.50 = $0.30 outranks it.
+        let mut r = report(vec![skill("idle", true, 0, 0, (20_000, 600_000))]);
+        r.totals.requests = 2;
+        let kinds: Vec<FindingKind> = priced(&r, &[], &c)
+            .findings
+            .iter()
+            .map(|f| f.kind)
+            .collect();
+        assert_eq!(kinds, [FindingKind::UnusedSkills, FindingKind::ContextSize]);
+
+        // Without any price in the period: no USD, the tokens still counted.
+        let a = analyze_with(&r, &References::new(), &[], &c, &Pricing::default());
+        let f = find(&a, FindingKind::ContextSize);
+        assert_eq!(f.impact.saving_usd, None);
+        assert!(f.notes.iter().any(|n| n.contains("not in the USD")));
     }
 
     #[test]

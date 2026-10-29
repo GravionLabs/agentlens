@@ -187,6 +187,20 @@ pub fn load(env: &Env, file: Option<&Path>) -> Result<PriceTable, String> {
     Ok(table.with_overrides(overrides))
 }
 
+/// Like [`load`], but never fails: for an analysis that only ranks by price (advice), a broken or
+/// unreadable price file falls back to the bundled table, with a warning that names the file and the error.
+pub fn load_or_bundled(env: &Env, file: Option<&Path>) -> (PriceTable, Option<String>) {
+    match load(env, file) {
+        Ok(table) => (table, None),
+        Err(e) => (
+            PriceTable::bundled(),
+            Some(format!(
+                "cannot load prices: {e}; the bundled prices are used"
+            )),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,6 +288,33 @@ mod tests {
         );
         let unknown = usage("mystery", 10, 10, 0, 0);
         assert_eq!(t.cost(&unknown), None);
+    }
+
+    #[test]
+    fn load_or_bundled_falls_back_to_the_bundled_table_with_a_warning() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = Env::for_home(dir.path());
+        // No user file: the bundled table, no warning.
+        let (t, w) = load_or_bundled(&env, None);
+        assert_eq!((t.len(), w), (PriceTable::bundled().len(), None));
+
+        let file = user_file(&env);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "{ nope").unwrap();
+        assert!(load(&env, None).is_err(), "load itself still fails");
+        let (t, w) = load_or_bundled(&env, None);
+        assert_eq!(t.len(), PriceTable::bundled().len());
+        let w = w.expect("a warning");
+        assert!(w.starts_with("cannot load prices: "), "{w}");
+        assert!(
+            w.contains(&file.display().to_string()),
+            "names the file: {w}"
+        );
+        assert!(w.ends_with("; the bundled prices are used"), "{w}");
+
+        // An unreadable file (a directory) as well.
+        let (_, w) = load_or_bundled(&env, Some(dir.path()));
+        assert!(w.is_some());
     }
 
     #[test]

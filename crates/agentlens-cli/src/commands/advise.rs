@@ -6,7 +6,7 @@ use agentlens_core::model::Source;
 use agentlens_core::pipeline::advice_run;
 use agentlens_core::prices;
 use agentlens_core::tokens::TokenEstimator;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use crate::args::Format;
 use crate::output;
@@ -129,7 +129,11 @@ pub fn run(
     estimator: &dyn TokenEstimator,
     display: output::Display,
 ) -> Result<()> {
-    let prices = prices::load(env, None).map_err(|e| anyhow!("cannot load prices: {e}"))?;
+    // Advice only ranks by price: a broken price file falls back to the bundled table (fail soft).
+    let (prices, price_warning) = prices::load_or_bundled(env, None);
+    if let Some(w) = &price_warning {
+        eprintln!("warning: {w}");
+    }
     let run = advice_run(registry, env, filter, only, estimator, &prices);
     match display.format {
         Format::Json => println!("{}", serde_json::to_string_pretty(&run.report)?),

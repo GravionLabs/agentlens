@@ -1550,6 +1550,26 @@ fn advise_lists_what_to_change_in_json_csv_and_a_table() {
 }
 
 #[test]
+fn advise_falls_back_to_the_bundled_prices_when_the_price_file_is_broken() {
+    let home = home();
+    let file = home.path().join(".config/agentlens/prices.json");
+    fs::create_dir_all(file.parent().unwrap()).unwrap();
+    fs::write(&file, "{ nope").unwrap();
+    let out = agentlens(&home)
+        .args(["advise", "--format", "json"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning: cannot load prices"))
+        .stderr(predicate::str::contains("prices.json"))
+        .stderr(predicate::str::contains("the bundled prices are used"))
+        .get_output()
+        .stdout
+        .clone();
+    let v: Value = serde_json::from_slice(&out).expect("valid JSON on stdout");
+    assert!(!v["findings"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn advise_has_nothing_to_say_without_sessions() {
     let home = tempfile::tempdir().unwrap();
     agentlens(&home)

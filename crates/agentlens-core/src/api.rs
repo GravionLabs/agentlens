@@ -228,8 +228,9 @@ pub fn skills(ctx: &Context, f: &Filters) -> Result<Answer<SkillsData>, String> 
 
 pub fn advice(ctx: &Context, f: &Filters) -> Result<Answer<AdviceReport>, String> {
     let (filter, only) = f.resolve(Timestamp::now())?;
-    let prices = load_prices(ctx)?;
-    let run = pipeline::advice_run(
+    // Advice only ranks by price: a broken price file falls back to the bundled table (fail soft).
+    let (prices, price_warning) = prices::load_or_bundled(&ctx.env, None);
+    let mut run = pipeline::advice_run(
         &ctx.registry,
         &ctx.env,
         &filter,
@@ -237,6 +238,7 @@ pub fn advice(ctx: &Context, f: &Filters) -> Result<Answer<AdviceReport>, String
         &CharsPerToken,
         &prices,
     );
+    run.errors.extend(price_warning);
     answer(run.report, run.warnings, run.errors)
 }
 
@@ -582,6 +584,32 @@ mod tests {
             filter.since.map(|t| t.to_string()),
             filter.until.map(|t| t.to_string()),
         )
+    }
+
+    #[test]
+    fn advice_does_not_fail_on_a_broken_price_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = Context {
+            env: Env::for_home(dir.path()),
+            registry: default_registry(),
+        };
+        let file = prices::user_file(&ctx.env);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "{ nope").unwrap();
+        assert!(
+            cost(&ctx, &Filters::default(), "model", None).is_err(),
+            "cost fails hard"
+        );
+        let a = advice(&ctx, &Filters::default()).expect("advice falls back to the bundled prices");
+        assert!(
+            a.errors
+                .iter()
+                .any(|e| e.starts_with("cannot load prices: ")
+                    && e.contains(&file.display().to_string())
+                    && e.ends_with("; the bundled prices are used")),
+            "{:?}",
+            a.errors
+        );
     }
 
     #[test]
