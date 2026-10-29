@@ -135,3 +135,49 @@ fn the_json_of_every_analysis_keeps_its_shape() {
         ),
     );
 }
+
+/// The usage events of a workflow subagent carry `agent`. This is a compatible change (a field was
+/// added): the field is left out when the client says nothing about the agent, as for the main session.
+#[test]
+fn a_workflow_subagent_shows_its_agent_in_the_usage_events() {
+    use agentlens_core::adapter::{Adapter, SessionFilter};
+    use agentlens_core::adapters::claude_code::ClaudeCodeAdapter;
+    use agentlens_core::model::EventKind;
+
+    let home = TempHome::new();
+    let slug = ".claude/projects/-work-demo";
+    home.copy_fixture(
+        "claude_code/main_with_subagent.jsonl",
+        &format!("{slug}/main.jsonl"),
+    );
+    home.copy_fixture(
+        "claude_code/subagent.jsonl",
+        &format!("{slug}/main/subagents/workflows/run-1/agent-w1.jsonl"),
+    );
+    home.copy_fixture(
+        "claude_code/workflow_subagent.meta.json",
+        &format!("{slug}/main/subagents/workflows/run-1/agent-w1.meta.json"),
+    );
+    let env = home.env();
+    let se = ClaudeCodeAdapter
+        .sessions(&env, &SessionFilter::default())
+        .map(|r| r.unwrap())
+        .next()
+        .unwrap();
+    let usages: Vec<_> = se
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::Usage(u) => Some(u),
+            _ => None,
+        })
+        .map(|u| serde_json::json!({ "subagent": u.subagent, "agent": u.agent }))
+        .collect();
+    let body = serde_json::to_string_pretty(&usages).unwrap();
+    insta::with_settings!({
+        description => "The agent field of a workflow subagent's usage events (compatible: a field was added).",
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!("usage_workflow_subagent", body);
+    });
+}

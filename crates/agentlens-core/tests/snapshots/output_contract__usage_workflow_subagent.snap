@@ -1,0 +1,22 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "The agent field of a workflow subagent's usage events (compatible: a field was added)."
+---
+[
+  {
+    "subagent": false,
+    "agent": null
+  },
+  {
+    "subagent": true,
+    "agent": {
+      "agent_type": "workflow-subagent",
+      "description": "implement #12",
+      "workflow_phase": "Implement"
+    }
+  },
+  {
+    "subagent": false,
+    "agent": null
+  }
+]

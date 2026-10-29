@@ -282,6 +282,20 @@ pub struct Usage {
     /// `skill.name`), if it reports one.
     #[serde(default)]
     pub skill: Option<String>,
+    /// The subagent that made the request, if the client describes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentInfo>,
+}
+
+/// What a client says about a subagent (Claude Code `.meta.json`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentInfo {
+    /// For example `workflow-subagent`.
+    pub agent_type: Option<String>,
+    /// The label the agent was started with, for example `implement #12`.
+    pub description: Option<String>,
+    /// The workflow phase of a workflow subagent.
+    pub workflow_phase: Option<String>,
 }
 
 impl Usage {
@@ -305,6 +319,7 @@ impl Default for Usage {
             subagent: false,
             premium_requests: None,
             skill: None,
+            agent: None,
         }
     }
 }
