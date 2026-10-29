@@ -102,7 +102,7 @@ pub enum Command {
     },
     /// Show what the sessions cost
     Cost {
-        /// Group the cost by model, project, git branch or issue number (parsed from the branch name)
+        /// Group the cost by model, project, git branch, issue number (parsed from the branch name) or session
         #[arg(long, value_enum, default_value_t = CostBy::Model)]
         by: CostBy,
         /// Price file that overrides or extends the bundled prices
@@ -111,6 +111,9 @@ pub enum Command {
         /// Recompute the usage with the prices of this model (id prefix) and compare
         #[arg(long, value_name = "MODEL")]
         what_if: Option<String>,
+        /// Rows of the session table with --by session (0 shows all); JSON and CSV always contain everything
+        #[arg(long, default_value_t = 25)]
+        top: usize,
     },
     /// List installed skills, agents and MCP servers that were not used
     Unused {
@@ -175,6 +178,7 @@ pub enum CostBy {
     Project,
     Branch,
     Issue,
+    Session,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]

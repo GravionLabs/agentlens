@@ -1703,3 +1703,40 @@ fn the_binary_carries_the_marker_of_the_command_line_tools() {
     let bin = std::path::Path::new(env!("CARGO_BIN_EXE_agentlens"));
     assert!(agentlens_core::cli_tools::has_marker(bin));
 }
+
+#[test]
+fn cost_by_session_has_a_row_per_session_and_top_limits_only_the_table() {
+    let home = home();
+    let file = price_file(&home);
+    let v = json(
+        agentlens(&home)
+            .args(["cost", "--format", "json", "--by", "session", "--prices"])
+            .arg(&file),
+    );
+    let sessions = v["sessions"].as_array().unwrap();
+    assert_eq!(sessions.len(), 2);
+    for s in sessions {
+        assert_eq!(s["project"], "/work/demo");
+        assert!(s["peak_context"].as_u64().unwrap() > 0);
+    }
+    let csv = agentlens(&home)
+        .args(["cost", "--format", "csv", "--by", "session", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert_eq!(String::from_utf8(csv).unwrap().lines().count(), 3);
+    let table = agentlens(&home)
+        .args(["cost", "--by", "session", "--top", "1", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let table = String::from_utf8(table).unwrap();
+    assert!(table.contains("subagent share"), "{table}");
+    assert!(table.contains("1 more rows"), "{table}");
+}

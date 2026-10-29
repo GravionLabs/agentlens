@@ -67,7 +67,7 @@ impl Query {
 pub struct CostQuery {
     #[serde(flatten)]
     pub query: Query,
-    /// Grouping: `model` (default), `project`, `branch` or `issue`.
+    /// Grouping: `model` (default), `project`, `branch`, `issue` or `session`.
     pub by: Option<String>,
     /// A model id prefix: what the usage would have cost with that model.
     pub what_if: Option<String>,
@@ -201,7 +201,7 @@ impl AgentLensServer {
     }
 
     #[tool(
-        description = "What the usage costs in USD, grouped by model, project, branch or issue, split into measured (`measured_usd`, reported by the client) and estimated (`estimated_usd`, tokens times a price table) cost, optionally compared with another model.",
+        description = "What the usage costs in USD, grouped by model, project, branch, issue or session (one row per session in `report.sessions`, with peak context and the subagent share of the cost), split into measured (`measured_usd`, reported by the client) and estimated (`estimated_usd`, tokens times a price table) cost, optionally compared with another model.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn cost(&self, Parameters(q): Parameters<CostQuery>) -> CallToolResult {

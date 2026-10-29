@@ -58,6 +58,7 @@ pub fn run(cli: Cli) -> Result<()> {
             by,
             prices,
             what_if,
+            top,
         } => cost::run(
             &registry,
             &env,
@@ -67,6 +68,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 price_file: prices.as_deref(),
                 by,
                 what_if: what_if.as_deref(),
+                top,
             },
             display,
         ),

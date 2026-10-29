@@ -297,8 +297,35 @@ export interface WhatIfRow {
   excluded_requests: number;
 }
 
+export interface SessionCost {
+  source: SourceId;
+  session: string;
+  project: string | null;
+  started_at: string | null;
+  duration_ms: number | null;
+  issue: string | null;
+  models: string[];
+  requests: number;
+  main_requests: number;
+  peak_context: number;
+  input: number;
+  cache_read: number;
+  cache_write: number;
+  output: number;
+  measured_usd: number;
+  estimated_usd: number;
+  unpriced_requests: number;
+  subagent_usd: number;
+}
+
 export interface CostData {
-  report: { rows: CostRow[]; total: CostRow; unpriced_models: Record<string, number> };
+  report: {
+    rows: CostRow[];
+    total: CostRow;
+    unpriced_models: Record<string, number>;
+    /** Only with `by: "session"`. */
+    sessions?: SessionCost[];
+  };
   what_if: { target: string; rows: WhatIfRow[]; total: WhatIfRow } | null;
 }
 

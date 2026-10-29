@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use crate::analyzers::advice::AdviceReport;
 use crate::analyzers::compare::SourceStats;
 use crate::analyzers::context::ContextRow;
-use crate::analyzers::cost::{CostRow, WhatIfReport};
+use crate::analyzers::cost::{CostRow, SessionCost, WhatIfReport};
 use crate::analyzers::efficiency::CacheRow;
 use crate::analyzers::flow::{HookStats, SessionGrowth, ToolErrors};
 use crate::analyzers::skills::SkillStats;
@@ -261,6 +261,71 @@ pub fn cost(rows: &[CostRow], label: &str) -> Result<String, CsvError> {
                 format!("{:.6}", x.estimated_usd),
                 x.unpriced_requests.to_string(),
                 x.premium_requests.to_string(),
+            ]
+        })
+        .collect();
+    write(&header, body)
+}
+
+/// `cost --by session`: one row per session; an unknown cost is an empty field, never 0.
+pub fn session_cost(rows: &[SessionCost]) -> Result<String, CsvError> {
+    let header = [
+        "session",
+        "source",
+        "project",
+        "started_at",
+        "duration_ms",
+        "issue",
+        "models",
+        "requests",
+        "main_requests",
+        "peak_context_tokens",
+        "input_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "output_tokens",
+        "measured_usd",
+        "estimated_usd",
+        "unpriced_requests",
+        "subagent_usd",
+        "subagent_share",
+    ];
+    let body = rows
+        .iter()
+        .map(|s| {
+            let known = s.cost_known();
+            let usd = |v: f64| {
+                if known {
+                    format!("{v:.6}")
+                } else {
+                    String::new()
+                }
+            };
+            vec![
+                s.session.clone(),
+                s.source.id().to_owned(),
+                s.project
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default(),
+                s.started_at.map(|t| t.to_string()).unwrap_or_default(),
+                s.duration_ms.map(|v| v.to_string()).unwrap_or_default(),
+                s.issue.clone().unwrap_or_default(),
+                s.models.join(";"),
+                s.requests.to_string(),
+                s.main_requests.to_string(),
+                s.peak_context.to_string(),
+                s.input.to_string(),
+                s.cache_read.to_string(),
+                s.cache_write.to_string(),
+                s.output.to_string(),
+                usd(s.measured_usd),
+                usd(s.estimated_usd),
+                s.unpriced_requests.to_string(),
+                usd(s.subagent_usd),
+                s.subagent_share()
+                    .map(|v| format!("{v:.4}"))
+                    .unwrap_or_default(),
             ]
         })
         .collect();
