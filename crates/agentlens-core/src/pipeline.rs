@@ -86,13 +86,15 @@ pub struct AdviceRun {
     pub errors: Vec<String>,
 }
 
-/// The findings about the skills of the selected sessions: what to change to save tokens.
+/// The findings about the skills of the selected sessions: what to change to save tokens, ranked by
+/// what each would have saved, priced with `prices`.
 pub fn advice_run(
     registry: &Registry,
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
     estimator: &dyn TokenEstimator,
+    prices: &crate::prices::PriceTable,
 ) -> AdviceRun {
     let (sessions, errors) = read_sessions(registry, env, filter, only);
     let run = skill_run_from(env, &sessions, errors, estimator);
@@ -107,8 +109,10 @@ pub fn advice_run(
     let instructions = instructions::scan(env, &run.projects, estimator);
     let context_report = context::analyze(&sessions, &instructions.files, estimator);
     let mcp = advice::mcp_servers(&context_report, &sessions);
+    let context_saving = advice::context_saving(&sessions, prices);
+    let pricing = advice::Pricing::from_sessions(&sessions, prices);
     AdviceRun {
-        report: advice::analyze_with(&run.report, &references, &mcp),
+        report: advice::analyze_with(&run.report, &references, &mcp, &context_saving, &pricing),
         warnings: run.warnings + catalog.warnings.len() as u64 + instructions.warnings.len() as u64,
         errors: run.errors,
     }

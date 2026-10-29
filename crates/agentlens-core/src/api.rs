@@ -228,7 +228,15 @@ pub fn skills(ctx: &Context, f: &Filters) -> Result<Answer<SkillsData>, String> 
 
 pub fn advice(ctx: &Context, f: &Filters) -> Result<Answer<AdviceReport>, String> {
     let (filter, only) = f.resolve(Timestamp::now())?;
-    let run = pipeline::advice_run(&ctx.registry, &ctx.env, &filter, &only, &CharsPerToken);
+    let prices = load_prices(ctx)?;
+    let run = pipeline::advice_run(
+        &ctx.registry,
+        &ctx.env,
+        &filter,
+        &only,
+        &CharsPerToken,
+        &prices,
+    );
     answer(run.report, run.warnings, run.errors)
 }
 

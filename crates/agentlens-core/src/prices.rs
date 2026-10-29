@@ -47,6 +47,15 @@ pub struct Tier {
     pub cache_read: Option<f64>,
 }
 
+/// The prices one request pays per token class, in USD per million tokens (the tier already chosen).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rates {
+    pub input: f64,
+    pub output: f64,
+    pub cache_write: f64,
+    pub cache_read: f64,
+}
+
 /// Where a request's cost comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct RequestCost {
@@ -108,27 +117,33 @@ impl PriceTable {
             .map(|(_, p)| p)
     }
 
+    /// The prices per token class (USD per million) that a request of `model` with `total_input`
+    /// tokens of input pays; `None` if the model has no price.
+    pub fn rates(&self, model: &str, total_input: u64) -> Option<Rates> {
+        let p = self.lookup(model)?;
+        Some(match &p.above {
+            Some(t) if total_input > t.over_tokens => Rates {
+                input: t.input,
+                output: t.output,
+                cache_write: t.cache_write.unwrap_or(t.input),
+                cache_read: t.cache_read.unwrap_or(t.input),
+            },
+            _ => Rates {
+                input: p.input,
+                output: p.output,
+                cache_write: p.cache_write.unwrap_or(p.input),
+                cache_read: p.cache_read.unwrap_or(p.input),
+            },
+        })
+    }
+
     /// Cost computed from the table; `None` if the model has no price.
     pub fn compute(&self, model: &str, usage: &Usage) -> Option<f64> {
-        let p = self.lookup(model)?;
-        let (input, output, cache_write, cache_read) = match &p.above {
-            Some(t) if usage.total_input() > t.over_tokens => (
-                t.input,
-                t.output,
-                t.cache_write.unwrap_or(t.input),
-                t.cache_read.unwrap_or(t.input),
-            ),
-            _ => (
-                p.input,
-                p.output,
-                p.cache_write.unwrap_or(p.input),
-                p.cache_read.unwrap_or(p.input),
-            ),
-        };
-        let per_million = usage.input as f64 * input
-            + usage.cache_write as f64 * cache_write
-            + usage.cache_read as f64 * cache_read
-            + usage.output as f64 * output;
+        let r = self.rates(model, usage.total_input())?;
+        let per_million = usage.input as f64 * r.input
+            + usage.cache_write as f64 * r.cache_write
+            + usage.cache_read as f64 * r.cache_read
+            + usage.output as f64 * r.output;
         Some(per_million / 1_000_000.0)
     }
 

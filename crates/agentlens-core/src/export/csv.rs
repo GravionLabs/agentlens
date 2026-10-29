@@ -412,7 +412,7 @@ pub fn errors(tools: &[ToolErrors]) -> Result<String, CsvError> {
     write(&header, rows)
 }
 
-/// `advise`: one row per skill of each finding.
+/// `advise`: one row per skill of each finding, with the finding's rank and saving on every row.
 pub fn advice(report: &AdviceReport) -> Result<String, CsvError> {
     let header = [
         "finding",
@@ -421,12 +421,24 @@ pub fn advice(report: &AdviceReport) -> Result<String, CsvError> {
         "tokens_measured",
         "requests",
         "detail",
+        "rank",
+        "saving_tokens",
+        "saving_usd",
+        "confidence",
     ];
+    let id = |v: serde_json::Result<serde_json::Value>| {
+        v.ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default()
+    };
     let mut rows = Vec::new();
     for f in &report.findings {
-        let kind = serde_json::to_value(f.kind)
-            .ok()
-            .and_then(|v| v.as_str().map(str::to_owned))
+        let kind = id(serde_json::to_value(f.kind));
+        let confidence = id(serde_json::to_value(f.impact.confidence));
+        let usd = f
+            .impact
+            .saving_usd
+            .map(|u| format!("{u:.6}"))
             .unwrap_or_default();
         for i in &f.items {
             rows.push(vec![
@@ -436,6 +448,10 @@ pub fn advice(report: &AdviceReport) -> Result<String, CsvError> {
                 i.tokens.measured.to_string(),
                 i.requests.to_string(),
                 i.detail.clone(),
+                f.rank.to_string(),
+                f.impact.saving.count.to_string(),
+                usd.clone(),
+                confidence.clone(),
             ]);
         }
     }
