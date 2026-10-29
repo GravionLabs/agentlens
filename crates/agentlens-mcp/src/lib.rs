@@ -22,7 +22,7 @@ use rmcp::{
 };
 use serde::{Deserialize, Serialize};
 
-/// The filter every analysis takes, like `--since`, `--until`, `--source` and `--project` of the CLI.
+/// The filter every analysis takes, like `--since`, `--until`, `--source`, `--project` and `--session` of the CLI.
 /// The period is `[since, until)`; both take `30d`, `12h`, `4w` (counted back from now), a date
 /// (`2026-10-01`, midnight UTC) or an RFC 3339 instant.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -37,6 +37,8 @@ pub struct Query {
     pub sources: Option<Vec<String>>,
     /// Only sessions that ran in this directory or below it.
     pub project: Option<String>,
+    /// Only the session with this id (Claude Code `session_id`, OpenCode session id). Unknown id: empty result.
+    pub session: Option<String>,
 }
 
 impl Query {
@@ -50,6 +52,12 @@ impl Query {
                 .as_ref()
                 .filter(|p| !p.trim().is_empty())
                 .map(Into::into),
+            session: self
+                .session
+                .iter()
+                .filter(|s| !s.trim().is_empty())
+                .cloned()
+                .collect(),
         }
     }
 }

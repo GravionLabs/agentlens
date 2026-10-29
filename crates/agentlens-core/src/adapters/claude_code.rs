@@ -226,6 +226,14 @@ fn discover(projects: &Path, filter: &SessionFilter) -> Result<Vec<SessionFile>,
     let mut out = Vec::new();
     for slug in slugs {
         for path in jsonl_files(&slug) {
+            // The file is named after the session, so a session filter needs no parsing.
+            if !filter.session.is_empty()
+                && !path
+                    .file_stem()
+                    .is_some_and(|s| filter.session.iter().any(|id| s == id.as_str()))
+            {
+                continue;
+            }
             if untouched_since(&path, filter.since) {
                 continue;
             }

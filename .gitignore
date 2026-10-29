@@ -25,3 +25,6 @@ apm_modules/
 
 # git worktrees of the deliver workflow
 /.worktrees/
+
+# agent runtime files (bus database, installed skills)
+/.agents/
