@@ -20,6 +20,7 @@ pub mod references;
 pub mod report;
 pub mod since;
 pub mod tokens;
+pub mod worktree;
 
 /// Version of this crate, for report metadata.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

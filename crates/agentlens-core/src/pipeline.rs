@@ -20,6 +20,7 @@ use crate::inventory::{self, Inventory};
 use crate::model::{SessionEvents, Source};
 use crate::references;
 use crate::tokens::TokenEstimator;
+use crate::worktree::WorktreeResolver;
 
 /// What one source holds on this machine.
 #[derive(Debug, Clone)]
@@ -53,14 +54,18 @@ pub fn scan_sources(
                 errors: Vec::new(),
             };
             if scan.detection.found {
+                let mut resolver = WorktreeResolver::new();
                 for r in a.sessions(env, filter) {
                     match r {
-                        Ok(se) if filter.matches(&se.session) => {
+                        Ok(mut se) => {
+                            resolver.apply(&mut se.session);
+                            if !filter.matches(&se.session) {
+                                continue;
+                            }
                             scan.sessions += 1;
                             scan.events += se.events.len() as u64;
                             scan.warnings += se.warnings.len() as u64;
                         }
-                        Ok(_) => {}
                         Err(e) => scan.errors.push(e.to_string()),
                     }
                 }
