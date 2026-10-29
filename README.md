@@ -68,7 +68,7 @@ pnpm tauri dev                                              # the application wi
 pnpm docs:dev                                               # the documentation site
 ```
 
-See [AGENTS.md](AGENTS.md) for the architecture and the working conventions.
+See [AGENTS.md](AGENTS.md) for the architecture and the working conventions, and [ROADMAP.md](ROADMAP.md) for the order of work and the releases.
 
 ## License
 
