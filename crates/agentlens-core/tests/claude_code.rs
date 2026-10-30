@@ -739,3 +739,90 @@ fn efficiency_roles_cover_skill_phase_type_and_main() {
     assert_eq!(skill.uncached_after_first.count, 0);
     assert!(skill.first_request_context.measured);
 }
+
+#[test]
+fn a_clear_opens_the_new_transcript_and_is_recorded_at_its_start() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/clear_at_start.jsonl",
+        &format!("{SLUG}/clear_at_start.jsonl"),
+    );
+    let se = read_all(&home).remove(0);
+    let clears: Vec<usize> = se
+        .events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| matches!(e.kind, EventKind::Clear))
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(clears.len(), 1, "one /clear, one event");
+    let first_request = se
+        .events
+        .iter()
+        .position(|e| matches!(e.kind, EventKind::Usage(_)))
+        .unwrap();
+    assert!(
+        clears[0] < first_request,
+        "the clear comes before the first request of the session"
+    );
+    assert!(
+        se.events[..clears[0]]
+            .iter()
+            .all(|e| matches!(e.kind, EventKind::UserTurn)),
+        "only the command's own turn precedes it: {:?}",
+        &se.events[..clears[0]]
+    );
+    assert_eq!(
+        se.events[clears[0]].at,
+        Some("2026-10-03T10:00:00Z".parse().unwrap())
+    );
+    // `/clear` stays a built-in command: no skill.
+    assert!(
+        se.events
+            .iter()
+            .all(|e| !matches!(e.kind, EventKind::SkillInvoked(_)))
+    );
+}
+
+#[test]
+fn other_builtin_commands_record_no_clear() {
+    let home = TempHome::new();
+    home.copy_fixture("claude_code/skills.jsonl", &format!("{SLUG}/skills.jsonl"));
+    let se = read_all(&home).remove(0);
+    assert!(
+        se.events
+            .iter()
+            .all(|e| !matches!(e.kind, EventKind::Clear)),
+        "/model is no clear"
+    );
+}
+
+#[test]
+fn a_recorded_clear_is_a_measured_fresh_start() {
+    use agentlens_core::analyzers::advice::hygiene_saving;
+    use agentlens_core::prices::PriceTable;
+
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/clear_at_start.jsonl",
+        &format!("{SLUG}/clear_at_start.jsonl"),
+    );
+    // Same client, project and branch, but no /clear: Claude Code records it, so no proxy.
+    home.copy_fixture(
+        "claude_code/two_compactions.jsonl",
+        &format!("{SLUG}/two_compactions.jsonl"),
+    );
+    let sessions = read_all(&home);
+    let h = hygiene_saving(&sessions, &PriceTable::default());
+    assert_eq!((h.fresh_measured, h.fresh_estimated), (1, 0));
+    let clears: Vec<(&str, u64, bool)> = h
+        .sessions
+        .iter()
+        .map(|s| (s.session.as_str(), s.clears, s.clears_measured))
+        .collect();
+    assert_eq!(
+        clears,
+        [("clear_at_start", 1, true), ("two_compactions", 0, true)],
+        "both have two compactions"
+    );
+}

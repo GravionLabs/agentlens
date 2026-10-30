@@ -7,6 +7,36 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
   "data": [
     {
       "source": "claude-code",
+      "id": "near_limit",
+      "project": "/work/demo",
+      "model": "claude-test-1",
+      "started_at": "2026-10-03T12:00:00Z",
+      "ended_at": "2026-10-03T12:00:03Z",
+      "requests": 3,
+      "peak_tokens": 190000
+    },
+    {
+      "source": "claude-code",
+      "id": "two_compactions",
+      "project": "/work/demo",
+      "model": "claude-test-1",
+      "started_at": "2026-10-03T11:00:10Z",
+      "ended_at": "2026-10-03T11:00:21Z",
+      "requests": 6,
+      "peak_tokens": 6000
+    },
+    {
+      "source": "claude-code",
+      "id": "clear_at_start",
+      "project": "/work/demo",
+      "model": "claude-test-1",
+      "started_at": "2026-10-03T10:00:00Z",
+      "ended_at": "2026-10-03T10:00:21Z",
+      "requests": 6,
+      "peak_tokens": 6000
+    },
+    {
+      "source": "claude-code",
       "id": "typed_skill",
       "project": "/work/demo",
       "model": "claude-test-1",

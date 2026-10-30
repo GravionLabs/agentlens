@@ -152,6 +152,9 @@ pub enum EventKind {
     Usage(Usage),
     /// The context was compacted; earlier content no longer counts as carried.
     Compaction,
+    /// The user cleared the context (`/clear` in Claude Code). Claude Code starts a new transcript for
+    /// it, so the event normally sits at the start of the new session: that session is a fresh start.
+    Clear,
     /// Static content the client put into the context (not conversation).
     ContextItem(ContextItem),
     /// A hook the client ran.
@@ -388,6 +391,7 @@ mod tests {
             }),
         );
         se.push(None, EventKind::Compaction);
+        se.push(None, EventKind::Clear);
         se.warn(Warning::new("bad line").at("a.jsonl:3"));
 
         let json = serde_json::to_string(&se).unwrap();
