@@ -146,7 +146,8 @@ pub fn skill_run(
     skill_run_from(env, &sessions, errors, estimator)
 }
 
-fn read_sessions(
+/// Reads the sessions of the selected sources once, with the errors of those that could not be read.
+pub fn read_sessions(
     registry: &Registry,
     env: &Env,
     filter: &SessionFilter,

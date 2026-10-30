@@ -137,6 +137,16 @@ agentlens compare --since 30d
 
 The clients side by side over the same sessions: sessions, requests, tokens, cache hit rate, tool calls and error rate, skill invocations and their estimated overhead, and session time (first to last event, so idle time is included). A value a client does not record is `n/a`.
 
+## Trend
+
+The current period next to a comparison window, with the change of every figure. This is the analysis behind `api::trend` (the CLI command and the MCP tool follow).
+
+- **Windows.** The current window is `[since, until)` of the filters; without `since` it is the last 30 days, without `until` it ends now. The comparison window is, by default, the window of the same length right before (`[since - length, since)`); it can be given explicitly. Overlapping windows are an error.
+- **Boundary rule.** A session belongs to the window in which it ends (its start if it has no end), the same rule as the period filter: a session that ends exactly at `since` is in the current window, one that ends exactly at `until` is in the next one.
+- **Normalization.** When the two windows differ in length, `normalized` is `true` and every count and amount is compared per day (figure divided by the length of the window in days). Rates (cache hit rate, subagent share) are compared as rates and never normalized. With equal lengths the values are absolute.
+- **Delta.** Each figure has `before` (comparison window), `after` (current window), `change` (`after - before`), `change_pct` (in percent of `before`) and `measured`. `change` is `n/a` when either window has no sessions, never a 100 % drop; `change_pct` is `n/a` when `before` is 0; `measured` is true only if both values were measured, so a change of an estimate is an estimate.
+- **Figures.** Volume (sessions, requests, subagent requests, tokens, context tokens, large-context requests), cost (measured and estimated USD kept apart, unpriced requests), efficiency (cache hit rate, subagent request share), errors (tool calls, failed calls, retry loops) and, per skill, loads and overhead tokens. A skill loaded in one window only has the status `new` or `gone`; the skills are sorted by the size of the change of their overhead tokens, then by name.
+
 ## Timeline
 
 The application (and the `timeline` tool of the MCP server) shows the context size of every request of one session, with its compactions. There is no CLI command for it.

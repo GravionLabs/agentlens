@@ -12,6 +12,7 @@ import type {
   SkillsData,
   SourceOverview,
   Timeline,
+  TrendReport,
   UnusedReport,
 } from "./types";
 import advice from "./samples/advice.json";
@@ -25,6 +26,7 @@ import overview from "./samples/overview.json";
 import sessions from "./samples/sessions.json";
 import skills from "./samples/skills.json";
 import timeline from "./samples/timeline.json";
+import trend from "./samples/trend.json";
 import unused from "./samples/unused.json";
 
 // These samples are written by the Rust side (`UPDATE_SAMPLES=1 cargo test -p agentlens-app`).
@@ -44,6 +46,7 @@ describe("samples from the backend", () => {
       compare as unknown as Answer<CompareReport>,
       sessions as unknown as Answer<SessionSummary[]>,
       timeline as unknown as Answer<Timeline>,
+      trend as unknown as Answer<TrendReport>,
     ];
     for (const a of answers) {
       expect(Object.keys(a).sort()).toEqual(["data", "errors", "schema_version", "warnings"]);

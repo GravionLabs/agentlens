@@ -19,11 +19,13 @@ use crate::analyzers::efficiency::{CacheBy, EfficiencyReport};
 use crate::analyzers::flow::{ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::SkillReport;
 use crate::analyzers::timeline::{SessionSummary, Timeline};
+use crate::analyzers::trend::{self, TrendReport, Windows};
 use crate::analyzers::unused::UnusedReport;
 use crate::cli_tools::{self, CliTools};
 use crate::env::Env;
 use crate::export::{self, csv as csv_export};
-use crate::inventory::Duplicate;
+use crate::inventory::{self, Duplicate};
+use crate::model::SessionEvents;
 use crate::model::Source;
 use crate::pipeline;
 use crate::prices::{self, PriceTable};
@@ -71,8 +73,12 @@ pub struct Filters {
     pub roles: Vec<String>,
 }
 
-/// Length in days of the period the unused view looks at when no `since` is given.
-pub const DEFAULT_UNUSED_DAYS: u32 = 30;
+/// Length in days of the period the unused view and the trend look at when no `since` is given.
+pub const DEFAULT_PERIOD_DAYS: u32 = 30;
+
+/// The former name of [`DEFAULT_PERIOD_DAYS`].
+#[deprecated(note = "use DEFAULT_PERIOD_DAYS")]
+pub const DEFAULT_UNUSED_DAYS: u32 = DEFAULT_PERIOD_DAYS;
 
 impl Filters {
     fn resolve(&self, now: Timestamp) -> Result<(SessionFilter, Vec<Source>), String> {
@@ -259,11 +265,11 @@ pub fn context(ctx: &Context, f: &Filters) -> Result<Answer<ContextReport>, Stri
     answer(run.report, run.warnings, run.errors)
 }
 
-/// Defaults to the last [`DEFAULT_UNUSED_DAYS`] days if the filter has no period.
+/// Defaults to the last [`DEFAULT_PERIOD_DAYS`] days if the filter has no period.
 pub fn unused(ctx: &Context, f: &Filters) -> Result<Answer<UnusedReport>, String> {
     let now = Timestamp::now();
     let (filter, only) = f.resolve(now)?;
-    let filter = with_unused_window(filter, DEFAULT_UNUSED_DAYS, now)?;
+    let filter = with_unused_window(filter, DEFAULT_PERIOD_DAYS, now)?;
     let run = pipeline::unused_run(&ctx.registry, &ctx.env, &filter, &only, &CharsPerToken);
     answer(run.report, run.warnings, run.errors)
 }
@@ -278,6 +284,99 @@ pub fn with_unused_window(
         filter.since = Some(window_start(days, filter.until, now)?);
     }
     Ok(filter)
+}
+
+/// The two windows of a trend and the sessions of each, read once.
+pub type WindowsRead = (
+    Windows,
+    Vec<SessionEvents>,
+    Vec<SessionEvents>,
+    u64,
+    Vec<String>,
+);
+
+/// Plans the current window and its comparison window from the filter (see [`trend::plan`]), reads the
+/// sessions **once** with a filter that spans both and splits them: a session belongs to the window in
+/// which it ends, the rule of `SessionFilter::matches`. Returns the windows (with their session counts),
+/// the sessions of the current and of the comparison window, the warnings and the read errors.
+pub fn windows(
+    ctx: &Context,
+    f: &Filters,
+    against: Option<(Timestamp, Timestamp)>,
+) -> Result<WindowsRead, String> {
+    windows_at(ctx, f, against, Timestamp::now())
+}
+
+fn windows_at(
+    ctx: &Context,
+    f: &Filters,
+    against: Option<(Timestamp, Timestamp)>,
+    now: Timestamp,
+) -> Result<WindowsRead, String> {
+    let (filter, only) = f.resolve(now)?;
+    // `resolve` counts relative bounds from a five-minute step; an open end does too.
+    let step =
+        Timestamp::from_second(now.as_second() - now.as_second().rem_euclid(300)).unwrap_or(now);
+    let mut windows = trend::plan(
+        filter.since,
+        filter.until,
+        step,
+        DEFAULT_PERIOD_DAYS,
+        against,
+    )?;
+    let span = SessionFilter {
+        since: Some(windows.current.since.min(windows.against.since)),
+        until: Some(windows.current.until.max(windows.against.until)),
+        ..filter
+    };
+    let (sessions, errors) = pipeline::read_sessions(&ctx.registry, &ctx.env, &span, &only);
+    let warnings = sessions.iter().map(|s| s.warnings.len() as u64).sum();
+    let belongs = |w: &trend::Window| SessionFilter {
+        since: Some(w.since),
+        until: Some(w.until),
+        ..SessionFilter::default()
+    };
+    let (in_current, in_against) = (belongs(&windows.current), belongs(&windows.against));
+    let (mut current, mut compared) = (Vec::new(), Vec::new());
+    // A session in the gap between two distant windows belongs to neither.
+    for se in sessions {
+        if in_current.matches(&se.session) {
+            current.push(se);
+        } else if in_against.matches(&se.session) {
+            compared.push(se);
+        }
+    }
+    pipeline::retain_roles(&mut current, &f.roles);
+    pipeline::retain_roles(&mut compared, &f.roles);
+    windows.current.sessions = current.len() as u32;
+    windows.against.sessions = compared.len() as u32;
+    Ok((windows, current, compared, warnings, errors))
+}
+
+/// The period against the window before it (or `against`), with the deltas of the figures.
+pub fn trend(
+    ctx: &Context,
+    f: &Filters,
+    against: Option<(Timestamp, Timestamp)>,
+) -> Result<Answer<TrendReport>, String> {
+    let prices = load_prices(ctx)?;
+    let (windows, current, compared, warnings, errors) = windows(ctx, f, against)?;
+    let projects: std::collections::BTreeSet<PathBuf> = current
+        .iter()
+        .chain(&compared)
+        .filter_map(|s| s.session.project_dir.clone())
+        .collect();
+    let projects: Vec<PathBuf> = projects.into_iter().collect();
+    let inventory = inventory::scan(&inventory::locations(&ctx.env, &projects), &CharsPerToken);
+    let report = trend::analyze(
+        windows,
+        &current,
+        &compared,
+        &inventory,
+        &prices,
+        &CharsPerToken,
+    );
+    answer(report, warnings, errors)
 }
 
 #[derive(Debug, Serialize)]
@@ -721,9 +820,9 @@ mod tests {
 
     #[test]
     fn the_unused_window_defaults_to_the_shared_thirty_days_and_keeps_a_given_since() {
-        assert_eq!(DEFAULT_UNUSED_DAYS, 30);
+        assert_eq!(DEFAULT_PERIOD_DAYS, 30);
         let (open, _) = filters(None, None).resolve(now()).unwrap();
-        let w = with_unused_window(open, DEFAULT_UNUSED_DAYS, now()).unwrap();
+        let w = with_unused_window(open, DEFAULT_PERIOD_DAYS, now()).unwrap();
         assert_eq!(w.since.unwrap().to_string(), "2026-09-10T12:03:20Z");
         let (given, _) = filters(Some("2026-10-01"), None).resolve(now()).unwrap();
         let w = with_unused_window(given, 7, now()).unwrap();
@@ -793,5 +892,112 @@ mod tests {
         // Counted from now, the default window would end long after `until` and be empty.
         let f = filters(None, Some("2026-01-05"));
         assert_eq!(unused(&ctx, &f).unwrap().data.sessions, 0);
+    }
+    /// Yields sessions that end at the given instants and counts how often it is read.
+    struct Counting {
+        ends: Vec<&'static str>,
+        reads: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl crate::adapter::Adapter for Counting {
+        fn id(&self) -> Source {
+            Source::ClaudeCode
+        }
+
+        fn detect(&self, _env: &Env) -> crate::adapter::Detection {
+            crate::adapter::Detection::found(vec!["/dummy".into()])
+        }
+
+        fn sessions<'a>(
+            &'a self,
+            _env: &'a Env,
+            _filter: &'a SessionFilter,
+        ) -> crate::adapter::SessionIter<'a> {
+            self.reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Box::new(self.ends.iter().map(|end| {
+                let mut s = crate::model::Session::new(*end, Source::ClaudeCode);
+                s.ended_at = Some(end.parse().unwrap());
+                Ok(SessionEvents::new(s))
+            }))
+        }
+    }
+
+    fn counting_context(
+        ends: Vec<&'static str>,
+    ) -> (Context, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        let reads = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut registry = Registry::new();
+        registry.register(Box::new(Counting {
+            ends,
+            reads: reads.clone(),
+        }));
+        let ctx = Context {
+            env: Env::for_home("/h"),
+            registry,
+        };
+        (ctx, reads)
+    }
+
+    fn ids(sessions: &[SessionEvents]) -> Vec<&str> {
+        let mut ids: Vec<&str> = sessions.iter().map(|s| s.session.id.as_str()).collect();
+        ids.sort();
+        ids
+    }
+
+    #[test]
+    fn windows_read_once_and_split_by_the_end_of_the_session() {
+        // now is 2026-10-10T12:03:20Z, rounded to 12:00:00; the period is 2026-10-03..2026-10-10T12:00.
+        let (ctx, reads) = counting_context(vec![
+            "2026-09-26T00:00:00Z", // the week before
+            "2026-10-02T23:59:59Z", // the week before, just
+            "2026-10-03T00:00:00Z", // exactly the boundary: current
+            "2026-10-09T00:00:00Z", // current
+            "2026-10-10T12:00:00Z", // exactly until: neither
+            "2026-09-01T00:00:00Z", // before both
+        ]);
+        let f = filters(Some("2026-10-03"), None);
+        let (w, current, against, _, errors) = windows_at(&ctx, &f, None, now()).unwrap();
+        assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(errors.is_empty());
+        assert_eq!(
+            ids(&current),
+            ["2026-10-03T00:00:00Z", "2026-10-09T00:00:00Z"]
+        );
+        assert_eq!(
+            ids(&against),
+            ["2026-09-26T00:00:00Z", "2026-10-02T23:59:59Z"]
+        );
+        assert_eq!((w.current.sessions, w.against.sessions), (2, 2));
+        assert!(!w.normalized);
+    }
+
+    #[test]
+    fn the_default_comparison_window_is_the_one_of_the_same_length_before() {
+        let (ctx, _) = counting_context(vec![]);
+        let f = filters(Some("2026-10-03"), Some("2026-10-10"));
+        let (w, _, _, _, _) = windows_at(&ctx, &f, None, now()).unwrap();
+        assert_eq!(w.current.since.to_string(), "2026-10-03T00:00:00Z");
+        assert_eq!(w.current.until.to_string(), "2026-10-10T00:00:00Z");
+        assert_eq!(w.against.since.to_string(), "2026-09-26T00:00:00Z");
+        assert_eq!(w.against.until.to_string(), "2026-10-03T00:00:00Z");
+        assert!(!w.normalized);
+        // Without a period: the last thirty days and the thirty before.
+        let (w, _, _, _, _) = windows_at(&ctx, &Filters::default(), None, now()).unwrap();
+        assert_eq!(w.current.since.to_string(), "2026-09-10T12:00:00Z");
+        assert_eq!(w.against.since.to_string(), "2026-08-11T12:00:00Z");
+        assert_eq!(w.against.until, w.current.since);
+    }
+
+    #[test]
+    fn an_overlapping_against_is_an_error_and_reads_nothing() {
+        let (ctx, reads) = counting_context(vec![]);
+        let f = filters(Some("2026-10-03"), Some("2026-10-10"));
+        let against = Some((
+            "2026-10-01T00:00:00Z".parse().unwrap(),
+            "2026-10-05T00:00:00Z".parse().unwrap(),
+        ));
+        let err = windows_at(&ctx, &f, against, now()).unwrap_err();
+        assert!(err.contains("overlaps"), "{err}");
+        assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 0);
     }
 }
