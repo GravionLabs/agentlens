@@ -14,9 +14,12 @@ import { overhead, Skills, skillView } from "./skills";
 
 let payload: unknown = null;
 
+let trendPayload: unknown = null;
+
 class FakeIpc extends Ipc {
-  override async invoke<T>(): Promise<T> {
-    return { schema_version: 2, data: payload, warnings: 0, errors: [] } as T;
+  override async invoke<T>(command: string): Promise<T> {
+    const data = command === "trend" ? trendPayload : payload;
+    return { schema_version: 2, data, warnings: 0, errors: [] } as T;
   }
 }
 
@@ -154,6 +157,68 @@ describe("Skills table on helix", () => {
     const cell = el.querySelector("hx-data-table tbody tr td:nth-child(5) span")!;
     expect(cell.textContent!.trim()).toBe("~5.00 k");
     expect(cell.getAttribute("title")).toBe("5,000");
+  });
+});
+
+describe("Skills change column", () => {
+  const delta = (before: number, after: number, pct: number | null) => ({
+    before,
+    after,
+    change: after - before,
+    change_pct: pct,
+    measured: true,
+  });
+  beforeEach(() => {
+    payload = {
+      installed_skills: 3,
+      report: { skills: [stats("big"), stats("small"), stats("idle", { invocations: 0 })] },
+    };
+    trendPayload = {
+      windows: {
+        current: { since: "2026-10-16T00:00:00Z", until: "2026-10-30T00:00:00Z", sessions: 4 },
+        against: { since: "2026-10-02T00:00:00Z", until: "2026-10-16T00:00:00Z", sessions: 3 },
+        normalized: false,
+      },
+      skills: [
+        {
+          name: "big",
+          status: "both",
+          loads: delta(2, 5, 150),
+          overhead_tokens: delta(10, 20, 100),
+        },
+        { name: "small", status: "both", loads: delta(4, 1, -75), overhead_tokens: delta(1, 1, 0) },
+      ],
+    };
+  });
+
+  it("has no change column while the comparison is off", async () => {
+    const { el } = await render();
+    expect(el.querySelector("hx-data-table thead")!.textContent).not.toContain("Change");
+  });
+
+  it("shows the change of the loads, - for a skill without one, and sorts by it", async () => {
+    localStorage.setItem("agentlens.filters", JSON.stringify({ compare: true }));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
+    });
+    const { fixture, el } = await render();
+    const changeIndex = [...el.querySelectorAll("hx-data-table thead th")].findIndex((th) =>
+      th.textContent!.includes("Change"),
+    );
+    expect(changeIndex).toBeGreaterThan(0);
+    const cells = () => column(el, changeIndex).map((t) => t.replace(/\s+/g, " "));
+    // Default order is by overhead: big, small and idle share nothing else to sort on.
+    expect(cells()).toEqual(
+      expect.arrayContaining(["\u25B2 +3 (+150.0%)", "\u25BC -3 (-75.0%)", "-"]),
+    );
+    const button = [...el.querySelectorAll<HTMLElement>("hx-data-table th button")].find((b) =>
+      b.textContent!.includes("Change"),
+    )!;
+    button.click();
+    fixture.detectChanges();
+    // Ascending: the biggest drop first, the missing value last.
+    expect(cells()).toEqual(["\u25BC -3 (-75.0%)", "\u25B2 +3 (+150.0%)", "-"]);
   });
 });
 

@@ -2,7 +2,7 @@ import { DestroyRef, effect, inject, resource } from "@angular/core";
 import { FiltersService } from "./filters.service";
 import { Ipc } from "./ipc";
 import { LoadingService } from "./loading.service";
-import type { Answer } from "./types";
+import type { Answer, TrendReport } from "./types";
 
 /**
  * Runs one analysis command and runs it again whenever the filters or the
@@ -37,4 +37,14 @@ export function messageOf(error: unknown): string {
   if (typeof error === "string") return error;
   if (error instanceof Error) return error.cause ? messageOf(error.cause) : error.message;
   return "Something went wrong.";
+}
+
+/** The comparison with the previous period; idle until the switch in the filter bar is on. */
+export function trendAnalysis() {
+  const filters = inject(FiltersService);
+  return analysis<TrendReport>(
+    "trend",
+    () => ({}),
+    () => filters.compare(),
+  );
 }

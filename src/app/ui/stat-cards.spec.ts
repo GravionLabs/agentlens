@@ -2,7 +2,7 @@
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { TestBed } from "@angular/core/testing";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { type Stat, StatCards } from "./stat-cards";
+import { type Stat, StatCards, trendStat } from "./stat-cards";
 
 beforeAll(() => {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -38,6 +38,35 @@ describe("StatCards", () => {
     const cards = el.querySelectorAll("helix-stat-card");
     expect(cards[0].getAttribute("title")).toBe("1,234 tokens");
     expect(cards[1].hasAttribute("title")).toBe(false);
+  });
+
+  it("shows the change under a card, colored only by its tone", () => {
+    const el = render([
+      {
+        value: "$3.00",
+        label: "Cost",
+        delta: { direction: "up", arrow: "\u25B2", text: "+$1.00 (+50.0%)", tone: "bad" },
+      },
+      {
+        value: "9",
+        label: "Neutral",
+        delta: { direction: "down", arrow: "\u25BC", text: "-1 (-10.0%)", tone: "neutral" },
+      },
+      { value: "1", label: "Plain" },
+    ]);
+    const deltas = el.querySelectorAll(".delta");
+    expect(deltas).toHaveLength(2);
+    expect(deltas[0].textContent).toContain("+$1.00 (+50.0%)");
+    expect(deltas[0].classList.contains("bad")).toBe(true);
+    expect(deltas[1].classList.contains("bad") || deltas[1].classList.contains("good")).toBe(false);
+  });
+
+  it("builds a trend stat with the current value and n/a for an empty window", () => {
+    const empty = { before: null, after: null, change: null, change_pct: null, measured: true };
+    const stat = trendStat("Cost", empty, "usd", { good: "down" });
+    expect(stat.value).toBe("n/a");
+    expect(stat.delta?.text).toBe("n/a");
+    expect(trendStat("Requests", empty, "count", { perDay: true }).label).toBe("Requests per day");
   });
 
   it("renders nothing for an empty list", () => {

@@ -13,6 +13,7 @@ import {
   HxInput,
   HxMultiSelect,
   HxSelect,
+  HxSwitch,
 } from "@gravionlabs/helix-ui";
 import { CUSTOM, FiltersService, LAST_UNITS, PERIODS } from "../core/filters.service";
 import { Ipc } from "../core/ipc";
@@ -21,7 +22,7 @@ import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../c
 @Component({
   selector: "app-filter-bar",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HxSelect, HxMultiSelect, HxInput, HxDateTimeRangePicker],
+  imports: [HxSelect, HxMultiSelect, HxInput, HxDateTimeRangePicker, HxSwitch],
   template: `
     <form class="bar" (submit)="$event.preventDefault()" aria-label="Filters">
       <div class="field">
@@ -121,6 +122,16 @@ import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../c
           />
         </div>
       }
+      <label class="compare" for="filter-compare">
+        <input
+          hx-switch
+          type="checkbox"
+          id="filter-compare"
+          [checked]="filters.compare()"
+          (change)="filters.setCompare(isChecked($event))"
+        />
+        vs. previous period
+      </label>
     </form>
   `,
   styles: `
@@ -165,8 +176,16 @@ import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../c
       color: var(--danger, #b00020);
       font-size: 0.85rem;
     }
+    .compare {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
     /* The fields keep their labels for assistive technology; the topbar has no room to show them. */
-    label {
+    label:not(.compare) {
       position: absolute;
       width: 1px;
       height: 1px;
@@ -264,6 +283,10 @@ export class FilterBar {
     for (const id of new Set([...current, ...ids])) {
       if (current.includes(id) !== ids.includes(id)) this.filters.toggleSource(id);
     }
+  }
+
+  protected isChecked(event: Event): boolean {
+    return (event.target as HTMLInputElement).checked;
   }
 
   protected setProject(event: Event): void {

@@ -105,6 +105,18 @@ describe("FiltersService", () => {
     expect(f.periodChoice()).toBe("7d");
   });
 
+  it("keeps the comparison switch off by default and remembers it with the filters", () => {
+    const f = service();
+    expect(f.compare()).toBe(false);
+    f.setCompare(true);
+    expect(stored().compare).toBe(true);
+    expect(service().compare()).toBe(true);
+    // The switch is not a filter of the analyses.
+    expect(f.payload()).not.toHaveProperty("compare");
+    f.setCompare(false);
+    expect(service().compare()).toBe(false);
+  });
+
   it("validates the pure inputs", () => {
     expect(validateLast(1.5, "d")).not.toBeNull();
     expect(validateLast(1, "w")).not.toBeNull();

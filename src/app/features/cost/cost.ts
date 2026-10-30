@@ -1,10 +1,14 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import { analysis, trendAnalysis } from "../../core/analysis";
+import { trendNote } from "../../core/delta";
+import { FiltersService } from "../../core/filters.service";
 import { exactTokens, number, pathLabel, tokens, usd } from "../../core/format";
 import type { CostData, CostRow, WhatIfRow } from "../../core/types";
+import { trendStat } from "../../ui/stat-cards";
 import { Status } from "../../ui/status";
+import { TrendCards } from "../../ui/trend-cards";
 import { HxCell, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 /** A cost row prepared for the helix table: sortable raw values next to the display text. */
@@ -70,7 +74,7 @@ export function money(r: CostRow): string {
 
 @Component({
   selector: "app-cost",
-  imports: [PageHeader, Term, Status, HxDataTable, HxCell],
+  imports: [PageHeader, Term, Status, TrendCards, HxDataTable, HxCell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -116,6 +120,14 @@ export function money(r: CostRow): string {
         [warnings]="res.value()?.warnings ?? 0"
         [errors]="res.value()?.errors ?? []"
       />
+      @if (compare()) {
+        <app-trend-cards
+          [stats]="trendStats()"
+          [note]="note()"
+          [loading]="trend.isLoading()"
+          [error]="trend.error()"
+        />
+      }
       <hx-data-table
         [value]="views()"
         [columns]="columns()"
@@ -238,6 +250,23 @@ export class Cost {
     by: this.by(),
     whatIf: this.whatIf() || null,
   }));
+
+  protected readonly compare = inject(FiltersService).compare;
+  protected readonly trend = trendAnalysis();
+  protected readonly note = computed(() => {
+    const w = this.trend.value()?.data.windows;
+    return w ? trendNote(w) : "";
+  });
+  protected readonly trendStats = computed(() => {
+    const t = this.trend.value()?.data;
+    if (!t) return [];
+    const perDay = t.windows.normalized;
+    return [
+      trendStat("Measured cost", t.cost.measured_usd, "usd", { good: "down", perDay }),
+      trendStat("Estimated cost", t.cost.estimated_usd, "usd", { good: "down", perDay }),
+      trendStat("Unpriced requests", t.cost.unpriced_requests, "count", { good: "down", perDay }),
+    ];
+  });
 
   protected readonly rows = computed(() => this.res.value()?.data.report.rows ?? []);
   protected readonly total = computed(() => this.res.value()?.data.report.total ?? null);

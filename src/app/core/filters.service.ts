@@ -44,6 +44,7 @@ interface Stored {
   sources?: SourceId[];
   project?: string;
   roles?: string[];
+  compare?: boolean;
 }
 
 function load(): Stored | null {
@@ -104,6 +105,9 @@ export class FiltersService {
   readonly project = signal(this.stored?.project ?? "");
   /** Empty means all roles. */
   readonly roles = signal<string[]>(this.stored?.roles ?? []);
+
+  /** Whether the views show the change against the previous period (off by default). */
+  readonly compare = signal(this.stored?.compare === true);
 
   /** Raised by the refresh button so every analysis runs again. */
   readonly generation = signal(0);
@@ -189,6 +193,11 @@ export class FiltersService {
     this.persist();
   }
 
+  setCompare(value: boolean): void {
+    this.compare.set(value);
+    this.persist();
+  }
+
   private persist(): void {
     const last = this.last();
     const range = this.range();
@@ -199,6 +208,7 @@ export class FiltersService {
       sources: this.sources(),
       project: this.project(),
       roles: this.roles(),
+      compare: this.compare(),
     };
     try {
       localStorage.setItem(KEY, JSON.stringify(value));
