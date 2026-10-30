@@ -80,6 +80,7 @@ pub fn run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
     params: Params,
     display: output::Display,
 ) -> Result<()> {
@@ -99,7 +100,7 @@ pub fn run(
         EfficiencyBy::Project => CacheBy::Project,
         EfficiencyBy::Source => CacheBy::Source,
     };
-    let run = efficiency_run(registry, env, filter, only, &table, cache_by);
+    let run = efficiency_run(registry, env, filter, only, roles, &table, cache_by);
     let r = &run.report;
 
     match display.format {

@@ -4,7 +4,7 @@
 //! (uncached input + cache read + cache write), measured from client usage.
 //! A source that reports no cache tokens at all has no hit rate (not 0%).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -178,6 +178,50 @@ fn role_of(info: &RunInfo) -> (String, RoleKind) {
     }
 }
 
+/// The run info of every run of a session, keyed by agent id, merged from its `AgentRun` events and
+/// the info on its requests.
+fn run_infos(se: &SessionEvents) -> BTreeMap<&str, RunInfo> {
+    let mut infos: BTreeMap<&str, RunInfo> = BTreeMap::new();
+    for e in &se.events {
+        match &e.kind {
+            EventKind::AgentRun {
+                agent_id,
+                agent_type,
+                name,
+                ..
+            } => {
+                let i = infos.entry(agent_id).or_default();
+                fill(&mut i.name, name);
+                fill(&mut i.agent_type, agent_type);
+            }
+            EventKind::Usage(u) => {
+                if let Some(a) = &u.agent
+                    && let Some(id) = a.agent_id.as_deref()
+                {
+                    let i = infos.entry(id).or_default();
+                    fill(&mut i.phase, &a.workflow_phase);
+                    fill(&mut i.request_agent_type, &a.agent_type);
+                }
+            }
+            _ => {}
+        }
+    }
+    infos
+}
+
+/// The roles (keys of the roles table) of the runs a session started, for the `--role` filter. Only
+/// runs with an `AgentRun` event count, so a session without one has no role.
+pub fn session_roles(se: &SessionEvents) -> BTreeSet<String> {
+    let infos = run_infos(se);
+    se.events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::AgentRun { agent_id, .. } => Some(role_of(&infos[agent_id.as_str()]).0),
+            _ => None,
+        })
+        .collect()
+}
+
 fn roles(sessions: &[SessionEvents], prices: &PriceTable) -> Vec<RoleRow> {
     let mut acc: BTreeMap<(RoleKind, String), RoleAcc> = BTreeMap::new();
     let fresh = || RoleAcc {
@@ -185,21 +229,13 @@ fn roles(sessions: &[SessionEvents], prices: &PriceTable) -> Vec<RoleRow> {
         ..RoleAcc::default()
     };
     for se in sessions {
-        let mut infos: BTreeMap<&str, RunInfo> = BTreeMap::new();
+        let infos = run_infos(se);
         // Requests per run in event order; `None` is the main agent.
         let mut runs: BTreeMap<Option<&str>, RunAcc> = BTreeMap::new();
         let mut seen: Vec<(Option<&str>, &Usage)> = Vec::new();
         for e in &se.events {
             match &e.kind {
-                EventKind::AgentRun {
-                    agent_id,
-                    agent_type,
-                    name,
-                    ..
-                } => {
-                    let i = infos.entry(agent_id).or_default();
-                    fill(&mut i.name, name);
-                    fill(&mut i.agent_type, agent_type);
+                EventKind::AgentRun { agent_id, .. } => {
                     // A run without requests still counts.
                     runs.entry(Some(agent_id)).or_insert_with(|| RunAcc {
                         measured: true,
@@ -208,11 +244,6 @@ fn roles(sessions: &[SessionEvents], prices: &PriceTable) -> Vec<RoleRow> {
                 }
                 EventKind::Usage(u) => {
                     let id = u.agent.as_ref().and_then(|a| a.agent_id.as_deref());
-                    if let (Some(a), Some(id)) = (&u.agent, id) {
-                        let i = infos.entry(id).or_default();
-                        fill(&mut i.phase, &a.workflow_phase);
-                        fill(&mut i.request_agent_type, &a.agent_type);
-                    }
                     seen.push((id, u));
                 }
                 _ => {}

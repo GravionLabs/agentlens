@@ -295,11 +295,29 @@ pub struct FlowRun {
 }
 
 /// Reads the sessions and analyzes how they unfold.
+/// The `--role` filter: keeps the sessions that started at least one run of one of `roles`, with all
+/// their requests. No roles keeps everything; a session without runs never matches.
+pub fn retain_roles(sessions: &mut Vec<SessionEvents>, roles: &[String]) {
+    let roles: Vec<&str> = roles
+        .iter()
+        .map(|r| r.trim())
+        .filter(|r| !r.is_empty())
+        .collect();
+    if roles.is_empty() {
+        return;
+    }
+    sessions.retain(|se| {
+        let have = efficiency::session_roles(se);
+        roles.iter().any(|r| have.contains(*r))
+    });
+}
+
 pub fn flow_run(
     registry: &Registry,
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
 ) -> FlowRun {
     let mut sessions: Vec<SessionEvents> = Vec::new();
     let mut errors = Vec::new();
@@ -309,6 +327,7 @@ pub fn flow_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    retain_roles(&mut sessions, roles);
     FlowRun {
         growth: flow::growth(&sessions),
         tool_errors: flow::errors(&sessions),
@@ -328,11 +347,13 @@ pub struct CostRun {
 }
 
 /// Reads the sessions and prices their usage.
+#[allow(clippy::too_many_arguments)]
 pub fn cost_run(
     registry: &Registry,
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
     prices: &crate::prices::PriceTable,
     group: Grouping,
     what_if: Option<&str>,
@@ -345,6 +366,7 @@ pub fn cost_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    retain_roles(&mut sessions, roles);
     CostRun {
         warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
         report: cost::analyze(&sessions, prices, group),
@@ -366,6 +388,7 @@ pub fn efficiency_run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
     prices: &crate::prices::PriceTable,
     by: CacheBy,
 ) -> EfficiencyRun {
@@ -377,6 +400,7 @@ pub fn efficiency_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    retain_roles(&mut sessions, roles);
     EfficiencyRun {
         warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
         report: efficiency::analyze(&sessions, prices, by),
@@ -397,6 +421,7 @@ pub fn compare_run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
     estimator: &dyn TokenEstimator,
 ) -> CompareRun {
     let mut sessions: Vec<SessionEvents> = Vec::new();
@@ -407,6 +432,7 @@ pub fn compare_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    retain_roles(&mut sessions, roles);
     let projects: BTreeSet<PathBuf> = sessions
         .iter()
         .filter_map(|s| s.session.project_dir.clone())

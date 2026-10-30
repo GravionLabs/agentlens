@@ -58,7 +58,31 @@ impl Query {
                 .filter(|s| !s.trim().is_empty())
                 .cloned()
                 .collect(),
+            roles: Vec::new(),
         }
+    }
+
+    fn filters_with_roles(&self, role: &Option<Vec<String>>) -> Filters {
+        Filters {
+            roles: role.clone().unwrap_or_default(),
+            ..self.filters()
+        }
+    }
+}
+
+/// The filter plus the `role` filter, for the analyses that take one (`flow`, `compare`).
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct RoleQuery {
+    #[serde(flatten)]
+    pub query: Query,
+    /// Only sessions that started a run of one of these roles: the keys of the `roles` table of the
+    /// efficiency tool (forked skill name, else workflow phase, else agent type). Empty: all sessions.
+    pub role: Option<Vec<String>>,
+}
+
+impl RoleQuery {
+    fn filters(&self) -> Filters {
+        self.query.filters_with_roles(&self.role)
     }
 }
 
@@ -71,6 +95,9 @@ pub struct CostQuery {
     pub by: Option<String>,
     /// A model id prefix: what the usage would have cost with that model.
     pub what_if: Option<String>,
+    /// Only sessions that started a run of one of these roles: the keys of the `roles` table of the
+    /// efficiency tool (forked skill name, else workflow phase, else agent type). Empty: all sessions.
+    pub role: Option<Vec<String>>,
 }
 
 /// The efficiency analysis: the filter and the grouping of the cache table.
@@ -80,6 +107,9 @@ pub struct EfficiencyQuery {
     pub query: Query,
     /// Grouping of the cache table: `session` (default), `project` or `source`.
     pub by: Option<String>,
+    /// Only sessions that started a run of one of these roles: the keys of the `roles` table of the
+    /// efficiency tool (forked skill name, else workflow phase, else agent type). Empty: all sessions.
+    pub role: Option<Vec<String>>,
 }
 
 /// One session of the timeline.
@@ -195,7 +225,7 @@ impl AgentLensServer {
         description = "How sessions unfold: context growth with compactions, tool errors and retry loops, hooks and permission waits.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
-    async fn flow(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
+    async fn flow(&self, Parameters(q): Parameters<RoleQuery>) -> CallToolResult {
         let f = q.filters();
         self.run(move |c| api::flow(c, &f)).await
     }
@@ -205,7 +235,7 @@ impl AgentLensServer {
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn cost(&self, Parameters(q): Parameters<CostQuery>) -> CallToolResult {
-        let f = q.query.filters();
+        let f = q.query.filters_with_roles(&q.role);
         let by = q.by.unwrap_or_else(|| "model".into());
         let what_if = q.what_if;
         self.run(move |c| api::cost(c, &f, &by, what_if.as_deref()))
@@ -217,7 +247,7 @@ impl AgentLensServer {
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn efficiency(&self, Parameters(q): Parameters<EfficiencyQuery>) -> CallToolResult {
-        let f = q.query.filters();
+        let f = q.query.filters_with_roles(&q.role);
         let by = q.by.unwrap_or_else(|| "session".into());
         self.run(move |c| api::efficiency(c, &f, &by)).await
     }
@@ -226,7 +256,7 @@ impl AgentLensServer {
         description = "The coding agents side by side over the same sessions: requests, tokens, cache hit rate, tool errors, skills and time. A value a client does not record is null; `skill_overhead_tokens` has a `measured` flag.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
-    async fn compare(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
+    async fn compare(&self, Parameters(q): Parameters<RoleQuery>) -> CallToolResult {
         let f = q.filters();
         self.run(move |c| api::compare(c, &f)).await
     }

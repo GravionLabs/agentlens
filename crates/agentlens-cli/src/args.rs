@@ -85,9 +85,16 @@ pub enum Command {
         /// Rows per table (0 shows all); JSON and CSV always contain everything
         #[arg(long, default_value_t = 25)]
         top: usize,
+        /// Only sessions that started a run of this role (repeatable): the key of the efficiency roles table (forked skill, workflow phase or agent type)
+        #[arg(long, value_name = "ROLE")]
+        role: Vec<String>,
     },
     /// Compare the clients side by side over the same period
-    Compare,
+    Compare {
+        /// Only sessions that started a run of this role (repeatable): the key of the efficiency roles table (forked skill, workflow phase or agent type)
+        #[arg(long, value_name = "ROLE")]
+        role: Vec<String>,
+    },
     /// Show cache hit rate and the share of work done by subagents
     Efficiency {
         /// Group the cache table by session, project or source
@@ -102,6 +109,9 @@ pub enum Command {
         /// Which section to show; `--format csv` needs `cache` or `roles`
         #[arg(long, value_enum, default_value_t = EfficiencySection::All)]
         section: EfficiencySection,
+        /// Only sessions that started a run of this role (repeatable): the key of the efficiency roles table (forked skill, workflow phase or agent type)
+        #[arg(long, value_name = "ROLE")]
+        role: Vec<String>,
     },
     /// Show what the sessions cost
     Cost {
@@ -117,6 +127,9 @@ pub enum Command {
         /// Rows of the session table with --by session (0 shows all); JSON and CSV always contain everything
         #[arg(long, default_value_t = 25)]
         top: usize,
+        /// Only sessions that started a run of this role (repeatable): the key of the efficiency roles table (forked skill, workflow phase or agent type)
+        #[arg(long, value_name = "ROLE")]
+        role: Vec<String>,
     },
     /// List installed skills, agents and MCP servers that were not used
     Unused {
@@ -230,6 +243,8 @@ impl Cli {
             sources: self.source.iter().map(|s| s.id().to_owned()).collect(),
             project: self.project.clone(),
             session: self.session.clone(),
+            // `--role` belongs to four commands and is passed to them directly.
+            roles: Vec::new(),
         }
     }
 

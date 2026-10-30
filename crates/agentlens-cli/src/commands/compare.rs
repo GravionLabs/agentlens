@@ -58,10 +58,11 @@ pub fn run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
     estimator: &dyn TokenEstimator,
     display: output::Display,
 ) -> Result<()> {
-    let run = compare_run(registry, env, filter, only, estimator);
+    let run = compare_run(registry, env, filter, only, roles, estimator);
     let sources = &run.report.sources;
 
     match display.format {
