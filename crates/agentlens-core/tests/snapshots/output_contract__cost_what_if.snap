@@ -9,31 +9,31 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       "rows": [
         {
           "key": "/work/demo",
-          "requests": 11,
-          "input": 100109,
-          "output": 10049,
-          "cache_read": 1700,
-          "cache_write": 1850,
+          "requests": 15,
+          "input": 100239,
+          "output": 10129,
+          "cache_read": 10800,
+          "cache_write": 2350,
           "measured_usd": 0.0,
           "estimated_usd": 0.0,
-          "unpriced_requests": 11,
+          "unpriced_requests": 15,
           "premium_requests": 1.0
         }
       ],
       "total": {
         "key": "total",
-        "requests": 11,
-        "input": 100109,
-        "output": 10049,
-        "cache_read": 1700,
-        "cache_write": 1850,
+        "requests": 15,
+        "input": 100239,
+        "output": 10129,
+        "cache_read": 10800,
+        "cache_write": 2350,
         "measured_usd": 0.0,
         "estimated_usd": 0.0,
-        "unpriced_requests": 11,
+        "unpriced_requests": 15,
         "premium_requests": 1.0
       },
       "unpriced_models": {
-        "claude-test-1": 10,
+        "claude-test-1": 14,
         "model-a": 1
       }
     },
@@ -45,7 +45,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "requests": 0,
           "actual_usd": 0.0,
           "what_if_usd": 0.0,
-          "excluded_requests": 10
+          "excluded_requests": 14
         },
         {
           "model": "model-a",
@@ -60,7 +60,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "requests": 0,
         "actual_usd": 0.0,
         "what_if_usd": 0.0,
-        "excluded_requests": 11
+        "excluded_requests": 15
       }
     }
   },

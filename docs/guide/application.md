@@ -24,7 +24,7 @@ The [analyses](analyses.md) page explains what each one means.
 
 ## Filters and refresh
 
-The filter bar in the toolbar above the open view sets the period, the sources and the project for every view. The application keeps the sessions it has read for a few minutes so that switching views is quick; **Refresh** in the top bar forgets them and reads the files again. On a narrow window the top bar folds Refresh into its menu.
+The filter bar in the top bar sets the period, the sources and the project for every view. The application keeps the sessions it has read for a few minutes so that switching views is quick; **Refresh** in the top bar forgets them and reads the files again. On a narrow window the top bar folds Refresh into its menu.
 
 ### Period
 
@@ -35,9 +35,21 @@ The **Period** select offers the last 24 hours, 7, 30 and 90 days, all time and 
 
 Input that cannot be used (zero or negative N, an end before the start) is explained under the inputs and is not applied; the last valid period stays active. The header of every page names the active window, for example "last 6 hours" or "Oct 1 – Oct 8". The filter bar remembers the choice between runs.
 
+### vs. previous period
+
+The **vs. previous period** switch at the end of the filter bar compares the active period with the window of the same length right before it (also for a custom window; a session belongs to the period in which it ends). It is off by default and remembered with the other filters. While it is on:
+
+- the overview shows cards for sessions, requests and tokens, the cost view cards for measured and estimated cost and unpriced requests, the efficiency view cards for the cache hit rate, the subagent share, failed tool calls and retry loops, and the skills view cards for skill loads and overhead. Each card shows the current value and under it an arrow with the absolute and the relative change;
+- the arrow is colored only where a direction is good or bad: green when cost, failed calls or skill overhead fall and the cache hit rate rises, red for the opposite; other changes stay gray;
+- `~` marks a change of an estimate, and `n/a` appears where a window has no sessions (or, for the percentage, where the earlier value is 0);
+- when the two windows differ in length (for example a period that reaches back before the first session), counts are shown per day and the note under the cards says so;
+- the skill table gains a **Change** column with the change of the loads, sortable like the others.
+
+The comparison window is always the previous period; choosing another one is a CLI option (`--against`).
+
 ## Tables
 
-Tables are sortable by their column headers. Where a table has a filter (for example the group of the cache efficiency table or the skill and kind columns), it is a filter row under the headers, one field per filterable column, instead of a single search box. Filtering by source is left to the filter bar above the view. Long tables have a paginator; its rows-per-page list ends with **Show all**.
+Tables are sortable by their column headers. Where a table has a filter (for example the group of the cache efficiency table or the skill and kind columns), it is a filter row under the headers, one field per filterable column, instead of a single search box. Filtering by source is left to the filter bar in the top bar. Long tables have a paginator; its rows-per-page list ends with **Show all**.
 
 ## Explaining the numbers
 

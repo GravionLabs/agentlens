@@ -27,7 +27,12 @@ afterEach(() => {
   document.querySelectorAll(".cdk-overlay-container").forEach((e) => e.remove());
 });
 
-function render(invoke = vi.fn(async () => "0.1.0")) {
+function render(
+  invoke = vi.fn(async (command: string) =>
+    // The role filter asks for the efficiency roles of the period; the rest answers the version.
+    command === "efficiency" ? { data: { roles: [] } } : "0.1.0",
+  ),
+) {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
@@ -117,6 +122,12 @@ describe("app", () => {
     const bar = el.querySelector("helix-status-bar")!;
     expect((bar.textContent ?? "").replace(/\s+/g, " ")).toContain("Version:v0.1.0");
     expect(bar.querySelector('app-status-bar button[aria-label="Larger"]')).not.toBeNull();
+  });
+
+  it("renders the filter bar once, in the topbar slot", () => {
+    const { el } = render();
+    expect(el.querySelectorAll("app-filter-bar")).toHaveLength(1);
+    expect(el.querySelector("helix-topbar .layout-topbar-slot > app-filter-bar")).not.toBeNull();
   });
 
   it("shows the progress bar only while loading", () => {

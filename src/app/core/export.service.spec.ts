@@ -14,7 +14,9 @@ function create(
       { provide: Ipc, useValue: { invoke } },
       {
         provide: FiltersService,
-        useValue: { payload: () => ({ since: "30d", until: null, sources: [], project: null }) },
+        useValue: {
+          payload: () => ({ since: "30d", until: null, sources: [], project: null, roles: [] }),
+        },
       },
       { provide: SAVE_DIALOG, useValue: dialog },
     ],
@@ -36,7 +38,7 @@ describe("ExportService", () => {
     expect(invoke).toHaveBeenLastCalledWith("export_view", {
       view: "cost",
       format: "json",
-      filters: { since: "30d", until: null, sources: [], project: null },
+      filters: { since: "30d", until: null, sources: [], project: null, roles: [] },
       options: { by: "project" },
       path: "/tmp/out.json",
     });
@@ -80,7 +82,7 @@ describe("ExportService with rounded token counts", () => {
       expect(invoke).toHaveBeenLastCalledWith("export_view", {
         view: "cost",
         format: "csv",
-        filters: { since: "30d", until: null, sources: [], project: null },
+        filters: { since: "30d", until: null, sources: [], project: null, roles: [] },
         options: null,
         path: "/tmp/out.csv",
       });

@@ -32,6 +32,18 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "premium_requests": 1.0
         },
         {
+          "key": "retry_loop",
+          "requests": 4,
+          "input": 130,
+          "output": 80,
+          "cache_read": 9100,
+          "cache_write": 500,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 4,
+          "premium_requests": 0.0
+        },
+        {
           "key": "skill_files",
           "requests": 6,
           "input": 60,
@@ -58,18 +70,18 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       ],
       "total": {
         "key": "total",
-        "requests": 11,
-        "input": 100109,
-        "output": 10049,
-        "cache_read": 1700,
-        "cache_write": 1850,
+        "requests": 15,
+        "input": 100239,
+        "output": 10129,
+        "cache_read": 10800,
+        "cache_write": 2350,
         "measured_usd": 0.0,
         "estimated_usd": 0.0,
-        "unpriced_requests": 11,
+        "unpriced_requests": 15,
         "premium_requests": 1.0
       },
       "unpriced_models": {
-        "claude-test-1": 10,
+        "claude-test-1": 14,
         "model-a": 1
       },
       "sessions": [
@@ -117,6 +129,29 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "measured_usd": 0.0,
           "estimated_usd": 0.0,
           "unpriced_requests": 1,
+          "subagent_usd": 0.0
+        },
+        {
+          "source": "claude-code",
+          "session": "retry_loop",
+          "project": "/work/demo",
+          "started_at": "2026-10-02T09:00:00Z",
+          "duration_ms": 7000,
+          "issue": null,
+          "issue_source": null,
+          "models": [
+            "claude-test-1"
+          ],
+          "requests": 4,
+          "main_requests": 4,
+          "peak_context": 3110,
+          "input": 130,
+          "cache_read": 9100,
+          "cache_write": 500,
+          "output": 80,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 4,
           "subagent_usd": 0.0
         },
         {

@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::analyzers::context::ContextReport;
+use crate::analyzers::flow;
 use crate::analyzers::skills::{LARGE_CONTEXT_TOKENS, SkillReport, SkillStats};
 use crate::analyzers::unused::{calls_server, norm};
 use crate::model::{ContextKind, EventKind, SessionEvents, Source, Usage};
@@ -52,6 +53,8 @@ pub enum FindingKind {
     CostlyMcpServers,
     /// How large the context of the average request is, and how much of the work ran on large contexts.
     ContextSize,
+    /// The same failing tool call repeated: every retry sends the whole context again.
+    RetryLoops,
 }
 
 impl FindingKind {
@@ -82,6 +85,9 @@ impl FindingKind {
             FindingKind::ContextSize => {
                 "Every request sends the whole context again, so its size drives the cost far more than the skills do. This is how large the context of a request was on average, how many requests ran on a large context, and which sessions had the largest."
             }
+            FindingKind::RetryLoops => {
+                "Three or more identical tool calls in a row whose first two failed. Each retry sends the whole context again, and the call fails for the same reason until the cause is fixed."
+            }
         }
     }
 
@@ -111,6 +117,9 @@ impl FindingKind {
             }
             FindingKind::ContextSize => {
                 "Start new work in a fresh session, clear the context between tasks, and delegate exploration and review to subagents, whose context stays separate."
+            }
+            FindingKind::RetryLoops => {
+                "Read the tool error and fix the cause, such as a missing file, a wrong path, a permission or a hook. When a hook failed inside the loop, check the hook configuration first."
             }
         }
     }
@@ -336,6 +345,164 @@ pub fn context_saving(sessions: &[SessionEvents], prices: &PriceTable) -> Contex
     out
 }
 
+/// The retry loops of one tool at one client, and what their retries cost.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RetryToolUse {
+    pub source: Option<Source>,
+    pub tool: String,
+    pub loops: u64,
+    pub calls: u64,
+    /// Distinct sessions with a loop of this tool.
+    pub sessions: u64,
+    /// The input summary most loops repeated (ties: the first seen).
+    pub input: Option<String>,
+    /// Loops with at least one failed hook run between their first and last call.
+    pub hook_failures: u64,
+    /// The hook type that failed most inside the loops (ties: the first seen).
+    pub hook: Option<String>,
+    /// The requests that issued the retries (the first attempt is not counted).
+    pub requests: u64,
+    /// The input of those requests split by token class.
+    pub input_tokens: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
+    /// `false` if one of the requests was estimated, not reported.
+    pub measured: bool,
+    /// The retry tokens of the priced requests in USD, each priced with its own model.
+    pub usd: f64,
+    pub priced_requests: u64,
+    pub unpriced_requests: u64,
+    /// The tokens of the requests without a price for their model, split by class;
+    /// [`analyze_with`] prices them with the period's average [`Pricing`].
+    pub unpriced_input: u64,
+    pub unpriced_cache_read: u64,
+    pub unpriced_cache_write: u64,
+}
+
+impl RetryToolUse {
+    pub fn tokens(&self) -> u64 {
+        self.input_tokens + self.cache_read + self.cache_write
+    }
+}
+
+/// The retry loops of the period, one row per `(client, tool)`.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RetryLoopUse {
+    pub tools: Vec<RetryToolUse>,
+}
+
+/// Counts `key` in `counts`, which keeps the order of first sight.
+fn tally(counts: &mut Vec<(String, u64)>, key: &str) {
+    match counts.iter_mut().find(|(k, _)| k == key) {
+        Some((_, c)) => *c += 1,
+        None => counts.push((key.to_owned(), 1)),
+    }
+}
+
+/// The key with the largest count; the first of equals.
+fn most(counts: &[(String, u64)]) -> Option<String> {
+    let mut best: Option<&(String, u64)> = None;
+    for c in counts {
+        if best.is_none_or(|b| c.1 > b.1) {
+            best = Some(c);
+        }
+    }
+    best.map(|(k, _)| k.clone())
+}
+
+/// The input of the RetryLoops finding, from the retry loops of [`flow::retry_loops`] and the requests
+/// that lie inside them.
+///
+/// A retry request is a `Usage` event strictly between the first and the last call of a loop: the first
+/// attempt was issued before it, so it is not counted. A request of a subagent that falls inside the span
+/// is counted too; spans are short, so this is rare and small.
+pub fn retry_saving(sessions: &[SessionEvents], prices: &PriceTable) -> RetryLoopUse {
+    // Per (client, tool): the row, the most seen inputs and hooks, the sessions seen.
+    type Acc = (
+        RetryToolUse,
+        Vec<(String, u64)>,
+        Vec<(String, u64)>,
+        std::collections::BTreeSet<String>,
+    );
+    let mut acc: BTreeMap<(Source, String), Acc> = BTreeMap::new();
+    for se in sessions {
+        let source = se.session.source;
+        for span in flow::retry_loops(&se.events) {
+            let (row, inputs, hooks, seen) =
+                acc.entry((source, span.tool.clone())).or_insert_with(|| {
+                    (
+                        RetryToolUse {
+                            source: Some(source),
+                            tool: span.tool.clone(),
+                            measured: true,
+                            ..RetryToolUse::default()
+                        },
+                        Vec::new(),
+                        Vec::new(),
+                        Default::default(),
+                    )
+                });
+            row.loops += 1;
+            row.calls += span.calls;
+            if seen.insert(se.session.id.clone()) {
+                row.sessions += 1;
+            }
+            if let Some(input) = &span.input {
+                tally(inputs, input);
+            }
+            let inside = &se.events[span.first..=span.last];
+            let mut failed = false;
+            for e in inside {
+                if let EventKind::Hook(h) = &e.kind
+                    && h.success == Some(false)
+                {
+                    failed = true;
+                    tally(hooks, &h.kind);
+                }
+            }
+            row.hook_failures += u64::from(failed);
+            for e in &se.events[span.first + 1..span.last] {
+                let EventKind::Usage(u) = &e.kind else {
+                    continue;
+                };
+                row.requests += 1;
+                row.measured &= u.measured;
+                row.input_tokens += u.input;
+                row.cache_read += u.cache_read;
+                row.cache_write += u.cache_write;
+                let counted = Usage {
+                    output: 0,
+                    reasoning: 0,
+                    cost_usd: None,
+                    ..u.clone()
+                };
+                match u.model.as_deref().and_then(|m| prices.compute(m, &counted)) {
+                    Some(usd) => {
+                        row.usd += usd;
+                        row.priced_requests += 1;
+                    }
+                    None => {
+                        row.unpriced_requests += 1;
+                        row.unpriced_input += u.input;
+                        row.unpriced_cache_read += u.cache_read;
+                        row.unpriced_cache_write += u.cache_write;
+                    }
+                }
+            }
+        }
+    }
+    RetryLoopUse {
+        tools: acc
+            .into_values()
+            .map(|(mut row, inputs, hooks, _)| {
+                row.input = most(&inputs);
+                row.hook = most(&hooks);
+                row
+            })
+            .collect(),
+    }
+}
+
 /// One skill in a finding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
@@ -451,6 +618,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         &References::new(),
         &[],
         &ContextSaving::default(),
+        &RetryLoopUse::default(),
         &Pricing::default(),
     )
 }
@@ -570,6 +738,7 @@ pub fn analyze_with(
     references: &References,
     mcp: &[McpServerUse],
     context: &ContextSaving,
+    retries: &RetryLoopUse,
     pricing: &Pricing,
 ) -> AdviceReport {
     let installed: Vec<&SkillStats> = report.skills.iter().filter(|s| s.in_inventory).collect();
@@ -1084,6 +1253,110 @@ pub fn analyze_with(
         findings.push((f, split.weight()));
     }
 
+    // The same failing call, again and again: the requests that issued the retries.
+    if !retries.tools.is_empty() {
+        let mut rows: Vec<&RetryToolUse> = retries.tools.iter().collect();
+        rows.sort_by(|a, b| {
+            b.tokens()
+                .cmp(&a.tokens())
+                .then_with(|| b.loops.cmp(&a.loops))
+                .then_with(|| a.tool.cmp(&b.tool))
+        });
+        let items: Vec<Item> = rows
+            .iter()
+            .take(TOP)
+            .map(|r| {
+                let mut detail = format!(
+                    "{} {} in {} {}, {} calls",
+                    n(r.loops),
+                    if r.loops == 1 { "loop" } else { "loops" },
+                    n(r.sessions),
+                    if r.sessions == 1 {
+                        "session"
+                    } else {
+                        "sessions"
+                    },
+                    n(r.calls)
+                );
+                if let Some(input) = &r.input {
+                    detail.push_str(&format!("; most often on `{input}`"));
+                }
+                if r.hook_failures > 0 {
+                    detail.push_str(&format!(
+                        "; {}hook failed in {} of the {} loops",
+                        r.hook.as_ref().map_or(String::new(), |h| format!("a {h} ")),
+                        n(r.hook_failures),
+                        n(r.loops)
+                    ));
+                }
+                Item {
+                    name: r.tool.clone(),
+                    tokens: Tokens {
+                        count: r.tokens(),
+                        measured: r.measured,
+                    },
+                    requests: r.requests,
+                    detail,
+                    referenced_by: Vec::new(),
+                }
+            })
+            .collect();
+        let sum_of = |f: fn(&RetryToolUse) -> u64| rows.iter().map(|r| f(r)).sum::<u64>();
+        let split = Split {
+            input: sum_of(|r| r.input_tokens) as f64,
+            cache_read: sum_of(|r| r.cache_read) as f64,
+            cache_write: sum_of(|r| r.cache_write) as f64,
+        };
+        let unpriced = Split {
+            input: sum_of(|r| r.unpriced_input) as f64,
+            cache_read: sum_of(|r| r.unpriced_cache_read) as f64,
+            cache_write: sum_of(|r| r.unpriced_cache_write) as f64,
+        };
+        let saved = sum_of(RetryToolUse::tokens);
+        let measured = rows.iter().all(|r| r.measured);
+        let (priced, unpriced_requests) = (
+            sum_of(|r| r.priced_requests),
+            sum_of(|r| r.unpriced_requests),
+        );
+        let total = Tokens {
+            count: saved,
+            measured,
+        };
+        let mut f = finding(FindingKind::RetryLoops, rows.len(), items, Some(total));
+        f.share_of_total_tokens = share(saved, total_tokens.count);
+        f.impact = Impact {
+            saving: Tokens::estimated(saved),
+            saving_usd: (priced > 0 || pricing.is_priced()).then(|| {
+                rows.iter().map(|r| r.usd).sum::<f64>() + pricing.usd(&unpriced).unwrap_or(0.0)
+            }),
+            confidence: Confidence::Inferred,
+        };
+        if !measured {
+            f.notes
+                .push("Some requests are estimated, not reported by the client.".to_owned());
+        }
+        f.notes.push(
+            "The saving is the input of the requests that issued the retries (not the first attempt); it assumes that fixing the cause avoids them, so it is inferred.".to_owned(),
+        );
+        f.notes.push(
+            "The requests of a loop can also be in the Context size saving; the savings are not additive. Calls without an input summary cannot be compared and never form a loop.".to_owned(),
+        );
+        if saved > 0 && unpriced_requests > 0 {
+            f.notes.push(if pricing.is_priced() {
+                format!(
+                    "{} of the retry requests had no price for their model; they are priced at the period's average price per token class.",
+                    n(unpriced_requests)
+                )
+            } else {
+                format!(
+                    "{} of the retry requests had no price for their model; their tokens are in the saving, not in the USD.",
+                    n(unpriced_requests)
+                )
+            });
+        }
+        findings.push((f, split.weight()));
+    }
+
     // Ranked by the USD saving, then by the weighted tokens, then in the order above; findings without
     // a saving last, in the order above (the sort is stable).
     findings.sort_by(|(a, wa), (b, wb)| {
@@ -1166,7 +1439,14 @@ mod tests {
 
     /// `analyze_with` without requests and prices.
     fn with(r: &SkillReport, refs: &References, mcp: &[McpServerUse]) -> AdviceReport {
-        analyze_with(r, refs, mcp, &ContextSaving::default(), &Pricing::default())
+        analyze_with(
+            r,
+            refs,
+            mcp,
+            &ContextSaving::default(),
+            &RetryLoopUse::default(),
+            &Pricing::default(),
+        )
     }
 
     fn find(r: &AdviceReport, kind: FindingKind) -> &Finding {
@@ -1815,7 +2095,14 @@ mod tests {
     }
 
     fn priced(r: &SkillReport, mcp: &[McpServerUse], context: &ContextSaving) -> AdviceReport {
-        analyze_with(r, &References::new(), mcp, context, &pricing())
+        analyze_with(
+            r,
+            &References::new(),
+            mcp,
+            context,
+            &RetryLoopUse::default(),
+            &pricing(),
+        )
     }
 
     #[test]
@@ -2041,7 +2328,14 @@ mod tests {
         assert_eq!(kinds, [FindingKind::UnusedSkills, FindingKind::ContextSize]);
 
         // Without any price in the period: no USD, the tokens still counted.
-        let a = analyze_with(&r, &References::new(), &[], &c, &Pricing::default());
+        let a = analyze_with(
+            &r,
+            &References::new(),
+            &[],
+            &c,
+            &RetryLoopUse::default(),
+            &Pricing::default(),
+        );
         let f = find(&a, FindingKind::ContextSize);
         assert_eq!(f.impact.saving_usd, None);
         assert!(f.notes.iter().any(|n| n.contains("not in the USD")));
@@ -2117,7 +2411,14 @@ mod tests {
             unpriced_requests: 1,
             ..ContextSaving::default()
         };
-        let a = analyze_with(&r, &References::new(), &[], &context, &Pricing::default());
+        let a = analyze_with(
+            &r,
+            &References::new(),
+            &[],
+            &context,
+            &RetryLoopUse::default(),
+            &Pricing::default(),
+        );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
         assert_eq!(a.findings[1].kind, FindingKind::UnusedSkills);
         assert!(a.findings.iter().all(|f| f.impact.saving_usd.is_none()));
@@ -2130,7 +2431,14 @@ mod tests {
         unused.baseline.tokens = Tokens::estimated(10_500);
         let mut r = report(vec![unused]);
         r.totals.requests = 10;
-        let a = analyze_with(&r, &References::new(), &[], &write, &Pricing::default());
+        let a = analyze_with(
+            &r,
+            &References::new(),
+            &[],
+            &write,
+            &RetryLoopUse::default(),
+            &Pricing::default(),
+        );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
         let a = analyze_with(
             &r,
@@ -2140,6 +2448,7 @@ mod tests {
                 input: 1_000,
                 ..ContextSaving::default()
             },
+            &RetryLoopUse::default(),
             &Pricing::default(),
         );
         assert_eq!(
@@ -2193,6 +2502,7 @@ mod tests {
             &References::new(),
             &[],
             &ContextSaving::default(),
+            &RetryLoopUse::default(),
             &p,
         );
         let f = find(&a, FindingKind::UnusedSkills);
@@ -2213,6 +2523,321 @@ mod tests {
                 .notes
                 .iter()
                 .all(|n| !n.contains("without a price"))
+        );
+    }
+
+    /// One event of a session built for the retry loop tests.
+    enum Ev<'a> {
+        /// A call of `Bash` with this input, failed or not.
+        Call(&'a str, bool),
+        /// A call of another tool.
+        Tool(&'a str, &'a str, bool),
+        /// A request: model, input, cache read, cache write.
+        Req(&'a str, u64, u64, u64),
+        /// A hook run: type, success.
+        Hook(&'a str, bool),
+    }
+
+    fn trace(id: &str, events: &[Ev]) -> SessionEvents {
+        use crate::model::{Event, Hook, Session, ToolCall, ToolStatus};
+        let call = |name: &str, input: &str, failed: bool| {
+            EventKind::ToolCall(ToolCall {
+                name: name.into(),
+                input_summary: Some(input.into()),
+                status: if failed {
+                    ToolStatus::Error
+                } else {
+                    ToolStatus::Ok
+                },
+                duration_ms: None,
+            })
+        };
+        SessionEvents {
+            session: Session::new(id, Source::ClaudeCode),
+            events: events
+                .iter()
+                .map(|e| Event {
+                    at: None,
+                    kind: match *e {
+                        Ev::Call(input, failed) => call("Bash", input, failed),
+                        Ev::Tool(name, input, failed) => call(name, input, failed),
+                        Ev::Req(model, input, cache_read, cache_write) => EventKind::Usage(Usage {
+                            model: Some(model.into()),
+                            input,
+                            cache_read,
+                            cache_write,
+                            measured: true,
+                            ..Usage::default()
+                        }),
+                        Ev::Hook(kind, ok) => EventKind::Hook(Hook {
+                            kind: kind.into(),
+                            success: Some(ok),
+                            duration_ms: None,
+                        }),
+                    },
+                })
+                .collect(),
+            warnings: Vec::new(),
+        }
+    }
+
+    type R<'a> = (&'a str, u64, u64, u64);
+
+    /// A loop of three calls: the requests before the second and the third are the retries.
+    fn a_loop<'a>(first: R<'a>, second: R<'a>, third: R<'a>, after: R<'a>) -> Vec<Ev<'a>> {
+        let req = |r: R<'a>| Ev::Req(r.0, r.1, r.2, r.3);
+        vec![
+            req(first),
+            Ev::Call("make", true),
+            req(second),
+            Ev::Call("make", true),
+            req(third),
+            Ev::Call("make", false),
+            req(after),
+        ]
+    }
+
+    fn retry_advice(sessions: &[SessionEvents], pricing: &Pricing) -> AdviceReport {
+        analyze_with(
+            &report(vec![]),
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &retry_saving(sessions, &prices()),
+            pricing,
+        )
+    }
+
+    #[test]
+    fn no_loop_no_finding() {
+        let s = trace(
+            "s",
+            &a_loop(
+                ("test-model", 1, 1, 1),
+                ("test-model", 1, 1, 1),
+                ("test-model", 1, 1, 1),
+                ("test-model", 1, 1, 1),
+            )
+            .into_iter()
+            .map(|e| match e {
+                // The second call succeeds: only one leading failure.
+                Ev::Call(i, true) => Ev::Call(i, false),
+                e => e,
+            })
+            .collect::<Vec<_>>(),
+        );
+        assert!(
+            retry_saving(std::slice::from_ref(&s), &prices())
+                .tools
+                .is_empty()
+        );
+        assert!(find_none(
+            &retry_advice(&[s], &pricing()),
+            FindingKind::RetryLoops
+        ));
+    }
+
+    #[test]
+    fn two_failing_calls_are_no_loop() {
+        let s = trace(
+            "s",
+            &[
+                Ev::Call("make", true),
+                Ev::Req("test-model", 10, 100, 0),
+                Ev::Call("make", true),
+                Ev::Req("test-model", 10, 100, 0),
+            ],
+        );
+        assert!(retry_saving(&[s], &prices()).tools.is_empty());
+    }
+
+    #[test]
+    fn the_tokens_are_those_of_the_retries_without_the_first_attempt() {
+        // Retries: (100 + 1,000 + 200) + (50 + 2,000 + 0) = 3,350 in the split 150 : 3,000 : 200. The first
+        // request (1,000 input) issued the first attempt and the last one came after the loop.
+        let s = trace(
+            "s",
+            &a_loop(
+                ("test-model", 1_000, 0, 0),
+                ("test-model", 100, 1_000, 200),
+                ("test-model", 50, 2_000, 0),
+                ("test-model", 999, 0, 0),
+            ),
+        );
+        let use_ = retry_saving(std::slice::from_ref(&s), &prices());
+        let row = &use_.tools[0];
+        assert_eq!(
+            (
+                row.requests,
+                row.input_tokens,
+                row.cache_read,
+                row.cache_write
+            ),
+            (2, 150, 3_000, 200)
+        );
+        let a = retry_advice(&[s], &pricing());
+        let f = find(&a, FindingKind::RetryLoops);
+        assert_eq!(f.total, Some(Tokens::measured(3_350)));
+        assert_eq!((f.items[0].requests, f.items[0].tokens.count), (2, 3_350));
+        assert_eq!(f.items[0].name, "Bash");
+        // 150 × $2 + 3,000 × $0.10 + 200 × $2.50 per M = 0.0003 + 0.0003 + 0.0005.
+        assert_eq!(f.impact.saving, Tokens::estimated(3_350));
+        assert!(
+            close(f.impact.saving_usd, 0.0011),
+            "{:?}",
+            f.impact.saving_usd
+        );
+        assert_eq!(f.impact.confidence, Confidence::Inferred);
+        assert_eq!(f.count, 1);
+    }
+
+    #[test]
+    fn requests_are_priced_with_their_own_model_and_the_rest_at_the_average() {
+        // The priced request: 100 input × $2 = 0.0002. The unpriced one: 100 × $3 + 1,000 × $0.50
+        // (the period's average) = 0.0008.
+        let s = trace(
+            "s",
+            &a_loop(
+                ("test-model", 5, 0, 0),
+                ("test-model", 100, 0, 0),
+                ("other-model", 100, 1_000, 0),
+                ("test-model", 5, 0, 0),
+            ),
+        );
+        let row = retry_saving(std::slice::from_ref(&s), &prices())
+            .tools
+            .remove(0);
+        assert_eq!((row.priced_requests, row.unpriced_requests), (1, 1));
+        assert!(close(Some(row.usd), 0.0002));
+        let a = retry_advice(std::slice::from_ref(&s), &pricing());
+        let f = find(&a, FindingKind::RetryLoops);
+        assert!(
+            close(f.impact.saving_usd, 0.001),
+            "{:?}",
+            f.impact.saving_usd
+        );
+        assert!(f.notes.iter().any(|n| n.contains("average price")));
+        // No price anywhere: tokens, no USD.
+        let a = retry_advice(&[s], &Pricing::default());
+        let f = find(&a, FindingKind::RetryLoops);
+        assert!(close(f.impact.saving_usd, 0.0002));
+        let only_unpriced = trace(
+            "u",
+            &a_loop(
+                ("other-model", 5, 0, 0),
+                ("other-model", 100, 0, 0),
+                ("other-model", 100, 0, 0),
+                ("other-model", 5, 0, 0),
+            ),
+        );
+        let a = retry_advice(&[only_unpriced], &Pricing::default());
+        let f = find(&a, FindingKind::RetryLoops);
+        assert_eq!(f.impact.saving, Tokens::estimated(200));
+        assert_eq!(f.impact.saving_usd, None);
+        assert!(f.notes.iter().any(|n| n.contains("not in the USD")));
+    }
+
+    #[test]
+    fn loops_are_grouped_per_tool_across_sessions() {
+        let looped = |tool: &'static str, input: &'static str, tokens: u64| {
+            vec![
+                Ev::Tool(tool, input, true),
+                Ev::Req("test-model", tokens, 0, 0),
+                Ev::Tool(tool, input, true),
+                Ev::Req("test-model", tokens, 0, 0),
+                Ev::Tool(tool, input, false),
+            ]
+        };
+        // Loops of the same call right after each other would be one run; the Edit loop separates them.
+        let mut s1 = looped("Bash", "make", 100);
+        s1.extend(looped("Edit", "a.rs", 1_000));
+        s1.extend(looped("Bash", "make", 100));
+        let mut s2 = looped("Bash", "cargo", 100);
+        s2.extend(looped("Bash", "make", 100));
+        let a = retry_advice(&[trace("s1", &s1), trace("s2", &s2)], &pricing());
+        let f = find(&a, FindingKind::RetryLoops);
+        assert_eq!(f.count, 2);
+        // Edit: 2,000 tokens; Bash: 4 loops × 200 = 800.
+        let names: Vec<&str> = f.items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["Edit", "Bash"]);
+        assert_eq!(
+            f.items[1].detail,
+            "4 loops in 2 sessions, 12 calls; most often on `make`"
+        );
+        assert_eq!(
+            f.items[0].detail,
+            "1 loop in 1 session, 3 calls; most often on `a.rs`"
+        );
+        assert_eq!(f.total, Some(Tokens::measured(2_800)));
+    }
+
+    #[test]
+    fn a_failed_hook_inside_a_loop_is_named_and_one_outside_is_not() {
+        let with_hook = trace(
+            "h",
+            &[
+                Ev::Hook("preToolUse", false),
+                Ev::Call("make", true),
+                Ev::Req("test-model", 10, 0, 0),
+                Ev::Hook("preToolUse", false),
+                Ev::Call("make", true),
+                Ev::Hook("postToolUse", true),
+                Ev::Req("test-model", 10, 0, 0),
+                Ev::Call("make", false),
+                Ev::Hook("preToolUse", false),
+            ],
+        );
+        let row = retry_saving(std::slice::from_ref(&with_hook), &prices())
+            .tools
+            .remove(0);
+        assert_eq!(
+            (row.hook_failures, row.hook.as_deref()),
+            (1, Some("preToolUse"))
+        );
+        let a = retry_advice(&[with_hook], &pricing());
+        assert_eq!(
+            find(&a, FindingKind::RetryLoops).items[0].detail,
+            "1 loop in 1 session, 3 calls; most often on `make`; a preToolUse hook failed in 1 of the 1 loops"
+        );
+        let without = trace(
+            "n",
+            &[
+                Ev::Hook("preToolUse", false),
+                Ev::Call("make", true),
+                Ev::Call("make", true),
+                Ev::Hook("preToolUse", true),
+                Ev::Call("make", false),
+                Ev::Hook("preToolUse", false),
+            ],
+        );
+        let a = retry_advice(&[without], &pricing());
+        assert!(
+            !find(&a, FindingKind::RetryLoops).items[0]
+                .detail
+                .contains("hook")
+        );
+    }
+
+    #[test]
+    fn an_estimated_request_makes_the_total_estimated() {
+        let mut s = trace(
+            "s",
+            &a_loop(
+                ("test-model", 1, 0, 0),
+                ("test-model", 100, 0, 0),
+                ("test-model", 100, 0, 0),
+                ("test-model", 1, 0, 0),
+            ),
+        );
+        for e in &mut s.events {
+            if let EventKind::Usage(u) = &mut e.kind {
+                u.measured = false;
+            }
+        }
+        let a = retry_advice(&[s], &pricing());
+        assert_eq!(
+            find(&a, FindingKind::RetryLoops).total,
+            Some(Tokens::estimated(200))
         );
     }
 }

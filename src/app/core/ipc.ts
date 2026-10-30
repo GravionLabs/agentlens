@@ -30,6 +30,7 @@ const SAMPLES: Record<string, () => Promise<{ default: unknown }>> = {
   flow: () => import("./samples/flow.json"),
   cost: () => import("./samples/cost.json"),
   efficiency: () => import("./samples/efficiency.json"),
+  trend: () => import("./samples/trend.json"),
   compare: () => import("./samples/compare.json"),
   sessions: () => import("./samples/sessions.json"),
   timeline: () => import("./samples/timeline.json"),

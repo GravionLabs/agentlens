@@ -9,11 +9,11 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       {
         "key": "claude-code",
         "source": "claude-code",
-        "requests": 10,
-        "input": 110,
-        "cache_read": 1700,
-        "cache_write": 1850,
-        "hit_rate": 0.4644808743169399
+        "requests": 14,
+        "input": 240,
+        "cache_read": 10800,
+        "cache_write": 2350,
+        "hit_rate": 0.806572068707991
       },
       {
         "key": "copilot-cli",
@@ -28,13 +28,13 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
     "subagents": [
       {
         "source": "claude-code",
-        "requests": 10,
+        "requests": 14,
         "subagent_requests": 0,
-        "tokens": 3710,
+        "tokens": 13520,
         "subagent_tokens": 0,
         "usd": 0.0,
         "subagent_usd": 0.0,
-        "unpriced_requests": 10
+        "unpriced_requests": 14
       },
       {
         "source": "copilot-cli",
@@ -51,30 +51,30 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       {
         "role": "main",
         "kind": "main",
-        "runs": 4,
-        "requests": 11,
-        "requests_per_run": 2.75,
-        "input": 100109,
-        "cache_read": 1700,
-        "cache_write": 1850,
-        "output": 10049,
+        "runs": 5,
+        "requests": 15,
+        "requests_per_run": 3.0,
+        "input": 100239,
+        "cache_read": 10800,
+        "cache_write": 2350,
+        "output": 10129,
         "usd": null,
         "usd_per_run": null,
         "cost_measured": false,
-        "unpriced_requests": 11,
+        "unpriced_requests": 15,
         "models": [
           "claude-test-1",
           "model-a"
         ],
         "first_request_context": {
-          "count": 25307,
+          "count": 20566,
           "measured": true
         },
         "uncached_after_first": {
-          "count": 233,
+          "count": 192,
           "measured": true
         },
-        "hit_rate": 0.016399926682680713
+        "hit_rate": 0.09524733439751651
       },
       {
         "role": "explore",

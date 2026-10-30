@@ -15,13 +15,13 @@ afterEach(() => {
 });
 
 describe("ViewFrame", () => {
-  it("has the filter toolbar above the view and marks the view busy while loading", () => {
+  it("renders the view without a filter toolbar and marks it busy while loading", () => {
     TestBed.configureTestingModule({ providers: [provideRouter([])] });
     const fixture = TestBed.createComponent(ViewFrame);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     const main = el.querySelector("main")!;
-    expect(el.querySelector('section[aria-label="Filter toolbar"] app-filter-bar')).not.toBeNull();
+    expect(el.querySelector("app-filter-bar")).toBeNull();
     expect(main.getAttribute("aria-busy")).toBe("false");
     expect(main.classList.contains("busy")).toBe(false);
     TestBed.inject(LoadingService).set(Symbol("t"), true);

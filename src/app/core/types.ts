@@ -17,6 +17,8 @@ export interface Filters {
   until: string | null;
   sources: SourceId[];
   project: string | null;
+  /** Only sessions that started a run of one of these roles; empty means all. */
+  roles: string[];
 }
 
 export interface Answer<T> {
@@ -112,7 +114,8 @@ export type FindingKind =
   | "large-bodies"
   | "large-context"
   | "costly-mcp-servers"
-  | "context-size";
+  | "context-size"
+  | "retry-loops";
 
 export interface Reference {
   kind: "agent" | "command" | "skill";

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::BTreeMap;
 
-use crate::model::{EventKind, SessionEvents, Source, ToolStatus};
+use crate::model::{Event, EventKind, SessionEvents, Source, ToolStatus};
 
 /// Context windows by model-name prefix (vendor documentation, October 2026).
 /// Models that are not listed are never flagged.
@@ -171,34 +171,71 @@ pub struct ErrorReport {
 /// Calls in a row needed to call it a loop.
 pub const LOOP_MIN_CALLS: u64 = 3;
 
+/// A retry loop in one session's events: the indices of its first and last call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LoopSpan {
+    pub first: usize,
+    pub last: usize,
+    pub tool: String,
+    pub input: Option<String>,
+    pub calls: u64,
+    pub errors: u64,
+}
+
+/// The retry loops of one session: [`LOOP_MIN_CALLS`] or more adjacent calls (other events in between do
+/// not break the run) of the same tool with the same input summary, the first two of which failed.
+pub(crate) fn retry_loops(events: &[Event]) -> Vec<LoopSpan> {
+    // The current run of identical adjacent calls and the number of its leading failures.
+    let mut run: Option<(LoopSpan, u64)> = None;
+    let mut loops = Vec::new();
+    let flush = |run: &mut Option<(LoopSpan, u64)>, loops: &mut Vec<LoopSpan>| {
+        if let Some((span, leading)) = run.take()
+            && span.calls >= LOOP_MIN_CALLS
+            && leading >= 2
+            && span.input.is_some()
+        {
+            loops.push(span);
+        }
+    };
+    for (i, e) in events.iter().enumerate() {
+        let EventKind::ToolCall(c) = &e.kind else {
+            continue;
+        };
+        let failed = c.status == ToolStatus::Error;
+        match &mut run {
+            Some((span, leading)) if span.tool == c.name && span.input == c.input_summary => {
+                if failed && *leading == span.calls {
+                    *leading += 1;
+                }
+                span.calls += 1;
+                span.errors += u64::from(failed);
+                span.last = i;
+            }
+            _ => {
+                flush(&mut run, &mut loops);
+                run = Some((
+                    LoopSpan {
+                        first: i,
+                        last: i,
+                        tool: c.name.clone(),
+                        input: c.input_summary.clone(),
+                        calls: 1,
+                        errors: u64::from(failed),
+                    },
+                    u64::from(failed),
+                ));
+            }
+        }
+    }
+    flush(&mut run, &mut loops);
+    loops
+}
+
 pub fn errors(sessions: &[SessionEvents]) -> ErrorReport {
     let mut tools: BTreeMap<(Source, String), ToolErrors> = BTreeMap::new();
     let mut loops = Vec::new();
     for se in sessions {
         let source = se.session.source;
-        // The current run of identical adjacent calls: (tool, input, calls, errors, leading failures).
-        let mut run: Option<(String, Option<String>, u64, u64, u64)> = None;
-        let flush = |run: &mut Option<(String, Option<String>, u64, u64, u64)>,
-                     tools: &mut BTreeMap<(Source, String), ToolErrors>,
-                     loops: &mut Vec<RetryLoop>| {
-            if let Some((tool, input, calls, errs, leading)) = run.take()
-                && calls >= LOOP_MIN_CALLS
-                && leading >= 2
-                && input.is_some()
-            {
-                if let Some(t) = tools.get_mut(&(source, tool.clone())) {
-                    t.loops += 1;
-                }
-                loops.push(RetryLoop {
-                    source,
-                    session: se.session.id.clone(),
-                    tool,
-                    input,
-                    calls,
-                    errors: errs,
-                });
-            }
-        };
         for e in &se.events {
             let EventKind::ToolCall(c) = &e.kind else {
                 continue;
@@ -219,30 +256,20 @@ pub fn errors(sessions: &[SessionEvents]) -> ErrorReport {
                 ToolStatus::Unknown => t.unknown += 1,
                 ToolStatus::Ok => {}
             }
-            let failed = c.status == ToolStatus::Error;
-            match &mut run {
-                Some((tool, input, calls, errs, leading))
-                    if *tool == c.name && *input == c.input_summary =>
-                {
-                    if failed && *leading == *calls {
-                        *leading += 1;
-                    }
-                    *calls += 1;
-                    *errs += u64::from(failed);
-                }
-                _ => {
-                    flush(&mut run, &mut tools, &mut loops);
-                    run = Some((
-                        c.name.clone(),
-                        c.input_summary.clone(),
-                        1,
-                        u64::from(failed),
-                        u64::from(failed),
-                    ));
-                }
-            }
         }
-        flush(&mut run, &mut tools, &mut loops);
+        for span in retry_loops(&se.events) {
+            if let Some(t) = tools.get_mut(&(source, span.tool.clone())) {
+                t.loops += 1;
+            }
+            loops.push(RetryLoop {
+                source,
+                session: se.session.id.clone(),
+                tool: span.tool,
+                input: span.input,
+                calls: span.calls,
+                errors: span.errors,
+            });
+        }
     }
     let mut tools: Vec<ToolErrors> = tools.into_values().collect();
     tools.sort_by(|a, b| {
@@ -609,5 +636,97 @@ mod tests {
         assert_eq!((p.prompts, p.answered, p.total_wait_ms), (2, 1, 1500));
         assert_eq!(r.unavailable.get(&Source::ClaudeCode), Some(&2));
         assert!(!r.unavailable.contains_key(&Source::CopilotCli));
+    }
+
+    /// Reads a fixture of the adapter tests through its adapter, laid out below a temporary home.
+    fn read_fixture(
+        adapter: &dyn crate::adapter::Adapter,
+        fixture: &str,
+        rel: &str,
+    ) -> SessionEvents {
+        let home = tempfile::tempdir().unwrap();
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(fixture);
+        let dest = home.path().join(rel);
+        std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        std::fs::copy(&src, &dest).unwrap();
+        let env = crate::env::Env::for_home(home.path());
+        adapter
+            .sessions(&env, &crate::adapter::SessionFilter::default())
+            .map(|r| r.unwrap())
+            .next()
+            .unwrap()
+    }
+
+    #[test]
+    fn the_claude_code_fixture_holds_one_loop_of_three_builds() {
+        let se = read_fixture(
+            &crate::adapters::claude_code::ClaudeCodeAdapter,
+            "claude_code/retry_loop.jsonl",
+            ".claude/projects/-work-demo/retry_loop.jsonl",
+        );
+        let spans = retry_loops(&se.events);
+        assert_eq!(spans.len(), 1);
+        let l = &spans[0];
+        assert_eq!(
+            (l.tool.as_str(), l.input.as_deref(), l.calls, l.errors),
+            ("Bash", Some("cargo"), 3, 2)
+        );
+        assert!(l.first < l.last);
+        assert!(matches!(se.events[l.first].kind, EventKind::ToolCall(_)));
+        assert!(matches!(se.events[l.last].kind, EventKind::ToolCall(_)));
+    }
+
+    #[test]
+    fn the_copilot_fixture_holds_one_loop_with_a_failing_hook_inside() {
+        let se = read_fixture(
+            &crate::adapters::copilot_cli::CopilotCliAdapter,
+            "copilot_cli/retry_loop.jsonl",
+            ".copilot/session-state/cp-loop/events.jsonl",
+        );
+        let spans = retry_loops(&se.events);
+        assert_eq!(spans.len(), 1);
+        let l = &spans[0];
+        assert_eq!(
+            (l.tool.as_str(), l.input.as_deref(), l.calls, l.errors),
+            ("bash", Some("npm"), 3, 3)
+        );
+        let failed_hooks = se.events[l.first..=l.last]
+            .iter()
+            .filter(|e| {
+                matches!(&e.kind, EventKind::Hook(h) if h.kind == "preToolUse" && h.success == Some(false))
+            })
+            .count();
+        assert_eq!(failed_hooks, 1);
+    }
+
+    #[test]
+    fn spans_are_event_indices_and_other_events_do_not_break_a_run() {
+        let call = |status| {
+            EventKind::ToolCall(crate::model::ToolCall {
+                name: "Bash".into(),
+                input_summary: Some("make".into()),
+                status,
+                duration_ms: None,
+            })
+        };
+        let se = session(
+            "s",
+            None,
+            vec![
+                EventKind::UserTurn,
+                call(ToolStatus::Error),
+                request(10, false),
+                call(ToolStatus::Error),
+                request(10, false),
+                call(ToolStatus::Ok),
+                call(ToolStatus::Ok),
+            ],
+        );
+        let spans = retry_loops(&se.events);
+        assert_eq!(spans.len(), 1);
+        assert_eq!((spans[0].first, spans[0].last), (1, 6));
+        assert_eq!((spans[0].calls, spans[0].errors), (4, 2));
     }
 }

@@ -170,7 +170,7 @@ After a compaction, content that was carried along (such as loaded skills) is go
 
 ### Retry loop
 
-Calls without a recorded outcome are “unknown” and never counted as errors.
+Each retry sends the whole context again and fails for the same reason until the cause is fixed. The Retry loops finding counts the input of the requests that issued the retries, not the first attempt. Calls without a recorded outcome are “unknown” and never counted as errors.
 
 ### Permission wait
 

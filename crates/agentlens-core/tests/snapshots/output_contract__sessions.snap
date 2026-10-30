@@ -36,6 +36,16 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       "peak_tokens": 1060
     },
     {
+      "source": "claude-code",
+      "id": "retry_loop",
+      "project": "/work/demo",
+      "model": "claude-test-1",
+      "started_at": "2026-10-02T09:00:00Z",
+      "ended_at": "2026-10-02T09:00:07Z",
+      "requests": 4,
+      "peak_tokens": 3110
+    },
+    {
       "source": "copilot-cli",
       "id": "cp-1",
       "project": "/work/demo",

@@ -1,13 +1,16 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import { analysis, trendAnalysis } from "../../core/analysis";
+import { type DeltaView, deltaView, sumDeltas, trendNote } from "../../core/delta";
+import { FiltersService } from "../../core/filters.service";
 import { day, exactTokens, number, tokens } from "../../core/format";
 import type { SkillStats, SkillsData } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
 import { Legend } from "../../ui/legend";
 import { type BarRow, StackedBars } from "../../ui/stacked-bars";
-import { StatCards } from "../../ui/stat-cards";
+import { StatCards, trendStat } from "../../ui/stat-cards";
+import { TrendCards } from "../../ui/trend-cards";
 import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
 import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
@@ -41,6 +44,9 @@ export interface SkillView {
   attributed: number | null;
   follow_on: number;
   last_used: string | null;
+  /** The change of the loads against the previous period; `null` without a comparison or a value. */
+  loadChange: number | null;
+  loadDelta: DeltaView | null;
 }
 
 export function skillView(s: SkillStats): SkillView {
@@ -61,6 +67,8 @@ export function skillView(s: SkillStats): SkillView {
     attributed: s.attributed.requests > 0 ? attributedTokens(s) : null,
     follow_on: f.input + f.output + f.cache_read + f.cache_write,
     last_used: s.last_used,
+    loadChange: null,
+    loadDelta: null,
   };
 }
 
@@ -71,6 +79,7 @@ export function skillView(s: SkillStats): SkillView {
     Term,
     Status,
     StatCards,
+    TrendCards,
     HxDataTable,
     HxCell,
     HxColumnHeader,
@@ -104,6 +113,14 @@ export function skillView(s: SkillStats): SkillView {
         [errors]="res.value()?.errors ?? []"
       />
       <app-stat-cards [stats]="stats()" />
+      @if (compare()) {
+        <app-trend-cards
+          [stats]="trendStats()"
+          [note]="note()"
+          [loading]="trend.isLoading()"
+          [error]="trend.error()"
+        />
+      }
 
       <h3>Cost split</h3>
       <p class="muted">
@@ -182,6 +199,18 @@ export function skillView(s: SkillStats): SkillView {
         <ng-template hxCell="follow_on" let-row>
           <span [attr.title]="tip(row.follow_on)">{{ tokens(row.follow_on) }}</span>
         </ng-template>
+        <ng-template hxCell="loadChange" let-row>
+          @if (row.loadDelta; as d) {
+            <span class="change" [class.good]="d.tone === 'good'" [class.bad]="d.tone === 'bad'">
+              @if (d.arrow) {
+                <span aria-hidden="true">{{ d.arrow }}</span>
+              }
+              {{ d.text }}
+            </span>
+          } @else {
+            -
+          }
+        </ng-template>
         <ng-template hxCell="last_used" let-value="value">{{ day(value) }}</ng-template>
       </hx-data-table>
     </section>
@@ -200,6 +229,15 @@ export function skillView(s: SkillStats): SkillView {
     }
     .est {
       color: var(--warn);
+    }
+    .change {
+      font-variant-numeric: tabular-nums;
+    }
+    .change.good {
+      color: var(--good);
+    }
+    .change.bad {
+      color: var(--bad);
     }
     :host ::ng-deep tr.unused td {
       color: var(--muted);
@@ -275,7 +313,54 @@ export class Skills {
       })),
   );
 
-  protected readonly views = computed(() => this.rows().map(skillView));
+  protected readonly compare = inject(FiltersService).compare;
+  protected readonly trend = trendAnalysis();
+  protected readonly note = computed(() => {
+    const w = this.trend.value()?.data.windows;
+    return w ? trendNote(w) : "";
+  });
+  protected readonly trendStats = computed(() => {
+    const t = this.trend.value()?.data;
+    if (!t) return [];
+    const perDay = t.windows.normalized;
+    return [
+      trendStat(
+        "Skill loads",
+        sumDeltas(
+          t.skills.map((s) => s.loads),
+          t.windows,
+        ),
+        "count",
+        {
+          perDay,
+        },
+      ),
+      trendStat(
+        "Skill overhead (tokens)",
+        sumDeltas(
+          t.skills.map((s) => s.overhead_tokens),
+          t.windows,
+        ),
+        "tokens",
+        { good: "down", perDay },
+      ),
+    ];
+  });
+
+  protected readonly views = computed(() => {
+    const t = this.compare() ? this.trend.value()?.data : undefined;
+    const byName = new Map(t?.skills.map((s) => [s.name, s]));
+    return this.rows().map((s) => {
+      const view = skillView(s);
+      const loads = byName.get(s.name)?.loads;
+      if (!loads) return view;
+      return {
+        ...view,
+        loadChange: loads.change,
+        loadDelta: deltaView(loads, "count", null, t!.windows.normalized),
+      };
+    });
+  });
   protected readonly rowClass = (v: SkillView) => (v.invocations === 0 ? "unused" : "");
   protected readonly sort = nullsLast;
   protected readonly tokens = tokens;
@@ -343,6 +428,15 @@ export class Skills {
       },
       { field: "last_used", header: "Last used", sortable: true },
     );
+    if (this.compare()) {
+      cols.push({
+        field: "loadChange",
+        header: "Change",
+        title: "Change of the loads against the previous period",
+        align: "right",
+        sortable: true,
+      });
+    }
     return cols;
   });
 }

@@ -1,7 +1,9 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import { analysis, trendAnalysis } from "../../core/analysis";
+import { trendNote } from "../../core/delta";
+import { FiltersService } from "../../core/filters.service";
 import {
   exactTokens,
   number,
@@ -14,7 +16,9 @@ import {
 import type { EfficiencyReport, SubagentShare } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
 import { nullsLast } from "../../ui/sort";
+import { trendStat } from "../../ui/stat-cards";
 import { Status } from "../../ui/status";
+import { TrendCards } from "../../ui/trend-cards";
 import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
 
 type By = "source" | "project" | "session";
@@ -52,7 +56,7 @@ export function subagentView(s: SubagentShare): SubagentView {
 
 @Component({
   selector: "app-efficiency",
-  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
+  imports: [PageHeader, Term, Status, TrendCards, HxDataTable, HxCell, HxColumnHeader, HelpLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -82,6 +86,14 @@ export function subagentView(s: SubagentShare): SubagentView {
         [warnings]="res.value()?.warnings ?? 0"
         [errors]="res.value()?.errors ?? []"
       />
+      @if (compare()) {
+        <app-trend-cards
+          [stats]="trendStats()"
+          [note]="note()"
+          [loading]="trend.isLoading()"
+          [error]="trend.error()"
+        />
+      }
       <hx-data-table
         [value]="cacheViews()"
         [sortFunction]="sort"
@@ -175,6 +187,23 @@ export class Efficiency {
   protected readonly by = signal<By>("source");
   protected readonly options: By[] = ["source", "project", "session"];
   protected readonly res = analysis<EfficiencyReport>("efficiency", () => ({ by: this.by() }));
+  protected readonly compare = inject(FiltersService).compare;
+  protected readonly trend = trendAnalysis();
+  protected readonly note = computed(() => {
+    const w = this.trend.value()?.data.windows;
+    return w ? trendNote(w) : "";
+  });
+  protected readonly trendStats = computed(() => {
+    const t = this.trend.value()?.data;
+    if (!t) return [];
+    const perDay = t.windows.normalized;
+    return [
+      trendStat("Cache hit rate", t.efficiency.cache_hit_rate, "ratio", { good: "up" }),
+      trendStat("Subagent share", t.efficiency.subagent_share, "ratio"),
+      trendStat("Failed tool calls", t.errors.failed_calls, "count", { good: "down", perDay }),
+      trendStat("Retry loops", t.errors.retry_loops, "count", { good: "down", perDay }),
+    ];
+  });
   protected readonly cache = computed(() => this.res.value()?.data.cache ?? []);
   protected readonly subagents = computed(() => this.res.value()?.data.subagents ?? []);
 

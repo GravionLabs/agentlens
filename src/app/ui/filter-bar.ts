@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  resource,
+  signal,
+} from "@angular/core";
 import {
   HxDateTimeRangePicker,
   type HxDateTimeRangePreset,
@@ -6,14 +13,16 @@ import {
   HxInput,
   HxMultiSelect,
   HxSelect,
+  HxSwitch,
 } from "@gravionlabs/helix-ui";
 import { CUSTOM, FiltersService, LAST_UNITS, PERIODS } from "../core/filters.service";
-import { SOURCES, type SourceId } from "../core/types";
+import { Ipc } from "../core/ipc";
+import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../core/types";
 
 @Component({
   selector: "app-filter-bar",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HxSelect, HxMultiSelect, HxInput, HxDateTimeRangePicker],
+  imports: [HxSelect, HxMultiSelect, HxInput, HxDateTimeRangePicker, HxSwitch],
   template: `
     <form class="bar" (submit)="$event.preventDefault()" aria-label="Filters">
       <div class="field">
@@ -37,6 +46,7 @@ import { SOURCES, type SourceId } from "../core/types";
               fluid
               id="filter-last"
               type="number"
+              placeholder="Last"
               min="1"
               step="1"
               [attr.aria-invalid]="lastError() ? 'true' : null"
@@ -60,6 +70,7 @@ import { SOURCES, type SourceId } from "../core/types";
           <hx-date-time-range-picker
             inputId="filter-window"
             ariaLabel="Date range"
+            placeholder="Date range"
             showTime
             [presets]="rangePresets"
             [invalid]="!!rangeError()"
@@ -97,41 +108,90 @@ import { SOURCES, type SourceId } from "../core/types";
           (change)="setProject($event)"
         />
       </div>
+      @if (roles().length > 0) {
+        <div class="field">
+          <label for="filter-roles">Roles</label>
+          <hx-multi-select
+            inputId="filter-roles"
+            fluid
+            [options]="roles()"
+            placeholder="All roles"
+            showClear
+            [value]="filters.roles()"
+            (valueChange)="filters.setRoles($event)"
+          />
+        </div>
+      }
+      <label class="compare" for="filter-compare">
+        <input
+          hx-switch
+          type="checkbox"
+          id="filter-compare"
+          [checked]="filters.compare()"
+          (change)="filters.setCompare(isChecked($event))"
+        />
+        vs. previous period
+      </label>
     </form>
   `,
   styles: `
+    /* Projected into the topbar (helixTopbarEnd): it takes the free width there. */
+    :host {
+      display: block;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    /* The topbar has a fixed height: one row that shrinks, never wraps. */
     .bar {
       display: flex;
-      flex-flow: row wrap;
-      align-items: flex-end;
-      gap: 10px 16px;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 8px;
     }
     .field {
       flex: 1 1 11rem;
+      min-width: 7rem;
       max-width: 18rem;
-    }
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
     }
     .pair {
       display: grid;
-      grid-template-columns: 5rem 1fr;
+      grid-template-columns: 4.5rem 1fr;
       gap: 6px;
     }
     .range {
+      min-width: 14rem;
       max-width: 24rem;
     }
+    /* Below the topbar, so it never changes the topbar height. */
     .error {
-      flex: 1 1 100%;
+      position: fixed;
+      top: calc(var(--helix-topbar-height, 4rem) + 4px);
+      right: 1rem;
+      z-index: 998;
       margin: 0;
+      padding: 4px 8px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 4px;
       color: var(--danger, #b00020);
       font-size: 0.85rem;
     }
-    label {
+    .compare {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 6px;
       font-size: 0.85rem;
-      color: var(--muted);
+      white-space: nowrap;
+    }
+    /* The fields keep their labels for assistive technology; the topbar has no room to show them. */
+    label:not(.compare) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
   `,
 })
@@ -161,6 +221,25 @@ export class FilterBar {
     return r ? { from: new Date(r.from), to: new Date(r.to) } : { from: null, to: null };
   });
   protected readonly sources = SOURCES;
+  private readonly ipc = inject(Ipc);
+
+  // The roles of the period under the other filters, not under the role filter itself, so the
+  // options stay when one is chosen.
+  private readonly efficiency = resource({
+    params: () => {
+      return {
+        filters: { ...this.filters.payload(), roles: [] as string[] },
+        generation: this.filters.generation(),
+      };
+    },
+    loader: ({ params }) =>
+      this.ipc.invoke<Answer<EfficiencyReport>>("efficiency", { filters: params.filters }),
+  });
+  /** The row keys of the efficiency roles table; empty (and the select hidden) without runs. */
+  protected readonly roles = computed(() => {
+    const own = this.efficiency.hasValue() ? this.efficiency.value().data.roles : [];
+    return [...new Set([...own.map((r) => r.role), ...this.filters.roles()])];
+  });
 
   protected setSince(value: unknown): void {
     // A cleared or non-string value is ignored: the period keeps its last value.
@@ -204,6 +283,10 @@ export class FilterBar {
     for (const id of new Set([...current, ...ids])) {
       if (current.includes(id) !== ids.includes(id)) this.filters.toggleSource(id);
     }
+  }
+
+  protected isChecked(event: Event): boolean {
+    return (event.target as HTMLInputElement).checked;
   }
 
   protected setProject(event: Event): void {
