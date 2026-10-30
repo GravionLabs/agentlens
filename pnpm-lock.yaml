@@ -30,11 +30,11 @@ importers:
         specifier: ^22.2.1
         version: 22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/platform-browser@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@gravionlabs/helix-shell':
-        specifier: 22.2.7
-        version: 22.2.7(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/router@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/platform-browser@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2)))(rxjs@7.8.2))(@gravionlabs/helix-ui@22.2.7(c850bc9b8bc89857ec360bbe7ab84fa2))(@ngrx/signals@22.0.1(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(primeicons@8.0.2)
+        specifier: 22.2.14
+        version: 22.2.14(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/router@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/platform-browser@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2)))(rxjs@7.8.2))(@gravionlabs/helix-ui@22.2.14(c850bc9b8bc89857ec360bbe7ab84fa2))(@ngrx/signals@22.0.1(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(primeicons@8.0.2)
       '@gravionlabs/helix-ui':
-        specifier: 22.2.7
-        version: 22.2.7(c850bc9b8bc89857ec360bbe7ab84fa2)
+        specifier: 22.2.14
+        version: 22.2.14(c850bc9b8bc89857ec360bbe7ab84fa2)
       '@ngrx/signals':
         specifier: ^22.0.1
         version: 22.0.1(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
@@ -865,8 +865,8 @@ packages:
       '@noble/hashes':
         optional: true
 
-  '@gravionlabs/helix-shell@22.2.7':
-    resolution: {integrity: sha512-TgsxqwE5NX7peG61wtOUE1SoRmo/ITiTAGwe2YfsJHvvYOJUxYw+aw1JxwTsw8KDroAD93iR0E8ST3LUWqT3dQ==}
+  '@gravionlabs/helix-shell@22.2.14':
+    resolution: {integrity: sha512-pXLqh3QWxXrff8vp8EW1QVEQG5IIgAMQWvT5XxE+4krY/V8z/egZOsAQhNyntR1XY0+ez9MXKBmQqw8/OWbprQ==}
     peerDependencies:
       '@angular/common': '>=22'
       '@angular/core': '>=22'
@@ -875,8 +875,8 @@ packages:
       '@ngrx/signals': '>=21'
       primeicons: '>=7'
 
-  '@gravionlabs/helix-ui@22.2.7':
-    resolution: {integrity: sha512-ngfni/JP0DV+L3mIhOyXsnb8AocsK+b269am/ADIRjRuSCsaxE9SuxvXVi/htsRgO2hr78sZ/2SrFCxgwiqM4Q==}
+  '@gravionlabs/helix-ui@22.2.14':
+    resolution: {integrity: sha512-GCelQNlTZmjbkoYEHFCQT4a3uGMOnGgBT/hRRfBsYEpcgtn6NKxOtzDsov7AFGEcklddWyld6pkSi02bEx1nGw==}
     peerDependencies:
       '@angular/cdk': '>=22'
       '@angular/common': '>=22'
@@ -4375,17 +4375,17 @@ snapshots:
 
   '@exodus/bytes@1.16.0': {}
 
-  '@gravionlabs/helix-shell@22.2.7(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/router@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/platform-browser@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2)))(rxjs@7.8.2))(@gravionlabs/helix-ui@22.2.7(c850bc9b8bc89857ec360bbe7ab84fa2))(@ngrx/signals@22.0.1(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(primeicons@8.0.2)':
+  '@gravionlabs/helix-shell@22.2.14(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/router@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/platform-browser@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2)))(rxjs@7.8.2))(@gravionlabs/helix-ui@22.2.14(c850bc9b8bc89857ec360bbe7ab84fa2))(@ngrx/signals@22.0.1(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(primeicons@8.0.2)':
     dependencies:
       '@angular/common': 22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
       '@angular/core': 22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2)
       '@angular/router': 22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/platform-browser@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2)))(rxjs@7.8.2)
-      '@gravionlabs/helix-ui': 22.2.7(c850bc9b8bc89857ec360bbe7ab84fa2)
+      '@gravionlabs/helix-ui': 22.2.14(c850bc9b8bc89857ec360bbe7ab84fa2)
       '@ngrx/signals': 22.0.1(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
       primeicons: 8.0.2
       tslib: 2.8.1
 
-  '@gravionlabs/helix-ui@22.2.7(c850bc9b8bc89857ec360bbe7ab84fa2)':
+  '@gravionlabs/helix-ui@22.2.14(c850bc9b8bc89857ec360bbe7ab84fa2)':
     dependencies:
       '@angular/cdk': 22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/forms@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(@angular/platform-browser@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2)))(rxjs@7.8.2))(@angular/platform-browser@22.2.2(@angular/common@22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@angular/common': 22.2.2(@angular/core@22.2.2(@angular/compiler@22.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
