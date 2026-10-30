@@ -1,23 +1,13 @@
 name: App
 
-# Checks for the desktop application. They run when the frontend, the Tauri
-# crate or this workflow change; the CLI workflow (ci.yml) excludes the app crate
-# and needs no system libraries.
+# Checks for the desktop application. On pull requests the `changes` job decides
+# from the diff whether the frontend, the Tauri crate or this workflow changed;
+# the `app` job always runs last and is the single check to require on a branch
+# (it is green when the checks passed or were skipped for lack of app changes).
+# The CLI workflow (ci.yml) excludes the app crate and needs no system libraries.
 on:
   pull_request:
     branches: [main, "release/**"]
-    paths:
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "angular.json"
-      - "tsconfig*.json"
-      - "eslint.config.mjs"
-      - "vitest.*"
-      - "src/**"
-      - "src-tauri/**"
-      - "crates/agentlens-core/**"
-      - ".github/workflows/app.yml"
   push:
     branches: [main, "release/**"]
 
@@ -29,7 +19,37 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: changes (app files)
+    runs-on: ubuntu-24.04
+    outputs:
+      app: ${{ steps.diff.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Same list as the former `paths` filter.
+          pattern='^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|angular\.json|tsconfig[^/]*\.json|eslint\.config\.mjs|vitest\.[^/]*|src/.*|src-tauri/.*|crates/agentlens-core/.*|\.github/workflows/app\.yml)$'
+          git diff --name-only "$BASE_SHA" HEAD > changed.txt
+          cat changed.txt
+          if grep -Eq "$pattern" changed.txt; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+          fi
+
   frontend:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     name: frontend (lint, format, test, build)
     runs-on: ubuntu-24.04
     steps:
@@ -46,6 +66,8 @@ jobs:
       - run: pnpm build
 
   tauri:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     name: application crate (clippy, test)
     runs-on: ubuntu-24.04
     env:
@@ -73,3 +95,23 @@ jobs:
       - run: cargo test -p agentlens-app
         env:
           AGENTLENS_REQUIRE_MAKENSIS: '1'
+
+  # The one check to require: green when frontend and tauri passed or were
+  # skipped because no app files changed; red when any of them (or `changes`)
+  # failed or was cancelled.
+  app:
+    name: app
+    if: always()
+    needs: [changes, frontend, tauri]
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needed job results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "a needed job ended as $r"; exit 1 ;;
+            esac
+          done
