@@ -23,6 +23,7 @@ fn title(f: &Finding) -> String {
         FindingKind::ContextSize => format!("Context size ({})", f.count),
         FindingKind::RetryLoops => format!("Retry loops ({})", f.count),
         FindingKind::ModelMix => format!("Model mix ({})", f.count),
+        FindingKind::Delegation => format!("Delegation ({})", f.count),
         FindingKind::ContextHygiene => format!("Context hygiene ({})", f.count),
     }
 }

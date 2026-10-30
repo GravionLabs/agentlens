@@ -826,3 +826,37 @@ fn a_recorded_clear_is_a_measured_fresh_start() {
         "both have two compactions"
     );
 }
+
+#[test]
+fn delegation_is_missing_where_subagents_ran_and_present_where_none_did() {
+    use agentlens_core::analyzers::advice::delegation_use;
+
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/main_with_subagent.jsonl",
+        &format!("{SLUG}/main_with_subagent.jsonl"),
+    );
+    let d = delegation_use(&read_all(&home));
+    assert!(d.sources.iter().all(|s| s.large_requests == 0));
+    assert!(d.sessions.is_empty());
+
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/large_context_no_subagents.jsonl",
+        &format!("{SLUG}/large_context_no_subagents.jsonl"),
+    );
+    let d = delegation_use(&read_all(&home));
+    assert_eq!((d.requests, d.large_requests), (20, 20));
+    let [s] = d.sources.as_slice() else {
+        panic!("one source")
+    };
+    assert_eq!(
+        (
+            s.share.requests,
+            s.share.subagent_requests,
+            s.large_requests
+        ),
+        (20, 0, 20)
+    );
+    assert_eq!(d.sessions[0].id, "large_context_no_subagents");
+}

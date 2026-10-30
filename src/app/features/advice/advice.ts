@@ -19,6 +19,7 @@ const TITLES: Record<FindingKind, string> = {
   "context-size": "Context size",
   "retry-loops": "Retry loops",
   "model-mix": "Model mix",
+  delegation: "Delegation",
   "context-hygiene": "Context hygiene",
 };
 
