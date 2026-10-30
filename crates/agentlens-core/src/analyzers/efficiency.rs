@@ -71,7 +71,7 @@ pub const MAIN_ROLE: &str = "main";
 pub const UNKNOWN_ROLE: &str = "(unknown)";
 
 /// One role over the period: the main agent or all runs with the same skill, phase or type.
-/// Runs without a single request are not counted.
+/// A run without a request counts in `runs` (requests 0, no cost).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RoleRow {
     pub role: String,
@@ -89,15 +89,16 @@ pub struct RoleRow {
     pub usd: Option<f64>,
     /// Mean cost per run (`usd / runs`).
     pub usd_per_run: Option<f64>,
-    /// `true` if every priced request carries a cost the client reported.
+    /// `true` if there is a cost and every priced request carries one the client reported.
     pub cost_measured: bool,
     pub unpriced_requests: u64,
     /// Sorted, without duplicates.
     pub models: Vec<String>,
-    /// Per run, mean: `input + cache_read + cache_write` of the first request, the static part
-    /// every run pays.
+    /// Per run, mean rounded to an integer, over the runs with requests: `input + cache_read +
+    /// cache_write` of the first request, the static part every run pays.
     pub first_request_context: Tokens,
-    /// Per run, mean: `input + cache_write` of the later requests, what the run read.
+    /// Per run, mean rounded to an integer, over the runs with requests: `input + cache_write` of
+    /// the later requests, what the run read.
     pub uncached_after_first: Tokens,
     /// `None` without any input.
     pub hit_rate: Option<f64>,
@@ -124,6 +125,8 @@ struct RunAcc {
 #[derive(Default)]
 struct RoleAcc {
     runs: u64,
+    /// Runs with at least one request; the denominator of the two context means.
+    runs_with_requests: u64,
     requests: u64,
     input: u64,
     cache_read: u64,
@@ -139,22 +142,37 @@ struct RoleAcc {
     all_measured: bool,
 }
 
-/// What a run says about itself, from its `AgentRun` event and the info on its requests.
+/// What a run says about itself, merged from its `AgentRun` event and the info on its requests,
+/// whichever comes first.
 #[derive(Default)]
 struct RunInfo {
     name: Option<String>,
     phase: Option<String>,
+    /// From the `AgentRun` event; preferred over the one on the requests.
     agent_type: Option<String>,
+    request_agent_type: Option<String>,
+}
+
+/// Keep a known value: the first non-blank one wins.
+fn fill(slot: &mut Option<String>, value: &Option<String>) {
+    if slot.is_none()
+        && let Some(v) = value.as_ref().filter(|v| !v.trim().is_empty())
+    {
+        *slot = Some(v.clone());
+    }
 }
 
 fn role_of(info: &RunInfo) -> (String, RoleKind) {
-    let pick = |v: &Option<String>| v.clone().filter(|v| !v.trim().is_empty());
-    if let Some(n) = pick(&info.name) {
-        (n, RoleKind::Skill)
-    } else if let Some(p) = pick(&info.phase) {
-        (p, RoleKind::WorkflowPhase)
-    } else if let Some(t) = pick(&info.agent_type) {
-        (t, RoleKind::AgentType)
+    if let Some(n) = &info.name {
+        (n.clone(), RoleKind::Skill)
+    } else if let Some(p) = &info.phase {
+        (p.clone(), RoleKind::WorkflowPhase)
+    } else if let Some(t) = info
+        .agent_type
+        .as_ref()
+        .or(info.request_agent_type.as_ref())
+    {
+        (t.clone(), RoleKind::AgentType)
     } else {
         (UNKNOWN_ROLE.into(), RoleKind::Unknown)
     }
@@ -162,8 +180,15 @@ fn role_of(info: &RunInfo) -> (String, RoleKind) {
 
 fn roles(sessions: &[SessionEvents], prices: &PriceTable) -> Vec<RoleRow> {
     let mut acc: BTreeMap<(RoleKind, String), RoleAcc> = BTreeMap::new();
+    let fresh = || RoleAcc {
+        all_measured: true,
+        ..RoleAcc::default()
+    };
     for se in sessions {
         let mut infos: BTreeMap<&str, RunInfo> = BTreeMap::new();
+        // Requests per run in event order; `None` is the main agent.
+        let mut runs: BTreeMap<Option<&str>, RunAcc> = BTreeMap::new();
+        let mut seen: Vec<(Option<&str>, &Usage)> = Vec::new();
         for e in &se.events {
             match &e.kind {
                 EventKind::AgentRun {
@@ -173,30 +198,24 @@ fn roles(sessions: &[SessionEvents], prices: &PriceTable) -> Vec<RoleRow> {
                     ..
                 } => {
                     let i = infos.entry(agent_id).or_default();
-                    i.name = name.clone();
-                    i.agent_type = agent_type.clone();
+                    fill(&mut i.name, name);
+                    fill(&mut i.agent_type, agent_type);
+                    // A run without requests still counts.
+                    runs.entry(Some(agent_id)).or_insert_with(|| RunAcc {
+                        measured: true,
+                        ..RunAcc::default()
+                    });
                 }
                 EventKind::Usage(u) => {
-                    if let Some(a) = &u.agent
-                        && let Some(id) = &a.agent_id
-                    {
+                    let id = u.agent.as_ref().and_then(|a| a.agent_id.as_deref());
+                    if let (Some(a), Some(id)) = (&u.agent, id) {
                         let i = infos.entry(id).or_default();
-                        i.phase = i.phase.take().or_else(|| a.workflow_phase.clone());
-                        if i.agent_type.is_none() {
-                            i.agent_type = a.agent_type.clone();
-                        }
+                        fill(&mut i.phase, &a.workflow_phase);
+                        fill(&mut i.request_agent_type, &a.agent_type);
                     }
+                    seen.push((id, u));
                 }
                 _ => {}
-            }
-        }
-        // Requests per run in event order; `None` is the main agent.
-        let mut runs: BTreeMap<Option<&str>, RunAcc> = BTreeMap::new();
-        let mut seen: Vec<(Option<&str>, &Usage)> = Vec::new();
-        for e in &se.events {
-            if let EventKind::Usage(u) = &e.kind {
-                let id = u.agent.as_ref().and_then(|a| a.agent_id.as_deref());
-                seen.push((id, u));
             }
         }
         for (id, u) in &seen {
@@ -212,32 +231,25 @@ fn roles(sessions: &[SessionEvents], prices: &PriceTable) -> Vec<RoleRow> {
             r.requests += 1;
             r.measured &= u.measured;
         }
+        let key_of = |id: Option<&str>| match id {
+            None => (RoleKind::Main, MAIN_ROLE.to_owned()),
+            Some(id) => {
+                let (name, kind) = role_of(&infos[id]);
+                (kind, name)
+            }
+        };
         for (id, run) in runs {
-            let key = match id {
-                None => (RoleKind::Main, MAIN_ROLE.to_owned()),
-                Some(id) => {
-                    let (name, kind) = role_of(&infos[id]);
-                    (kind, name)
-                }
-            };
-            let a = acc.entry(key).or_insert_with(|| RoleAcc {
-                all_measured: true,
-                ..RoleAcc::default()
-            });
+            let a = acc.entry(key_of(id)).or_insert_with(fresh);
             a.runs += 1;
-            a.first_context += run.first_context;
-            a.later_uncached += run.later_uncached;
-            a.all_measured &= run.measured;
+            if run.requests > 0 {
+                a.runs_with_requests += 1;
+                a.first_context += run.first_context;
+                a.later_uncached += run.later_uncached;
+                a.all_measured &= run.measured;
+            }
         }
         for (id, u) in &seen {
-            let key = match id {
-                None => (RoleKind::Main, MAIN_ROLE.to_owned()),
-                Some(id) => {
-                    let (name, kind) = role_of(&infos[id]);
-                    (kind, name)
-                }
-            };
-            let a = acc.get_mut(&key).expect("role created above");
+            let a = acc.get_mut(&key_of(*id)).expect("role created above");
             a.requests += 1;
             a.input += u.input;
             a.cache_read += u.cache_read;
@@ -264,9 +276,11 @@ fn roles(sessions: &[SessionEvents], prices: &PriceTable) -> Vec<RoleRow> {
         .into_iter()
         .map(|((kind, role), a)| {
             let runs = a.runs.max(1) as f64;
-            let mean = |n: u64| (n as f64 / runs).round() as u64;
+            let with_requests = a.runs_with_requests.max(1) as f64;
+            let mean = |n: u64| (n as f64 / with_requests).round() as u64;
             let total_input = a.input + a.cache_read + a.cache_write;
             let usd = (a.priced > 0).then_some(a.usd);
+            let measured = a.runs_with_requests > 0 && a.all_measured;
             RoleRow {
                 role,
                 kind,
@@ -279,16 +293,16 @@ fn roles(sessions: &[SessionEvents], prices: &PriceTable) -> Vec<RoleRow> {
                 output: a.output,
                 usd,
                 usd_per_run: usd.map(|u| u / runs),
-                cost_measured: !a.unmeasured_cost,
+                cost_measured: usd.is_some() && !a.unmeasured_cost,
                 unpriced_requests: a.unpriced,
                 models: a.models.into_iter().collect(),
                 first_request_context: Tokens {
                     count: mean(a.first_context),
-                    measured: a.all_measured,
+                    measured,
                 },
                 uncached_after_first: Tokens {
                     count: mean(a.later_uncached),
-                    measured: a.all_measured,
+                    measured,
                 },
                 hit_rate: (total_input > 0).then(|| a.cache_read as f64 / total_input as f64),
             }
@@ -640,6 +654,96 @@ mod tests {
         );
         let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
         assert_eq!(r.roles[0].role, "Explore", "largest cost first");
+    }
+
+    fn events_in_both_orders(first_run: bool) -> Vec<EventKind> {
+        let run = run_event("r1", Some("Explore"), Some("review"));
+        let req = agent_request("r1", Some("Implement"), 5, 100, 20);
+        if first_run {
+            vec![run, req]
+        } else {
+            vec![req, run]
+        }
+    }
+
+    #[test]
+    fn the_order_of_run_and_usage_events_does_not_matter() {
+        for first_run in [true, false] {
+            let s = session(
+                "a",
+                Source::ClaudeCode,
+                "/p",
+                events_in_both_orders(first_run),
+            );
+            let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
+            assert_eq!(r.roles.len(), 1, "{first_run}: {:?}", r.roles);
+            assert_eq!(
+                (r.roles[0].role.as_str(), r.roles[0].kind),
+                ("review", RoleKind::Skill),
+                "{first_run}"
+            );
+        }
+        // Without a skill name the type from the run must survive a request that comes first.
+        for first_run in [true, false] {
+            let run = run_event("r1", Some("Explore"), None);
+            let req = agent_request("r1", None, 5, 0, 0);
+            let evs = if first_run {
+                vec![run, req]
+            } else {
+                vec![req, run]
+            };
+            let s = session("a", Source::ClaudeCode, "/p", evs);
+            let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
+            assert_eq!(
+                (r.roles[0].role.as_str(), r.roles[0].kind),
+                ("Explore", RoleKind::AgentType),
+                "{first_run}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_run_without_requests_counts_but_stays_out_of_the_context_means() {
+        let s = session(
+            "a",
+            Source::ClaudeCode,
+            "/p",
+            vec![
+                run_event("r1", Some("Explore"), None),
+                agent_request("r1", None, 10, 0, 0),
+                run_event("r2", Some("Explore"), None), // no request
+            ],
+        );
+        let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
+        let row = &r.roles[0];
+        assert_eq!((row.runs, row.requests), (2, 1));
+        assert!((row.requests_per_run - 0.5).abs() < 1e-9);
+        assert_eq!(row.first_request_context.count, 10);
+
+        let s = session(
+            "b",
+            Source::ClaudeCode,
+            "/p",
+            vec![run_event("w", Some("workflow"), None)],
+        );
+        let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
+        let row = &r.roles[0];
+        assert_eq!((row.runs, row.requests), (1, 0));
+        assert_eq!((row.usd, row.usd_per_run), (None, None));
+        assert!(!row.cost_measured);
+    }
+
+    #[test]
+    fn cost_is_never_measured_without_a_value() {
+        let mut u = match agent_request("r1", None, 5, 0, 0) {
+            EventKind::Usage(u) => u,
+            _ => unreachable!(),
+        };
+        u.model = Some("model-without-a-price".into());
+        let s = session("a", Source::ClaudeCode, "/p", vec![EventKind::Usage(u)]);
+        let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
+        assert_eq!(r.roles[0].usd, None);
+        assert!(!r.roles[0].cost_measured);
     }
 
     #[test]

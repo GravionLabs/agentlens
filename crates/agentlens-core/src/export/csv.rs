@@ -385,7 +385,7 @@ pub fn cache(rows: &[CacheRow]) -> Result<String, CsvError> {
     write(&header, body)
 }
 
-/// `efficiency --csv-table roles`: the roles table. An empty cell is missing data.
+/// `efficiency --section roles`: the roles table. An empty cell is missing data.
 pub fn roles(rows: &[RoleRow]) -> Result<String, CsvError> {
     let header = [
         "role",

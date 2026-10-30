@@ -727,8 +727,11 @@ fn efficiency_roles_cover_skill_phase_type_and_main() {
     ] {
         assert!(roles.contains(&want), "{want:?} missing in {roles:?}");
     }
-    // The workflow container made no request and is not a row.
-    assert_eq!(roles.len(), 4, "{roles:?}");
+    // The workflow container made no request but is a run of its own.
+    assert_eq!(roles.len(), 5, "{roles:?}");
+    let container = report.roles.iter().find(|r| r.role == "workflow").unwrap();
+    assert_eq!((container.runs, container.requests), (1, 0));
+    assert_eq!(container.usd, None);
     let skill = report.roles.iter().find(|r| r.role == "review").unwrap();
     // The subagent fixture request: 10 input + 100 cache read + 200 cache write.
     assert_eq!(skill.requests, 1);

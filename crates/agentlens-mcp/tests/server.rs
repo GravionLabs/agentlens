@@ -202,6 +202,23 @@ fn a_tool_returns_what_the_application_shows() {
 }
 
 #[test]
+fn the_efficiency_tool_carries_the_roles_table() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    let result = client.call("efficiency", json!({"sources": ["claude-code"]}));
+    assert_eq!(result["isError"], false, "{result}");
+    let roles = result["structuredContent"]["data"]["roles"]
+        .as_array()
+        .expect("roles in the efficiency result");
+    assert!(
+        roles
+            .iter()
+            .any(|r| r["role"] == "main" && r["kind"] == "main"),
+        "{roles:?}"
+    );
+}
+
+#[test]
 fn a_bad_filter_is_an_error_the_agent_can_read() {
     let home = home();
     let mut client = Client::start(home.path());

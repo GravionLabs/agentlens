@@ -76,7 +76,7 @@ pub fn run(cli: Cli) -> Result<()> {
             by,
             top,
             prices,
-            csv_table,
+            section,
         } => efficiency::run(
             &registry,
             &env,
@@ -86,7 +86,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 price_file: prices.as_deref(),
                 by,
                 top,
-                csv_table,
+                section,
             },
             display,
         ),
