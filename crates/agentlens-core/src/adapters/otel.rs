@@ -25,8 +25,8 @@ use serde_json::Value;
 use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
 use crate::env::Env;
 use crate::model::{
-    EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger, Source, ToolCall, ToolStatus,
-    Usage, Warning,
+    AgentInfo, EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger, Source, ToolCall,
+    ToolStatus, Usage, Warning,
 };
 
 /// Reads the given files; registered only when the user names OTel files.
@@ -348,6 +348,41 @@ fn agent_depth(id: &str, spans: &HashMap<&str, (&str, Option<&str>)>) -> usize {
     depth
 }
 
+/// The `invoke_agent` span `id` is in (itself included).
+fn nearest_agent<'a>(
+    id: &str,
+    spans: &HashMap<&'a str, (&'a str, Option<&'a str>)>,
+) -> Option<&'a str> {
+    let mut cur: Option<&str> = Some(*spans.get_key_value(id)?.0);
+    for _ in 0..64 {
+        let c = cur?;
+        let (name, parent) = spans.get(c)?;
+        if *name == "invoke_agent" {
+            return Some(c);
+        }
+        cur = *parent;
+    }
+    None
+}
+
+/// The nearest `invoke_agent` span above `id` (not `id` itself) that is a subagent, that is nested in
+/// another agent. The outermost agent is the main session and is not a run.
+fn caller_run<'a>(
+    id: &str,
+    spans: &HashMap<&'a str, (&'a str, Option<&'a str>)>,
+) -> Option<&'a str> {
+    let mut cur = spans.get(id)?.1;
+    for _ in 0..64 {
+        let c = cur?;
+        let (name, parent) = spans.get(c)?;
+        if *name == "invoke_agent" && agent_depth(c, spans) >= 2 {
+            return Some(c);
+        }
+        cur = *parent;
+    }
+    None
+}
+
 /// Turns the spans of the Copilot CLI file exporter into events of a Copilot CLI session.
 fn copilot_spans(spans: &[Value], sessions: &mut Sessions, skipped: &mut BTreeMap<String, u64>) {
     let index: HashMap<&str, (&str, Option<&str>)> = spans
@@ -361,6 +396,10 @@ fn copilot_spans(spans: &[Value], sessions: &mut Sessions, skipped: &mut BTreeMa
                 ),
             ))
         })
+        .collect();
+    let by_id: HashMap<&str, &Value> = spans
+        .iter()
+        .filter_map(|s| Some((s.get("spanId")?.as_str()?, s)))
         .collect();
     for span in spans {
         let attrs = span.get("attributes").unwrap_or(&Value::Null);
@@ -416,7 +455,15 @@ fn copilot_spans(spans: &[Value], sessions: &mut Sessions, skipped: &mut BTreeMa
                         subagent: agent_depth(span_id, &index) >= 2,
                         premium_requests: attrs.get("github.copilot.cost").and_then(Value::as_f64),
                         skill: None,
-                        agent: None,
+                        // A request made inside a subagent belongs to the run of that agent span.
+                        agent: if agent_depth(span_id, &index) >= 2 {
+                            nearest_agent(span_id, &index).map(|id| AgentInfo {
+                                agent_id: Some(id.to_owned()),
+                                ..AgentInfo::default()
+                            })
+                        } else {
+                            None
+                        },
                     }),
                 );
             }
@@ -450,6 +497,49 @@ fn copilot_spans(spans: &[Value], sessions: &mut Sessions, skipped: &mut BTreeMa
                 );
             }
             Some("invoke_agent") => {
+                let span_id = span.get("spanId").and_then(Value::as_str);
+                let depth = span_id.map_or(0, |id| agent_depth(id, &index));
+                if let Some(span_id) = span_id
+                    && depth >= 2
+                {
+                    match start {
+                        Some(started_at) => {
+                            let parent_span = span
+                                .get("parentSpanId")
+                                .and_then(Value::as_str)
+                                .and_then(|p| by_id.get(p));
+                            se.push(
+                                start,
+                                EventKind::AgentRun {
+                                    agent_id: span_id.to_owned(),
+                                    parent_agent_id: caller_run(span_id, &index).map(str::to_owned),
+                                    // The tool call of the caller, when the span hangs under one.
+                                    tool_use_id: parent_span
+                                        .and_then(|p| p.get("attributes"))
+                                        .and_then(|a| a.get("gen_ai.tool.call.id"))
+                                        .and_then(Value::as_str)
+                                        .map(str::to_owned),
+                                    agent_type: attrs
+                                        .get("gen_ai.agent.name")
+                                        .and_then(Value::as_str)
+                                        .map(str::to_owned),
+                                    name: None,
+                                    description: None,
+                                    model: None,
+                                    // The main agent is depth 0 here; its direct subagents are 1.
+                                    depth: u32::try_from(depth - 1).ok(),
+                                    started_at,
+                                    ended_at: end,
+                                },
+                            );
+                        }
+                        None => {
+                            *skipped
+                                .entry("invoke_agent without startTime".into())
+                                .or_default() += 1;
+                        }
+                    }
+                }
                 for event in span
                     .get("events")
                     .and_then(Value::as_array)

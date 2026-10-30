@@ -19,8 +19,8 @@ use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIte
 use crate::commit::commit_issue;
 use crate::env::Env;
 use crate::model::{
-    EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger, Source, ToolCall, ToolStatus,
-    Usage, Warning,
+    AgentInfo, EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger, Source, ToolCall,
+    ToolStatus, Usage, Warning,
 };
 
 pub struct OpenCodeAdapter;
@@ -189,9 +189,10 @@ fn read_all(store: &Store, filter: &SessionFilter) -> Result<Vec<SessionEvents>,
             continue;
         }
         let mut se = SessionEvents::new(session_of(root));
-        read_session(store, root, false, &mut se);
+        read_session(store, root, None, &mut se);
         for kid in kids {
-            read_session(store, kid, true, &mut se);
+            let link = RunLink::of(kid, &by_id);
+            read_session(store, kid, Some(link), &mut se);
         }
         se.events.sort_by_key(|e| e.at);
         if let Some(last) = se.events.iter().filter_map(|e| e.at).max() {
@@ -200,6 +201,43 @@ fn read_all(store: &Store, filter: &SessionFilter) -> Result<Vec<SessionEvents>,
         out.push(se);
     }
     Ok(out)
+}
+
+/// What ties a subagent session to its caller: the `parent_id` chain.
+struct RunLink {
+    /// The parent session, unless it is the root (the main session).
+    parent: Option<String>,
+    /// Sessions on the chain up to the root; 1 for a child of the root.
+    depth: Option<u32>,
+}
+
+impl RunLink {
+    fn of(row: &SessionRow, by_id: &HashMap<&str, &SessionRow>) -> RunLink {
+        let known = |r: &SessionRow| r.parent.as_deref().and_then(|p| by_id.get(p).copied());
+        let mut depth = 1;
+        let mut cur = row;
+        for _ in 0..64 {
+            match known(cur) {
+                // The parent is a subagent itself: one level further down.
+                Some(parent) if known(parent).is_some() => {
+                    depth += 1;
+                    cur = parent;
+                }
+                // The parent is the root, the main session.
+                Some(_) => {
+                    return RunLink {
+                        parent: (depth > 1).then(|| row.parent.clone()).flatten(),
+                        depth: Some(depth),
+                    };
+                }
+                None => break,
+            }
+        }
+        RunLink {
+            parent: row.parent.clone(),
+            depth: None,
+        }
+    }
 }
 
 /// Where the sessions come from: the database or the legacy JSON files.
@@ -471,7 +509,13 @@ fn u64_of(v: &Value, key: &str) -> u64 {
     v.get(key).and_then(Value::as_u64).unwrap_or(0)
 }
 
-fn usage_of(tokens: &Value, cost: Option<f64>, model: Option<String>, subagent: bool) -> Usage {
+fn usage_of(
+    tokens: &Value,
+    cost: Option<f64>,
+    model: Option<String>,
+    run: Option<&RunLink>,
+    row: &SessionRow,
+) -> Usage {
     let cache = tokens.get("cache").unwrap_or(&Value::Null);
     Usage {
         model,
@@ -482,10 +526,14 @@ fn usage_of(tokens: &Value, cost: Option<f64>, model: Option<String>, subagent: 
         reasoning: u64_of(tokens, "reasoning"),
         cost_usd: cost,
         measured: true,
-        subagent,
+        subagent: run.is_some(),
         premium_requests: None,
         skill: None,
-        agent: None,
+        // A request of a subagent session belongs to the run of that session.
+        agent: run.map(|_| AgentInfo {
+            agent_id: Some(row.id.clone()),
+            ..AgentInfo::default()
+        }),
     }
 }
 
@@ -498,8 +546,9 @@ struct MessageInfo {
     has_steps: bool,
 }
 
-/// Appends the events of one session (the root or a subagent) to `se`.
-fn read_session(store: &Store, row: &SessionRow, subagent: bool, se: &mut SessionEvents) {
+/// Appends the events of one session (the root, or a subagent with its link) to `se`.
+fn read_session(store: &Store, row: &SessionRow, run: Option<RunLink>, se: &mut SessionEvents) {
+    let subagent = run.is_some();
     let loc = |what: &str| format!("session {} {what}", row.id);
     let raw = match store.messages(&row.id) {
         Ok(list) => list,
@@ -512,6 +561,34 @@ fn read_session(store: &Store, row: &SessionRow, subagent: bool, se: &mut Sessio
         .iter()
         .map(|m| (m.id.clone(), message_info(m)))
         .collect();
+
+    if let Some(link) = &run {
+        match row.created {
+            Some(started_at) => se.push(
+                Some(started_at),
+                EventKind::AgentRun {
+                    agent_id: row.id.clone(),
+                    parent_agent_id: link.parent.clone(),
+                    tool_use_id: None,
+                    // The agent the session was started with, as its first user message names it.
+                    agent_type: raw
+                        .iter()
+                        .filter(|m| str_of(&m.data, "role") == Some("user"))
+                        .min_by_key(|m| m.created)
+                        .and_then(|m| str_of(&m.data, "agent").map(str::to_owned)),
+                    name: None,
+                    description: None,
+                    model: row.model.clone(),
+                    depth: link.depth,
+                    started_at,
+                    ended_at: row.updated,
+                },
+            ),
+            None => se.warn(
+                Warning::new("subagent session without creation time; run skipped").at(loc("run")),
+            ),
+        }
+    }
 
     let mut problems = Vec::new();
     let parts = match store.parts(&row.id, &raw, &mut problems) {
@@ -548,7 +625,8 @@ fn read_session(store: &Store, row: &SessionRow, subagent: bool, se: &mut Sessio
                     part.get("tokens").unwrap_or(&Value::Null),
                     part.get("cost").and_then(Value::as_f64),
                     model,
-                    subagent,
+                    run.as_ref(),
+                    row,
                 );
                 se.push(at, EventKind::Usage(usage));
             }
@@ -563,7 +641,7 @@ fn read_session(store: &Store, row: &SessionRow, subagent: bool, se: &mut Sessio
             // Older data has message totals without step records.
             "assistant" if !info.has_steps => {
                 if let Some(tokens) = &info.tokens {
-                    let usage = usage_of(tokens, info.cost, info.model.clone(), subagent);
+                    let usage = usage_of(tokens, info.cost, info.model.clone(), run.as_ref(), row);
                     se.push(info.at, EventKind::Usage(usage));
                 }
             }

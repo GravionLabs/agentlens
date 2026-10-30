@@ -466,3 +466,123 @@ fn a_commit_message_keeps_only_its_issue_number() {
     let json = serde_json::to_string(&se.events).unwrap();
     assert!(!json.contains("fix: y"), "the message is not kept");
 }
+
+fn runs(se: &SessionEvents) -> Vec<&EventKind> {
+    se.events
+        .iter()
+        .map(|e| &e.kind)
+        .filter(|k| matches!(k, EventKind::AgentRun { .. }))
+        .collect()
+}
+
+#[test]
+fn a_started_subagent_is_a_run_of_the_main_session() {
+    let se = session(&home(true), "cp-1");
+    let r = runs(&se);
+    assert_eq!(r.len(), 1);
+    let EventKind::AgentRun {
+        agent_id,
+        parent_agent_id,
+        tool_use_id,
+        agent_type,
+        description,
+        depth,
+        started_at,
+        ended_at,
+        ..
+    } = r[0]
+    else {
+        unreachable!()
+    };
+    assert_eq!(agent_id, "c3");
+    assert_eq!(tool_use_id.as_deref(), Some("c3"));
+    assert_eq!(*parent_agent_id, None);
+    assert_eq!(agent_type.as_deref(), Some("explore"));
+    assert_eq!(description.as_deref(), Some("Explore"));
+    assert_eq!(*depth, Some(1));
+    assert_eq!(started_at.to_string(), "2026-07-15T04:00:07Z");
+    assert_eq!(*ended_at, None, "the fixture never completes it");
+}
+
+#[test]
+fn store_rows_of_a_subagent_carry_the_run_id() {
+    let se = session(&home(true), "cp-1");
+    let u = usages(&se);
+    let sub: Vec<_> = u.iter().filter(|u| u.subagent).collect();
+    assert_eq!(sub.len(), 1);
+    assert_eq!(
+        sub[0].agent.as_ref().and_then(|a| a.agent_id.as_deref()),
+        Some("c3")
+    );
+    assert!(u.iter().filter(|u| !u.subagent).all(|u| u.agent.is_none()));
+}
+
+fn events_home(lines: &[&str]) -> TempHome {
+    let home = TempHome::new();
+    home.write(
+        &format!("{STATE}/cp-9/events.jsonl"),
+        lines.join("\n") + "\n",
+    );
+    home
+}
+
+#[test]
+fn completed_failed_and_nested_runs_are_linked() {
+    let home = events_home(&[
+        r#"{"type":"subagent.started","data":{"toolCallId":"a","agentName":"general","agentDisplayName":"General"},"timestamp":"2026-07-15T04:00:00.000Z"}"#,
+        r#"{"type":"subagent.started","data":{"toolCallId":"b","agentName":"explore","agentDisplayName":"Explore","parentToolCallId":"a"},"timestamp":"2026-07-15T04:00:01.000Z"}"#,
+        r#"{"type":"subagent.started","data":{"toolCallId":"c","agentName":"x","parentToolCallId":"nobody"},"timestamp":"2026-07-15T04:00:01.500Z"}"#,
+        r#"{"type":"subagent.failed","data":{"toolCallId":"b"},"timestamp":"2026-07-15T04:00:02.000Z"}"#,
+        r#"{"type":"subagent.completed","data":{"toolCallId":"a"},"timestamp":"2026-07-15T04:00:03.000Z"}"#,
+    ]);
+    let se = session(&home, "cp-9");
+    assert!(se.warnings.is_empty(), "{:?}", se.warnings);
+    let mut got: Vec<_> = runs(&se)
+        .into_iter()
+        .map(|k| match k {
+            EventKind::AgentRun {
+                agent_id,
+                parent_agent_id,
+                depth,
+                ended_at,
+                ..
+            } => (
+                agent_id.clone(),
+                parent_agent_id.clone(),
+                *depth,
+                ended_at.map(|t| t.to_string()),
+            ),
+            _ => unreachable!(),
+        })
+        .collect();
+    got.sort();
+    assert_eq!(
+        got,
+        [
+            (
+                "a".to_owned(),
+                None,
+                Some(1),
+                Some("2026-07-15T04:00:03Z".to_owned())
+            ),
+            (
+                "b".to_owned(),
+                Some("a".to_owned()),
+                Some(2),
+                Some("2026-07-15T04:00:02Z".to_owned())
+            ),
+            ("c".to_owned(), None, None, None),
+        ]
+    );
+}
+
+#[test]
+fn a_started_event_without_id_or_time_warns_and_gives_no_run() {
+    let home = events_home(&[
+        r#"{"type":"subagent.started","data":{"agentName":"x"},"timestamp":"2026-07-15T04:00:00.000Z"}"#,
+        r#"{"type":"subagent.started","data":{"toolCallId":"z"}}"#,
+    ]);
+    let se = session(&home, "cp-9");
+    assert!(runs(&se).is_empty());
+    assert_eq!(se.warnings.len(), 2, "{:?}", se.warnings);
+}
