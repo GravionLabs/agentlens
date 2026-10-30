@@ -112,6 +112,16 @@ pub struct EfficiencyQuery {
     pub role: Option<Vec<String>>,
 }
 
+/// The trend: the filter (the current period) and the window to compare it with.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct TrendQuery {
+    #[serde(flatten)]
+    pub query: Query,
+    /// The comparison window as `SINCE..UNTIL`, each bound in the forms of `since` (`2026-09-01..2026-10-01`).
+    /// Empty: the window of the same length right before the period. It must not overlap the period.
+    pub against: Option<String>,
+}
+
 /// One session of the timeline.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 pub struct TimelineQuery {
@@ -262,6 +272,27 @@ impl AgentLensServer {
     }
 
     #[tool(
+        description = "What changed: the period (`since`/`until`, default the last 30 days) next to a comparison window (`against` as `SINCE..UNTIL`, default the window of the same length right before), with `before`, `after`, `change` and `change_pct` for sessions, requests, tokens, USD (measured and estimated apart), cache hit rate, subagent share, tool errors and, per skill, loads and overhead tokens. A change is null when a window has no sessions; when the windows differ in length (`windows.normalized`) counts are per day. A change of an estimate has `measured: false`.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn trend(&self, Parameters(q): Parameters<TrendQuery>) -> CallToolResult {
+        let f = q.query.filters();
+        let against = match q
+            .against
+            .as_deref()
+            .map(str::trim)
+            .filter(|a| !a.is_empty())
+        {
+            Some(a) => match api::parse_against(a, "against") {
+                Ok(w) => Some(w),
+                Err(e) => return failure(e),
+            },
+            None => None,
+        };
+        self.run(move |c| api::trend(c, &f, against)).await
+    }
+
+    #[tool(
         description = "The sessions in the period with source, id, project, model, start and end, so that one can be opened with the timeline tool.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
@@ -296,7 +327,7 @@ impl AgentLensServer {
             "Analyze how my coding agents use skills and what that costs in tokens, with the agentlens tools, and propose concrete changes. Look at the last {since} (pass it as `since`).\n\n\
 1. Call `advice` first. Its findings are computed from the numbers, not guessed, and come ranked by what each could have saved in the period (`rank`, `impact.saving`, `impact.saving_usd`, an estimate from the price table): explain them in plain language in that order.\n\
 2. If a field is unclear (load, carry, baseline, follow-on, file uses, overhead), read the resource {GLOSSARY_URI} instead of guessing.\n\
-3. Look closer at anything surprising with the other tools: `skills` for one skill, `unused` for agents and MCP servers, `context` for instruction files and tool definitions, `sessions` and `timeline` for a long session.\n\n\
+3. Look closer at anything surprising with the other tools: `skills` for one skill, `unused` for agents and MCP servers, `context` for instruction files and tool definitions, `sessions` and `timeline` for a long session, `trend` for what changed against the period before (cost, tokens, cache hit rate, skill overhead).\n\n\
 Rules for the conclusions:\n\
 - Trust a number without a tilde (`measured: true`); say so when a conclusion rests on an estimate (`~`, `measured: false`).\n\
 - `impact.confidence` says how sure a saving is: `measured`, `estimated`, or `inferred`. An `inferred` saving rests on an assumption (for the context size: that the work could have run in a fresh session); say so.\n\

@@ -1874,3 +1874,159 @@ fn cost_by_session_has_a_row_per_session_and_top_limits_only_the_table() {
     assert!(table.contains("subagent share"), "{table}");
     assert!(table.contains("1 more rows"), "{table}");
 }
+
+/// The `basic` session ends at 10:02, the `skills` session at 11:06 on 2026-10-01: one in each hour.
+const THIS_HOUR: [&str; 4] = [
+    "--since",
+    "2026-10-01T10:30:00Z",
+    "--until",
+    "2026-10-01T11:30:00Z",
+];
+
+#[test]
+fn trend_compares_the_period_with_the_window_before() {
+    let home = home();
+    let v = json(
+        agentlens(&home)
+            .args(["trend", "--format", "json"])
+            .args(THIS_HOUR),
+    );
+    assert_eq!(v["windows"]["normalized"], false);
+    assert_eq!(v["windows"]["current"]["sessions"], 1);
+    assert_eq!(v["windows"]["against"]["sessions"], 1);
+    let sessions = &v["volume"]["sessions"];
+    assert_eq!(
+        (&sessions["before"], &sessions["after"]),
+        (&1.0.into(), &1.0.into())
+    );
+    assert!(v["volume"]["requests"]["change"].is_number());
+    assert!(
+        v["skills"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["name"] == "demo")
+    );
+}
+
+#[test]
+fn trend_table_marks_estimates_and_missing_changes() {
+    let home = home();
+    let table = agentlens(&home)
+        .args(["trend"])
+        .args(THIS_HOUR)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let table = String::from_utf8(table).unwrap();
+    for needle in ["volume", "cost", "efficiency", "skills", "estimated_usd"] {
+        assert!(table.contains(needle), "{needle} missing:\n{table}");
+    }
+    let est = table.lines().find(|l| l.contains("estimated_usd")).unwrap();
+    assert!(est.contains('~'), "{est}");
+    assert!(!table.contains("per day"), "{table}");
+
+    // An empty comparison window: the values are there, the change is n/a.
+    let table = agentlens(&home)
+        .args(["trend", "--against", "2026-08-01..2026-08-02"])
+        .args(["--since", "2026-10-01", "--until", "2026-10-02"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let table = String::from_utf8(table).unwrap();
+    let sessions = table
+        .lines()
+        .find(|l| l.contains("volume") && l.contains(" sessions "))
+        .unwrap();
+    assert!(sessions.contains("n/a"), "{sessions}");
+    // 1 day against 1 day is not normalized; a longer period is.
+    let table = agentlens(&home)
+        .args(["trend", "--against", "2026-08-01..2026-08-02"])
+        .args(["--since", "2026-10-01", "--until", "2026-10-05"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(String::from_utf8(table).unwrap().contains("per day"));
+}
+
+#[test]
+fn trend_csv_has_one_row_per_figure() {
+    let home = home();
+    let out = agentlens(&home)
+        .args(["trend", "--format", "csv"])
+        .args(THIS_HOUR)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let csv = String::from_utf8(out).unwrap();
+    assert!(
+        csv.starts_with("group,figure,skill,status,before,after,change,change_pct,measured\n"),
+        "{csv}"
+    );
+    assert!(
+        csv.lines()
+            .any(|l| l.starts_with("volume,sessions,,,1.000000,1.000000,0.000000"))
+    );
+    assert!(csv.lines().any(|l| l.starts_with("skills,loads,demo,")));
+}
+
+#[test]
+fn trend_rejects_a_bad_against_and_overlapping_windows_with_the_message() {
+    let home = home();
+    for (against, message) in [
+        ("2026-09-01", "expected SINCE..UNTIL"),
+        ("nonsense..2026-09-01", "--against"),
+        ("2026-09-02..2026-09-01", "must be later"),
+        ("2026-09-20..2026-10-10", "overlaps"),
+    ] {
+        agentlens(&home)
+            .args(["trend", "--against", against])
+            .args(["--since", "2026-10-01", "--until", "2026-10-05"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(message))
+            .stderr(predicate::str::contains("panicked").not());
+    }
+}
+
+#[test]
+fn trend_filters_by_source_session_and_keeps_prompts_out() {
+    let home = home();
+    let none = json(
+        agentlens(&home)
+            .args(["trend", "--format", "json", "--source", "opencode"])
+            .args(THIS_HOUR),
+    );
+    assert_eq!(none["windows"]["current"]["sessions"], 0);
+    let one = json(
+        agentlens(&home)
+            .args(["trend", "--format", "json", "--session", "basic"])
+            .args(["--since", "2026-10-01", "--until", "2026-10-02"]),
+    );
+    assert_eq!(one["windows"]["current"]["sessions"], 1);
+    // Counts, names and numbers only: nothing of the conversation.
+    let raw = agentlens(&home)
+        .args(["trend", "--format", "json"])
+        .args(THIS_HOUR)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let raw = String::from_utf8(raw).unwrap();
+    let fixture = fs::read_to_string(fixtures().join("basic.jsonl")).unwrap();
+    let prompt = fixture
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .find_map(|v| v["message"]["content"].as_str().map(str::to_owned))
+        .expect("the fixture has a user prompt");
+    assert!(!raw.contains(&prompt), "{raw}");
+}

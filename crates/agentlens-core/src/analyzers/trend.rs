@@ -226,6 +226,100 @@ pub struct TrendReport {
     pub skills: Vec<SkillTrend>,
 }
 
+/// How a figure is written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unit {
+    Count,
+    Tokens,
+    Usd,
+    /// A share between 0 and 1.
+    Rate,
+}
+
+/// One figure of the report with its group and name, in the order of the table and the CSV.
+#[derive(Debug, Clone, Copy)]
+pub struct FigureRow<'a> {
+    /// `volume`, `cost`, `efficiency`, `errors` or `skills`.
+    pub group: &'static str,
+    /// The figure (`requests`); for a skill `loads` or `overhead_tokens`.
+    pub figure: &'static str,
+    /// The skill, for the rows of the group `skills`.
+    pub skill: Option<&'a SkillTrend>,
+    pub unit: Unit,
+    pub delta: &'a Delta,
+}
+
+impl TrendReport {
+    /// Every figure in the order volume, cost, efficiency, errors, then two rows per skill.
+    pub fn figures(&self) -> Vec<FigureRow<'_>> {
+        let row = |group, figure, unit, delta| FigureRow {
+            group,
+            figure,
+            skill: None,
+            unit,
+            delta,
+        };
+        let (v, c, e, x) = (&self.volume, &self.cost, &self.efficiency, &self.errors);
+        let mut rows = vec![
+            row("volume", "sessions", Unit::Count, &v.sessions),
+            row("volume", "requests", Unit::Count, &v.requests),
+            row(
+                "volume",
+                "subagent_requests",
+                Unit::Count,
+                &v.subagent_requests,
+            ),
+            row("volume", "tokens", Unit::Tokens, &v.tokens),
+            row("volume", "context_tokens", Unit::Tokens, &v.context_tokens),
+            row(
+                "volume",
+                "large_context_requests",
+                Unit::Count,
+                &v.large_context_requests,
+            ),
+            row("cost", "measured_usd", Unit::Usd, &c.measured_usd),
+            row("cost", "estimated_usd", Unit::Usd, &c.estimated_usd),
+            row(
+                "cost",
+                "unpriced_requests",
+                Unit::Count,
+                &c.unpriced_requests,
+            ),
+            row(
+                "efficiency",
+                "cache_hit_rate",
+                Unit::Rate,
+                &e.cache_hit_rate,
+            ),
+            row(
+                "efficiency",
+                "subagent_share",
+                Unit::Rate,
+                &e.subagent_share,
+            ),
+            row("errors", "tool_calls", Unit::Count, &x.tool_calls),
+            row("errors", "failed_calls", Unit::Count, &x.failed_calls),
+            row("errors", "retry_loops", Unit::Count, &x.retry_loops),
+        ];
+        for s in &self.skills {
+            rows.push(FigureRow {
+                skill: Some(s),
+                ..row("skills", "loads", Unit::Count, &s.loads)
+            });
+            rows.push(FigureRow {
+                skill: Some(s),
+                ..row(
+                    "skills",
+                    "overhead_tokens",
+                    Unit::Tokens,
+                    &s.overhead_tokens,
+                )
+            });
+        }
+        rows
+    }
+}
+
 /// The figures of one window.
 struct Figures {
     sessions: f64,
@@ -620,6 +714,60 @@ mod tests {
         assert_eq!(r.skills[0].loads.before, Some(0.0));
         assert_eq!(r.skills[0].loads.after, Some(1.0));
         assert_eq!(r.skills[0].overhead_tokens.change, Some(1000.0));
+    }
+
+    #[test]
+    fn figures_come_in_groups_then_two_rows_per_skill() {
+        let now = [session(
+            "n",
+            "2026-10-25T00:00:00Z",
+            vec![load("fresh", 400)],
+        )];
+        let r = run(equal(), &now, &[]);
+        let rows = r.figures();
+        let groups: Vec<&str> = rows.iter().map(|f| f.group).collect();
+        assert_eq!(groups[0], "volume");
+        assert_eq!(groups.iter().filter(|g| **g == "cost").count(), 3);
+        assert_eq!(&groups[groups.len() - 2..], ["skills", "skills"]);
+        assert_eq!(rows.len(), 14 + 2);
+        let last = rows.last().unwrap();
+        assert_eq!(
+            (last.figure, last.skill.unwrap().name.as_str()),
+            ("overhead_tokens", "fresh")
+        );
+    }
+
+    #[test]
+    fn the_csv_has_a_row_per_figure_and_empty_cells_for_missing_values() {
+        let now = [session(
+            "n",
+            "2026-10-25T00:00:00Z",
+            vec![load("fresh", 400)],
+        )];
+        let mut w = equal();
+        w.against.sessions = 0;
+        let r = run(w, &now, &[]);
+        let csv = crate::export::csv::trend(&r).unwrap();
+        let lines: Vec<&str> = csv.lines().collect();
+        assert_eq!(
+            lines[0],
+            "group,figure,skill,status,before,after,change,change_pct,measured"
+        );
+        assert_eq!(lines.len(), 1 + 16);
+        // No sessions before: no change, and the cache hit rate has no value at all.
+        assert_eq!(lines[1], "volume,sessions,,,0.000000,1.000000,,,true");
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.starts_with("skills,loads,fresh,new,0.000000,1.000000,,")),
+            "{csv}"
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.starts_with("efficiency,cache_hit_rate,,,,")),
+            "{csv}"
+        );
     }
 
     #[test]

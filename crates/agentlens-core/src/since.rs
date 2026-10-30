@@ -69,6 +69,25 @@ pub fn parse_window(
     Ok((since_at, until_at))
 }
 
+/// The comparison window of a trend from `SINCE..UNTIL`, each bound in the forms of [`parse_since`]
+/// and counted from the same `now`. `name` is the label the errors carry (`against`, `--against`).
+pub fn parse_against(
+    text: &str,
+    now: Timestamp,
+    name: &str,
+) -> Result<(Timestamp, Timestamp), String> {
+    let (since, until) = text.split_once("..").ok_or_else(|| {
+        format!("{name}: expected SINCE..UNTIL, for example 2026-09-01..2026-10-01")
+    })?;
+    let (since, until) = parse_window(Some(since), Some(until), now, (name, name))?;
+    match (since, until) {
+        (Some(s), Some(u)) => Ok((s, u)),
+        _ => Err(format!(
+            "{name}: both SINCE and UNTIL are needed in SINCE..UNTIL"
+        )),
+    }
+}
+
 /// The start of a period of `days` days that ends at `until`, or now: the default window of the
 /// unused view when no `since` is given.
 pub fn window_start(
@@ -85,6 +104,30 @@ mod tests {
 
     fn now() -> Timestamp {
         "2026-10-10T12:00:00Z".parse().unwrap()
+    }
+
+    #[test]
+    fn against_takes_two_bounds() {
+        let (s, u) = parse_against("2026-09-01..2026-10-01", now(), "against").unwrap();
+        assert_eq!(s.to_string(), "2026-09-01T00:00:00Z");
+        assert_eq!(u.to_string(), "2026-10-01T00:00:00Z");
+        let (s, u) = parse_against("60d..30d", now(), "against").unwrap();
+        assert!(s < u);
+    }
+
+    #[test]
+    fn a_malformed_against_is_an_error_with_its_name() {
+        for bad in [
+            "",
+            "2026-09-01",
+            "..2026-10-01",
+            "2026-09-01..",
+            "x..y",
+            "30d..60d",
+        ] {
+            let err = parse_against(bad, now(), "--against").unwrap_err();
+            assert!(err.starts_with("--against"), "{bad}: {err}");
+        }
     }
 
     #[test]

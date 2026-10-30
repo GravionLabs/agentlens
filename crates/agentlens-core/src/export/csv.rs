@@ -14,6 +14,7 @@ use crate::analyzers::cost::{CostRow, SessionCost, WhatIfReport};
 use crate::analyzers::efficiency::{CacheRow, RoleRow};
 use crate::analyzers::flow::{HookStats, SessionGrowth, ToolErrors};
 use crate::analyzers::skills::SkillStats;
+use crate::analyzers::trend::TrendReport;
 use crate::analyzers::unused::{UnusedItem, UnusedKind};
 use crate::model::ContextKind;
 
@@ -574,5 +575,48 @@ pub fn advice(report: &AdviceReport) -> Result<String, CsvError> {
             ]);
         }
     }
+    write(&header, rows)
+}
+
+/// `trend`: one row per figure (two per skill) with the value in the comparison window (`before`), in
+/// the current one (`after`) and the change; a missing value is an empty cell. With `normalized`
+/// windows the counts are per day.
+pub fn trend(report: &TrendReport) -> Result<String, CsvError> {
+    let header = [
+        "group",
+        "figure",
+        "skill",
+        "status",
+        "before",
+        "after",
+        "change",
+        "change_pct",
+        "measured",
+    ];
+    let num = |v: Option<f64>| v.map(|v| format!("{v:.6}")).unwrap_or_default();
+    let rows = report
+        .figures()
+        .iter()
+        .map(|r| {
+            vec![
+                r.group.to_owned(),
+                r.figure.to_owned(),
+                r.skill.map(|s| s.name.clone()).unwrap_or_default(),
+                r.skill
+                    .map(|s| {
+                        serde_json::to_value(s.status)
+                            .ok()
+                            .and_then(|v| v.as_str().map(str::to_owned))
+                            .unwrap_or_default()
+                    })
+                    .unwrap_or_default(),
+                num(r.delta.before),
+                num(r.delta.after),
+                num(r.delta.change),
+                num(r.delta.change_pct),
+                r.delta.measured.to_string(),
+            ]
+        })
+        .collect();
     write(&header, rows)
 }
