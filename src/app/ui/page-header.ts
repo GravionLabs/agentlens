@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, input, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, inject, input, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { HelixPageHeader } from "@gravionlabs/helix-shell";
+import { FiltersService } from "../core/filters.service";
 import type { ExportFormat } from "../core/export.service";
 import { ExportMenu } from "./export-menu";
 
@@ -12,6 +13,7 @@ import { ExportMenu } from "./export-menu";
   template: `
     <helix-page-header [title]="title()" [subtitle]="summary()" [headingLevel]="2">
       <div helixPageActions class="actions">
+        <span class="window" data-testid="window">{{ filters.windowLabel() }}</span>
         <button
           type="button"
           class="explain"
@@ -41,6 +43,10 @@ import { ExportMenu } from "./export-menu";
       display: flex;
       align-items: center;
       gap: 14px;
+    }
+    .window {
+      color: var(--muted);
+      font-size: 0.85rem;
     }
     .explain {
       all: unset;
@@ -80,5 +86,6 @@ export class PageHeader {
   readonly exportView = input<string>();
   readonly exportFormats = input<ExportFormat[]>(["json"]);
   readonly exportOptions = input<Record<string, unknown>>();
+  protected readonly filters = inject(FiltersService);
   protected readonly open = signal(false);
 }
