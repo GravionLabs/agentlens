@@ -292,7 +292,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: "Retry loop",
     group: "Flow",
     short: "Three or more identical tool calls in a row whose first two failed.",
-    long: "Calls without a recorded outcome are “unknown” and never counted as errors.",
+    long: "Each retry sends the whole context again and fails for the same reason until the cause is fixed. The Retry loops finding counts the input of the requests that issued the retries, not the first attempt. Calls without a recorded outcome are “unknown” and never counted as errors.",
   },
   {
     id: "permission-wait",

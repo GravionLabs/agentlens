@@ -114,7 +114,8 @@ export type FindingKind =
   | "large-bodies"
   | "large-context"
   | "costly-mcp-servers"
-  | "context-size";
+  | "context-size"
+  | "retry-loops";
 
 export interface Reference {
   kind: "agent" | "command" | "skill";
