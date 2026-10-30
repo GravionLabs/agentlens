@@ -520,20 +520,25 @@ fn runs(se: &SessionEvents) -> Vec<Run> {
 
 fn session_with(subs: &[(&str, Option<&str>)]) -> TempHome {
     let home = TempHome::new();
+    add_session(&home, "main", subs);
+    home
+}
+
+/// Adds a session `name` with the given subagents (path stem, optional meta fixture).
+fn add_session(home: &TempHome, name: &str, subs: &[(&str, Option<&str>)]) {
     home.copy_fixture(
         "claude_code/main_with_subagent.jsonl",
-        &format!("{SLUG}/main.jsonl"),
+        &format!("{SLUG}/{name}.jsonl"),
     );
     for (path, meta) in subs {
         home.copy_fixture(
             "claude_code/subagent.jsonl",
-            &format!("{SLUG}/main/subagents/{path}.jsonl"),
+            &format!("{SLUG}/{name}/subagents/{path}.jsonl"),
         );
         if let Some(meta) = meta {
-            home.copy_fixture(meta, &format!("{SLUG}/main/subagents/{path}.meta.json"));
+            home.copy_fixture(meta, &format!("{SLUG}/{name}/subagents/{path}.meta.json"));
         }
     }
-    home
 }
 
 #[test]
@@ -623,21 +628,74 @@ fn workflow_run_is_a_node_above_its_subagents() {
 }
 
 #[test]
-fn missing_meta_warns_and_leaves_the_caller_unknown() {
+fn missing_meta_leaves_the_caller_unknown_and_summarizes_once() {
     let home = session_with(&[("agent-a5", None)]);
     let se = read_all(&home).remove(0);
     let r = runs(&se);
     assert_eq!((r[0].depth, r[0].parent.clone()), (None, None));
     assert_eq!(se.warnings.len(), 1);
+    assert_eq!(
+        se.warnings[0].message,
+        "1 subagent transcripts have no meta file (older Claude Code); their runs have no caller or depth"
+    );
     assert_eq!(usages(&se).iter().filter(|u| u.subagent).count(), 1);
 }
 
 #[test]
-fn unreadable_meta_warns_and_the_scan_goes_on() {
+fn three_missing_metas_give_one_summary_warning_naming_three() {
+    let home = session_with(&[("agent-b1", None), ("agent-b2", None), ("agent-b3", None)]);
+    let se = read_all(&home).remove(0);
+    assert_eq!(se.warnings.len(), 1);
+    assert!(
+        se.warnings[0]
+            .message
+            .starts_with("3 subagent transcripts have no meta file")
+    );
+}
+
+#[test]
+fn missing_metas_across_sessions_give_one_summary_for_the_whole_scan() {
+    let home = TempHome::new();
+    add_session(&home, "first", &[("agent-d1", None), ("agent-d2", None)]);
+    add_session(
+        &home,
+        "second",
+        &[
+            ("agent-d3", None),
+            ("agent-d4", Some("claude_code/agent_depth1.meta.json")),
+        ],
+    );
+    add_session(&home, "third", &[("agent-d5", None)]);
+    let sessions = read_all(&home);
+    assert_eq!(sessions.len(), 3);
+    let warnings: Vec<&str> = sessions
+        .iter()
+        .flat_map(|se| se.warnings.iter().map(|w| w.message.as_str()))
+        .collect();
+    assert_eq!(
+        warnings,
+        [
+            "4 subagent transcripts have no meta file (older Claude Code); their runs have no caller or depth"
+        ]
+    );
+}
+
+#[test]
+fn complete_metas_give_no_meta_warning() {
+    let home = session_with(&[("agent-c1", Some("claude_code/agent_depth1.meta.json"))]);
+    assert!(read_all(&home).remove(0).warnings.is_empty());
+}
+
+#[test]
+fn unreadable_meta_warns_per_file_and_the_scan_goes_on() {
     let home = session_with(&[("agent-a6", Some("claude_code/basic.jsonl"))]);
     let se = read_all(&home).remove(0);
     let r = runs(&se);
     assert_eq!((r[0].depth, r[0].parent.clone()), (None, None));
     assert_eq!(se.warnings.len(), 1);
+    assert_eq!(
+        se.warnings[0].location.as_deref(),
+        Some("agent-a6.meta.json")
+    );
     assert_eq!(usages(&se).len(), 3);
 }

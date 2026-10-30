@@ -95,23 +95,39 @@ impl Adapter for ClaudeCodeAdapter {
             Ok(files) => files,
             Err(e) => return Box::new(std::iter::once(Err(e))),
         };
+        // One summary for the whole scan, counted over the sessions that were kept.
+        let parsed = dedupe(parse_all(&files));
+        let missing: usize = parsed
+            .iter()
+            .filter_map(|r| r.as_ref().ok())
+            .map(|(_, m)| m)
+            .sum();
+        let mut results: Vec<Result<SessionEvents, AdapterError>> =
+            parsed.into_iter().map(|r| r.map(|(se, _)| se)).collect();
+        if missing > 0
+            && let Some(Ok(se)) = results.iter_mut().find(|r| r.is_ok())
+        {
+            se.warnings.push(Warning::new(format!(
+                "{missing} subagent transcripts have no meta file (older Claude Code); their runs have no caller or depth"
+            )));
+        }
         Box::new(
-            dedupe(parse_all(&files))
+            results
                 .into_iter()
                 .filter(|r| !matches!(r, Ok(se) if se.events.is_empty() && se.warnings.is_empty())),
         )
     }
 }
 
+type Parsed = Result<(SessionEvents, usize), AdapterError>;
+
 /// The same session can sit under two project directories (a moved or renamed
 /// project, a resumed session). It is one session: the copy with the most events
 /// is kept (the first one on a tie).
-fn dedupe(
-    results: Vec<Result<SessionEvents, AdapterError>>,
-) -> Vec<Result<SessionEvents, AdapterError>> {
+fn dedupe(results: Vec<Parsed>) -> Vec<Parsed> {
     let mut best: HashMap<String, (usize, usize)> = HashMap::new();
     for (i, r) in results.iter().enumerate() {
-        if let Ok(se) = r {
+        if let Ok((se, _)) = r {
             let events = se.events.len();
             let entry = best.entry(se.session.id.clone()).or_insert((i, events));
             if events > entry.1 {
@@ -123,7 +139,7 @@ fn dedupe(
         .into_iter()
         .enumerate()
         .filter(|(i, r)| match r {
-            Ok(se) => best[&se.session.id].0 == *i,
+            Ok((se, _)) => best[&se.session.id].0 == *i,
             Err(_) => true,
         })
         .map(|(_, r)| r)
@@ -131,7 +147,7 @@ fn dedupe(
 }
 
 /// Parses the session files on all cores; the order of `files` is kept.
-fn parse_all(files: &[SessionFile]) -> Vec<Result<SessionEvents, AdapterError>> {
+fn parse_all(files: &[SessionFile]) -> Vec<Parsed> {
     let workers = std::thread::available_parallelism()
         .map_or(1, |n| n.get())
         .min(files.len().max(1));
@@ -142,8 +158,7 @@ fn parse_all(files: &[SessionFile]) -> Vec<Result<SessionEvents, AdapterError>> 
             .collect();
     }
     let next = std::sync::atomic::AtomicUsize::new(0);
-    let mut slots: Vec<Option<Result<SessionEvents, AdapterError>>> =
-        (0..files.len()).map(|_| None).collect();
+    let mut slots: Vec<Option<Parsed>> = (0..files.len()).map(|_| None).collect();
     let results = std::sync::Mutex::new(&mut slots);
     std::thread::scope(|scope| {
         for _ in 0..workers {
@@ -204,12 +219,26 @@ struct AgentMeta {
     workflow_phase: Option<String>,
 }
 
+/// Why an `agent-<id>.meta.json` could not be read. A missing file is expected from older
+/// Claude Code versions: it is counted and summarized once per scan. The others are warned
+/// per file.
+enum MetaError {
+    Missing,
+    Unreadable(String),
+}
+
 /// Reads `agent-<id>.meta.json` next to a subagent transcript.
-fn read_agent_meta(path: &Path) -> Result<AgentMeta, String> {
+fn read_agent_meta(path: &Path) -> Result<AgentMeta, MetaError> {
     let file = path.with_extension("meta.json");
-    let text =
-        fs::read_to_string(&file).map_err(|e| format!("no readable agent meta file: {e}"))?;
-    let v: Value = serde_json::from_str(&text).map_err(|e| format!("invalid agent meta: {e}"))?;
+    let text = fs::read_to_string(&file).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            MetaError::Missing
+        } else {
+            MetaError::Unreadable(format!("no readable agent meta file: {e}"))
+        }
+    })?;
+    let v: Value = serde_json::from_str(&text)
+        .map_err(|e| MetaError::Unreadable(format!("invalid agent meta: {e}")))?;
     let own = |key| str_of(&v, key).map(str::to_owned);
     Ok(AgentMeta {
         agent_type: own("agentType"),
@@ -316,8 +345,12 @@ impl Meta {
     }
 }
 
-/// Reads one session: the main transcript and its subagent transcripts.
-pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents, AdapterError> {
+/// Reads one session: the main transcript and its subagent transcripts. Also returns the
+/// number of subagent transcripts without a meta file, so the scan can summarize them once.
+pub fn parse_session(
+    path: &Path,
+    subagents: &[PathBuf],
+) -> Result<(SessionEvents, usize), AdapterError> {
     let id = path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -328,6 +361,7 @@ pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents
     parse_file(path, None, &mut events, &mut warnings, &mut meta)?;
     // Workflow run id -> (earliest start, latest end) over its subagents.
     let mut workflows: BTreeMap<String, (Timestamp, Timestamp)> = BTreeMap::new();
+    let mut missing_meta = 0usize;
     for sub in subagents {
         let agent_id = agent_id_of(sub);
         let run = workflow_run_of(sub);
@@ -337,8 +371,17 @@ pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents
             .unwrap_or_default();
         let raw = match read_agent_meta(sub) {
             Ok(m) => Some(m),
-            Err(e) => {
-                warnings.push(Warning::new(e).at(file.clone()));
+            Err(MetaError::Missing) => {
+                missing_meta += 1;
+                None
+            }
+            Err(MetaError::Unreadable(e)) => {
+                let meta_file = sub.with_extension("meta.json");
+                let name = meta_file
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                warnings.push(Warning::new(e).at(name));
                 None
             }
         };
@@ -423,11 +466,14 @@ pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents
     session.model = meta.model;
     session.started_at = meta.first;
     session.ended_at = meta.last;
-    Ok(SessionEvents {
-        session,
-        events,
-        warnings,
-    })
+    Ok((
+        SessionEvents {
+            session,
+            events,
+            warnings,
+        },
+        missing_meta,
+    ))
 }
 
 struct Parser<'a> {
