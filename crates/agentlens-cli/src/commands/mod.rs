@@ -50,7 +50,9 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Scan => scan::run(&registry, &env, &filter, &cli.source, display),
         Command::Skills => skills::run(&registry, &env, &filter, &cli.source, est, display),
         Command::Advise => advise::run(&registry, &env, &filter, &cli.source, est, display),
-        Command::Compare => compare::run(&registry, &env, &filter, &cli.source, est, display),
+        Command::Compare { role } => {
+            compare::run(&registry, &env, &filter, &cli.source, &role, est, display)
+        }
         Command::Context { kind } => {
             context::run(&registry, &env, &filter, &cli.source, est, kind, display)
         }
@@ -59,11 +61,13 @@ pub fn run(cli: Cli) -> Result<()> {
             prices,
             what_if,
             top,
+            role,
         } => cost::run(
             &registry,
             &env,
             &filter,
             &cli.source,
+            &role,
             cost::Params {
                 price_file: prices.as_deref(),
                 by,
@@ -77,11 +81,13 @@ pub fn run(cli: Cli) -> Result<()> {
             top,
             prices,
             section,
+            role,
         } => efficiency::run(
             &registry,
             &env,
             &filter,
             &cli.source,
+            &role,
             efficiency::Params {
                 price_file: prices.as_deref(),
                 by,
@@ -90,9 +96,16 @@ pub fn run(cli: Cli) -> Result<()> {
             },
             display,
         ),
-        Command::Flow { section, top } => {
-            flow::run(&registry, &env, &filter, &cli.source, section, top, display)
-        }
+        Command::Flow { section, top, role } => flow::run(
+            &registry,
+            &env,
+            &filter,
+            &cli.source,
+            &role,
+            section,
+            top,
+            display,
+        ),
         Command::Unused { days, all } => {
             // The period ends at --until, or now.
             let filter =

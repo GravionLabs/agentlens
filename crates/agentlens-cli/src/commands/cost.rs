@@ -192,6 +192,7 @@ pub fn run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
     params: Params,
     display: output::Display,
 ) -> Result<()> {
@@ -214,7 +215,7 @@ pub fn run(
     {
         bail!("no price for the what-if model `{model}`; add it to a price file (--prices FILE)");
     }
-    let run = cost_run(registry, env, filter, only, &table, group, what_if);
+    let run = cost_run(registry, env, filter, only, roles, &table, group, what_if);
     let r = &run.report;
 
     match display.format {

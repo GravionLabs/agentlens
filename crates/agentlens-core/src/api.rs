@@ -66,6 +66,9 @@ pub struct Filters {
     pub project: Option<PathBuf>,
     /// Only sessions with one of these ids; empty means all.
     pub session: Vec<String>,
+    /// Only sessions that started a run of one of these roles (the keys of the efficiency roles
+    /// table); empty means all. Applies to cost, efficiency, flow and compare.
+    pub roles: Vec<String>,
 }
 
 /// Length in days of the period the unused view looks at when no `since` is given.
@@ -286,7 +289,7 @@ pub struct FlowData {
 
 pub fn flow(ctx: &Context, f: &Filters) -> Result<Answer<FlowData>, String> {
     let (filter, only) = f.resolve(Timestamp::now())?;
-    let run = pipeline::flow_run(&ctx.registry, &ctx.env, &filter, &only);
+    let run = pipeline::flow_run(&ctx.registry, &ctx.env, &filter, &only, &f.roles);
     let data = FlowData {
         growth: run.growth,
         errors: run.tool_errors,
@@ -333,6 +336,7 @@ pub fn cost(
         &ctx.env,
         &filter,
         &only,
+        &f.roles,
         &prices,
         group,
         what_if,
@@ -358,13 +362,28 @@ pub fn efficiency(
     };
     let (filter, only) = f.resolve(Timestamp::now())?;
     let prices = load_prices(ctx)?;
-    let run = pipeline::efficiency_run(&ctx.registry, &ctx.env, &filter, &only, &prices, cache_by);
+    let run = pipeline::efficiency_run(
+        &ctx.registry,
+        &ctx.env,
+        &filter,
+        &only,
+        &f.roles,
+        &prices,
+        cache_by,
+    );
     answer(run.report, run.warnings, run.errors)
 }
 
 pub fn compare(ctx: &Context, f: &Filters) -> Result<Answer<CompareReport>, String> {
     let (filter, only) = f.resolve(Timestamp::now())?;
-    let run = pipeline::compare_run(&ctx.registry, &ctx.env, &filter, &only, &CharsPerToken);
+    let run = pipeline::compare_run(
+        &ctx.registry,
+        &ctx.env,
+        &filter,
+        &only,
+        &f.roles,
+        &CharsPerToken,
+    );
     answer(run.report, run.warnings, run.errors)
 }
 

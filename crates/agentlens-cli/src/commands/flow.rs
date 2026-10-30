@@ -231,6 +231,7 @@ pub fn run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
     section: FlowSection,
     top: usize,
     display: output::Display,
@@ -238,7 +239,7 @@ pub fn run(
     if display.format == Format::Csv && section == FlowSection::All {
         bail!("--format csv holds one table; choose it with --section growth|errors|hooks");
     }
-    let run: FlowRun = flow_run(registry, env, filter, only);
+    let run: FlowRun = flow_run(registry, env, filter, only, roles);
     let want = |s: FlowSection| section == FlowSection::All || section == s;
 
     match display.format {
