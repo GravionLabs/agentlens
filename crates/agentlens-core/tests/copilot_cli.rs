@@ -440,3 +440,29 @@ fn malformed_usage_records_are_skipped_and_missing_fields_stay_unknown() {
         "no cost recorded: unknown, not zero"
     );
 }
+
+#[test]
+fn a_commit_message_keeps_only_its_issue_number() {
+    let home = TempHome::new();
+    home.write(
+        &format!("{STATE}/cp-9/events.jsonl"),
+        concat!(
+            r#"{"type":"session.start","data":{"sessionId":"cp-9","version":1,"context":{"cwd":"/work/demo","branch":"release/next"}},"id":"g1","timestamp":"2026-07-16T04:00:00.000Z","parentId":null}"#,
+            "\n",
+            r#"{"type":"tool.execution_start","data":{"toolCallId":"c1","toolName":"bash","arguments":{"command":"git commit -m 'fix: y' -m 'Closes #41'"}},"id":"g2","timestamp":"2026-07-16T04:00:01.000Z","parentId":"g1"}"#,
+            "\n",
+        ),
+    );
+    let se = session(&home, "cp-9");
+    let issues: Vec<u32> = se
+        .events
+        .iter()
+        .filter_map(|e| match e.kind {
+            EventKind::CommitIssue { issue } => Some(issue),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(issues, [41]);
+    let json = serde_json::to_string(&se.events).unwrap();
+    assert!(!json.contains("fix: y"), "the message is not kept");
+}

@@ -15,6 +15,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
 use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
+use crate::commit::commit_issue;
 use crate::env::Env;
 use crate::model::{
     EventKind, Hook, PermissionPrompt, Session, SessionEvents, SkillInvoked, SkillTrigger, Source,
@@ -370,6 +371,11 @@ fn parse_session(
                 se.push(at, EventKind::ToolCall(call));
                 if let Some(call_id) = str_of(data, "toolCallId") {
                     pending.insert(call_id.to_owned(), (idx, at));
+                }
+                if name == "bash"
+                    && let Some(issue) = str_of(args, "command").and_then(commit_issue)
+                {
+                    se.push(at, EventKind::CommitIssue { issue });
                 }
             }
             "tool.execution_complete" => {

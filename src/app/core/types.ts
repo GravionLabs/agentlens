@@ -276,6 +276,9 @@ export interface FlowData {
   };
 }
 
+/** Where the issue number of a session comes from, in the order they are tried. */
+export type IssueSource = "branch" | "commit";
+
 export interface CostRow {
   key: string;
   requests: number;
@@ -287,6 +290,8 @@ export interface CostRow {
   estimated_usd: number;
   unpriced_requests: number;
   premium_requests: number;
+  /** Only when grouped by issue; the weakest source of the row's sessions. */
+  issue_source?: IssueSource;
 }
 
 export interface WhatIfRow {
@@ -304,6 +309,7 @@ export interface SessionCost {
   started_at: string | null;
   duration_ms: number | null;
   issue: string | null;
+  issue_source: IssueSource | null;
   models: string[];
   requests: number;
   main_requests: number;

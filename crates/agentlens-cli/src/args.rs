@@ -102,7 +102,7 @@ pub enum Command {
     },
     /// Show what the sessions cost
     Cost {
-        /// Group the cost by model, project, git branch, issue number (parsed from the branch name) or session
+        /// Group the cost by model, project, git branch, issue number (from the branch name, else from the session's commit messages) or session
         #[arg(long, value_enum, default_value_t = CostBy::Model)]
         by: CostBy,
         /// Price file that overrides or extends the bundled prices

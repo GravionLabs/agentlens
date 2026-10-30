@@ -7,6 +7,7 @@ pub mod analyzers;
 pub mod api;
 pub mod catalog;
 pub mod cli_tools;
+pub mod commit;
 pub mod env;
 pub mod exact;
 pub mod export;
