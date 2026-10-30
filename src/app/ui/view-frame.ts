@@ -1,15 +1,13 @@
 import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
 import { RouterOutlet } from "@angular/router";
 import { LoadingService } from "../core/loading.service";
-import { FilterBar } from "./filter-bar";
 
-/** The page the views render in: the filter toolbar above the open view, busy while it loads. */
+/** The page the views render in: the open view, busy while it loads. The filters sit in the topbar. */
 @Component({
   selector: "app-view-frame",
-  imports: [RouterOutlet, FilterBar],
+  imports: [RouterOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="toolbar" aria-label="Filter toolbar"><app-filter-bar /></section>
     <main [class.busy]="loading.busy()" [attr.aria-busy]="loading.busy()">
       <router-outlet />
     </main>
@@ -18,13 +16,6 @@ import { FilterBar } from "./filter-bar";
     :host {
       display: block;
       min-width: 0;
-    }
-    .toolbar {
-      padding: 10px 12px;
-      margin-bottom: 12px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 6px;
     }
     main {
       min-width: 0;

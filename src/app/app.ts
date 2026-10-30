@@ -11,6 +11,7 @@ import { Ipc, SAMPLE_MODE } from "./core/ipc";
 import { LoadingService } from "./core/loading.service";
 import { UpdateService } from "./core/update.service";
 import { ZoomService } from "./core/zoom.service";
+import { FilterBar } from "./ui/filter-bar";
 import { HelixDark } from "./ui/helix-dark";
 import { StatusBar } from "./ui/status-bar";
 
@@ -18,7 +19,7 @@ const toNavItem = (item: NavItem) => ({ label: item.label, routerLink: `/${item.
 
 @Component({
   selector: "app-root",
-  imports: [HelixAppLayout, StatusBar],
+  imports: [HelixAppLayout, FilterBar, StatusBar],
   hostDirectives: [HelixDark],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { "(document:keydown)": "zoom.handleKey($event)" },
@@ -36,6 +37,7 @@ const toNavItem = (item: NavItem) => ({ label: item.label, routerLink: `/${item.
       [statusBarNote]="note"
       [statusBarVersions]="versions()"
     >
+      <app-filter-bar helixTopbarEnd />
       <app-status-bar hxStatusBarEnd />
     </helix-app-layout>
   `,

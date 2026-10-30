@@ -37,6 +37,7 @@ import { SOURCES, type SourceId } from "../core/types";
               fluid
               id="filter-last"
               type="number"
+              placeholder="Last"
               min="1"
               step="1"
               [attr.aria-invalid]="lastError() ? 'true' : null"
@@ -60,6 +61,7 @@ import { SOURCES, type SourceId } from "../core/types";
           <hx-date-time-range-picker
             inputId="filter-window"
             ariaLabel="Date range"
+            placeholder="Date range"
             showTime
             [presets]="rangePresets"
             [invalid]="!!rangeError()"
@@ -100,38 +102,55 @@ import { SOURCES, type SourceId } from "../core/types";
     </form>
   `,
   styles: `
+    /* Projected into the topbar (helixTopbarEnd): it takes the free width there. */
+    :host {
+      display: block;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    /* The topbar has a fixed height: one row that shrinks, never wraps. */
     .bar {
       display: flex;
-      flex-flow: row wrap;
-      align-items: flex-end;
-      gap: 10px 16px;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 8px;
     }
     .field {
       flex: 1 1 11rem;
+      min-width: 7rem;
       max-width: 18rem;
-    }
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
     }
     .pair {
       display: grid;
-      grid-template-columns: 5rem 1fr;
+      grid-template-columns: 4.5rem 1fr;
       gap: 6px;
     }
     .range {
+      min-width: 14rem;
       max-width: 24rem;
     }
+    /* Below the topbar, so it never changes the topbar height. */
     .error {
-      flex: 1 1 100%;
+      position: fixed;
+      top: calc(var(--helix-topbar-height, 4rem) + 4px);
+      right: 1rem;
+      z-index: 998;
       margin: 0;
+      padding: 4px 8px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 4px;
       color: var(--danger, #b00020);
       font-size: 0.85rem;
     }
+    /* The fields keep their labels for assistive technology; the topbar has no room to show them. */
     label {
-      font-size: 0.85rem;
-      color: var(--muted);
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
   `,
 })
