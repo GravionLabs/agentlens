@@ -46,6 +46,36 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "subagent_usd": 0.0,
         "unpriced_requests": 1
       }
+    ],
+    "roles": [
+      {
+        "role": "main",
+        "kind": "main",
+        "runs": 4,
+        "requests": 11,
+        "requests_per_run": 2.75,
+        "input": 100109,
+        "cache_read": 1700,
+        "cache_write": 1850,
+        "output": 10049,
+        "usd": null,
+        "usd_per_run": null,
+        "cost_measured": true,
+        "unpriced_requests": 11,
+        "models": [
+          "claude-test-1",
+          "model-a"
+        ],
+        "first_request_context": {
+          "count": 25307,
+          "measured": true
+        },
+        "uncached_after_first": {
+          "count": 233,
+          "measured": true
+        },
+        "hit_rate": 0.016399926682680713
+      }
     ]
   },
   "warnings": 2,

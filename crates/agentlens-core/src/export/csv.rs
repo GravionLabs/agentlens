@@ -11,7 +11,7 @@ use crate::analyzers::advice::AdviceReport;
 use crate::analyzers::compare::SourceStats;
 use crate::analyzers::context::ContextRow;
 use crate::analyzers::cost::{CostRow, SessionCost, WhatIfReport};
-use crate::analyzers::efficiency::CacheRow;
+use crate::analyzers::efficiency::{CacheRow, RoleRow};
 use crate::analyzers::flow::{HookStats, SessionGrowth, ToolErrors};
 use crate::analyzers::skills::SkillStats;
 use crate::analyzers::unused::{UnusedItem, UnusedKind};
@@ -378,6 +378,60 @@ pub fn cache(rows: &[CacheRow]) -> Result<String, CsvError> {
                 r.input.to_string(),
                 r.cache_read.to_string(),
                 r.cache_write.to_string(),
+                r.hit_rate.map(|h| format!("{h:.6}")).unwrap_or_default(),
+            ]
+        })
+        .collect();
+    write(&header, body)
+}
+
+/// `efficiency --csv-table roles`: the roles table. An empty cell is missing data.
+pub fn roles(rows: &[RoleRow]) -> Result<String, CsvError> {
+    let header = [
+        "role",
+        "kind",
+        "runs",
+        "requests",
+        "requests_per_run",
+        "input_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "output_tokens",
+        "usd",
+        "usd_per_run",
+        "cost_measured",
+        "unpriced_requests",
+        "models",
+        "first_request_context",
+        "uncached_after_first",
+        "tokens_measured",
+        "hit_rate",
+    ];
+    let usd = |v: Option<f64>| v.map(|v| format!("{v:.6}")).unwrap_or_default();
+    let body = rows
+        .iter()
+        .map(|r| {
+            vec![
+                r.role.clone(),
+                serde_json::to_value(r.kind)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_owned))
+                    .unwrap_or_default(),
+                r.runs.to_string(),
+                r.requests.to_string(),
+                format!("{:.2}", r.requests_per_run),
+                r.input.to_string(),
+                r.cache_read.to_string(),
+                r.cache_write.to_string(),
+                r.output.to_string(),
+                usd(r.usd),
+                usd(r.usd_per_run),
+                r.cost_measured.to_string(),
+                r.unpriced_requests.to_string(),
+                r.models.join(";"),
+                r.first_request_context.count.to_string(),
+                r.uncached_after_first.count.to_string(),
+                r.first_request_context.measured.to_string(),
                 r.hit_rate.map(|h| format!("{h:.6}")).unwrap_or_default(),
             ]
         })

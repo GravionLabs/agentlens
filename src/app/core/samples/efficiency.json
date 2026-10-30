@@ -42,6 +42,36 @@
         "subagent_usd": 0.0,
         "unpriced_requests": 1
       }
+    ],
+    "roles": [
+      {
+        "role": "main",
+        "kind": "main",
+        "runs": 2,
+        "requests": 4,
+        "requests_per_run": 2.0,
+        "input": 100039,
+        "cache_read": 1000,
+        "cache_write": 1850,
+        "output": 10014,
+        "usd": null,
+        "usd_per_run": null,
+        "cost_measured": true,
+        "unpriced_requests": 4,
+        "models": [
+          "claude-test-1",
+          "model-a"
+        ],
+        "first_request_context": {
+          "count": 50505,
+          "measured": true
+        },
+        "uncached_after_first": {
+          "count": 440,
+          "measured": true
+        },
+        "hit_rate": 0.009719211966293773
+      }
     ]
   },
   "warnings": 2,

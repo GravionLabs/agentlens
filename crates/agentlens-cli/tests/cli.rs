@@ -947,6 +947,35 @@ fn efficiency_reports_cache_hit_rate_and_subagent_share() {
 }
 
 #[test]
+fn efficiency_prints_the_roles_table_and_its_csv() {
+    let home = home_with_context();
+    let file = price_file(&home);
+    agentlens(&home)
+        .args(["efficiency", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Roles"))
+        .stdout(predicate::str::contains("first request context"))
+        .stdout(predicate::str::contains("main"));
+    let out = agentlens(&home)
+        .args(["efficiency", "--format", "csv", "--csv-table", "roles"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert!(text.starts_with("role,kind,runs,requests,requests_per_run,"));
+    assert!(
+        text.lines()
+            .nth(1)
+            .unwrap()
+            .starts_with("main,main,1,3,3.00,")
+    );
+}
+
+#[test]
 fn efficiency_csv_and_grouping_by_project() {
     let home = home_with_context();
     let out = agentlens(&home)

@@ -356,9 +356,32 @@ export interface SubagentShare {
   unpriced_requests: number;
 }
 
+export type RoleKind = "main" | "skill" | "workflow-phase" | "agent-type" | "unknown";
+
+export interface RoleRow {
+  role: string;
+  kind: RoleKind;
+  runs: number;
+  requests: number;
+  requests_per_run: number;
+  input: number;
+  cache_read: number;
+  cache_write: number;
+  output: number;
+  usd: number | null;
+  usd_per_run: number | null;
+  cost_measured: boolean;
+  unpriced_requests: number;
+  models: string[];
+  first_request_context: Tokens;
+  uncached_after_first: Tokens;
+  hit_rate: number | null;
+}
+
 export interface EfficiencyReport {
   cache: CacheRow[];
   subagents: SubagentShare[];
+  roles: RoleRow[];
 }
 
 export interface SourceStats {

@@ -8,8 +8,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{EventKind, SessionEvents, Source};
+use crate::model::{EventKind, SessionEvents, Source, Usage};
 use crate::prices::PriceTable;
+use crate::tokens::Tokens;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -50,11 +51,257 @@ pub struct SubagentShare {
     pub unpriced_requests: u64,
 }
 
+/// Which field of a run named its role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RoleKind {
+    /// The main agent (requests without a run).
+    Main,
+    /// The name of a forked skill.
+    Skill,
+    /// The workflow phase of a workflow subagent.
+    WorkflowPhase,
+    /// The agent type (`Explore`, `general-purpose`, ...).
+    AgentType,
+    /// The run names none of the three.
+    Unknown,
+}
+
+pub const MAIN_ROLE: &str = "main";
+pub const UNKNOWN_ROLE: &str = "(unknown)";
+
+/// One role over the period: the main agent or all runs with the same skill, phase or type.
+/// Runs without a single request are not counted.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RoleRow {
+    pub role: String,
+    pub kind: RoleKind,
+    /// Runs of the role; the main agent counts one run per session with requests.
+    pub runs: u64,
+    pub requests: u64,
+    pub requests_per_run: f64,
+    /// Uncached input tokens.
+    pub input: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
+    pub output: u64,
+    /// Cost of the priced requests; `None` if no request has a price.
+    pub usd: Option<f64>,
+    /// Mean cost per run (`usd / runs`).
+    pub usd_per_run: Option<f64>,
+    /// `true` if every priced request carries a cost the client reported.
+    pub cost_measured: bool,
+    pub unpriced_requests: u64,
+    /// Sorted, without duplicates.
+    pub models: Vec<String>,
+    /// Per run, mean: `input + cache_read + cache_write` of the first request, the static part
+    /// every run pays.
+    pub first_request_context: Tokens,
+    /// Per run, mean: `input + cache_write` of the later requests, what the run read.
+    pub uncached_after_first: Tokens,
+    /// `None` without any input.
+    pub hit_rate: Option<f64>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct EfficiencyReport {
     /// Sorted by requests, largest first.
     pub cache: Vec<CacheRow>,
     pub subagents: Vec<SubagentShare>,
+    /// Sorted by cost, largest first (rows without a price last).
+    #[serde(default)]
+    pub roles: Vec<RoleRow>,
+}
+
+#[derive(Default)]
+struct RunAcc {
+    requests: u64,
+    first_context: u64,
+    later_uncached: u64,
+    measured: bool,
+}
+
+#[derive(Default)]
+struct RoleAcc {
+    runs: u64,
+    requests: u64,
+    input: u64,
+    cache_read: u64,
+    cache_write: u64,
+    output: u64,
+    usd: f64,
+    priced: u64,
+    unmeasured_cost: bool,
+    unpriced: u64,
+    models: std::collections::BTreeSet<String>,
+    first_context: u64,
+    later_uncached: u64,
+    all_measured: bool,
+}
+
+/// What a run says about itself, from its `AgentRun` event and the info on its requests.
+#[derive(Default)]
+struct RunInfo {
+    name: Option<String>,
+    phase: Option<String>,
+    agent_type: Option<String>,
+}
+
+fn role_of(info: &RunInfo) -> (String, RoleKind) {
+    let pick = |v: &Option<String>| v.clone().filter(|v| !v.trim().is_empty());
+    if let Some(n) = pick(&info.name) {
+        (n, RoleKind::Skill)
+    } else if let Some(p) = pick(&info.phase) {
+        (p, RoleKind::WorkflowPhase)
+    } else if let Some(t) = pick(&info.agent_type) {
+        (t, RoleKind::AgentType)
+    } else {
+        (UNKNOWN_ROLE.into(), RoleKind::Unknown)
+    }
+}
+
+fn roles(sessions: &[SessionEvents], prices: &PriceTable) -> Vec<RoleRow> {
+    let mut acc: BTreeMap<(RoleKind, String), RoleAcc> = BTreeMap::new();
+    for se in sessions {
+        let mut infos: BTreeMap<&str, RunInfo> = BTreeMap::new();
+        for e in &se.events {
+            match &e.kind {
+                EventKind::AgentRun {
+                    agent_id,
+                    agent_type,
+                    name,
+                    ..
+                } => {
+                    let i = infos.entry(agent_id).or_default();
+                    i.name = name.clone();
+                    i.agent_type = agent_type.clone();
+                }
+                EventKind::Usage(u) => {
+                    if let Some(a) = &u.agent
+                        && let Some(id) = &a.agent_id
+                    {
+                        let i = infos.entry(id).or_default();
+                        i.phase = i.phase.take().or_else(|| a.workflow_phase.clone());
+                        if i.agent_type.is_none() {
+                            i.agent_type = a.agent_type.clone();
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Requests per run in event order; `None` is the main agent.
+        let mut runs: BTreeMap<Option<&str>, RunAcc> = BTreeMap::new();
+        let mut seen: Vec<(Option<&str>, &Usage)> = Vec::new();
+        for e in &se.events {
+            if let EventKind::Usage(u) = &e.kind {
+                let id = u.agent.as_ref().and_then(|a| a.agent_id.as_deref());
+                seen.push((id, u));
+            }
+        }
+        for (id, u) in &seen {
+            let r = runs.entry(*id).or_insert_with(|| RunAcc {
+                measured: true,
+                ..RunAcc::default()
+            });
+            if r.requests == 0 {
+                r.first_context = u.total_input();
+            } else {
+                r.later_uncached += u.input + u.cache_write;
+            }
+            r.requests += 1;
+            r.measured &= u.measured;
+        }
+        for (id, run) in runs {
+            let key = match id {
+                None => (RoleKind::Main, MAIN_ROLE.to_owned()),
+                Some(id) => {
+                    let (name, kind) = role_of(&infos[id]);
+                    (kind, name)
+                }
+            };
+            let a = acc.entry(key).or_insert_with(|| RoleAcc {
+                all_measured: true,
+                ..RoleAcc::default()
+            });
+            a.runs += 1;
+            a.first_context += run.first_context;
+            a.later_uncached += run.later_uncached;
+            a.all_measured &= run.measured;
+        }
+        for (id, u) in &seen {
+            let key = match id {
+                None => (RoleKind::Main, MAIN_ROLE.to_owned()),
+                Some(id) => {
+                    let (name, kind) = role_of(&infos[id]);
+                    (kind, name)
+                }
+            };
+            let a = acc.get_mut(&key).expect("role created above");
+            a.requests += 1;
+            a.input += u.input;
+            a.cache_read += u.cache_read;
+            a.cache_write += u.cache_write;
+            a.output += u.output;
+            let mut usage = (*u).clone();
+            if usage.model.is_none() {
+                usage.model = se.session.model.clone();
+            }
+            if let Some(m) = &usage.model {
+                a.models.insert(m.clone());
+            }
+            match prices.cost(&usage) {
+                Some(c) => {
+                    a.usd += c.usd;
+                    a.priced += 1;
+                    a.unmeasured_cost |= !c.measured;
+                }
+                None => a.unpriced += 1,
+            }
+        }
+    }
+    let mut rows: Vec<RoleRow> = acc
+        .into_iter()
+        .map(|((kind, role), a)| {
+            let runs = a.runs.max(1) as f64;
+            let mean = |n: u64| (n as f64 / runs).round() as u64;
+            let total_input = a.input + a.cache_read + a.cache_write;
+            let usd = (a.priced > 0).then_some(a.usd);
+            RoleRow {
+                role,
+                kind,
+                runs: a.runs,
+                requests: a.requests,
+                requests_per_run: a.requests as f64 / runs,
+                input: a.input,
+                cache_read: a.cache_read,
+                cache_write: a.cache_write,
+                output: a.output,
+                usd,
+                usd_per_run: usd.map(|u| u / runs),
+                cost_measured: !a.unmeasured_cost,
+                unpriced_requests: a.unpriced,
+                models: a.models.into_iter().collect(),
+                first_request_context: Tokens {
+                    count: mean(a.first_context),
+                    measured: a.all_measured,
+                },
+                uncached_after_first: Tokens {
+                    count: mean(a.later_uncached),
+                    measured: a.all_measured,
+                },
+                hit_rate: (total_input > 0).then(|| a.cache_read as f64 / total_input as f64),
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        b.usd
+            .unwrap_or(-1.0)
+            .total_cmp(&a.usd.unwrap_or(-1.0))
+            .then_with(|| b.requests.cmp(&a.requests))
+            .then_with(|| a.role.cmp(&b.role))
+    });
+    rows
 }
 
 pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, by: CacheBy) -> EfficiencyReport {
@@ -140,6 +387,7 @@ pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, by: CacheBy) -> 
     EfficiencyReport {
         cache,
         subagents: shares.into_values().collect(),
+        roles: roles(sessions, prices),
     }
 }
 
@@ -239,5 +487,164 @@ mod tests {
         assert_eq!((sh.tokens, sh.subagent_tokens), (3_000_005, 2_000_005));
         assert!((sh.usd - 6.0).abs() < 1e-9 && (sh.subagent_usd - 4.0).abs() < 1e-9);
         assert_eq!(sh.unpriced_requests, 1);
+    }
+
+    fn run_event(id: &str, ty: Option<&str>, name: Option<&str>) -> EventKind {
+        EventKind::AgentRun {
+            agent_id: id.into(),
+            parent_agent_id: None,
+            tool_use_id: None,
+            agent_type: ty.map(Into::into),
+            name: name.map(Into::into),
+            description: Some("free text that is never a role".into()),
+            model: None,
+            depth: Some(1),
+            started_at: "2026-10-01T12:00:00Z".parse().unwrap(),
+            ended_at: None,
+        }
+    }
+
+    fn agent_request(
+        id: &str,
+        phase: Option<&str>,
+        input: u64,
+        read: u64,
+        write: u64,
+    ) -> EventKind {
+        EventKind::Usage(Usage {
+            model: Some("claude-sonnet-5-5".into()),
+            input,
+            output: 1,
+            cache_read: read,
+            cache_write: write,
+            measured: true,
+            subagent: true,
+            agent: Some(crate::model::AgentInfo {
+                agent_id: Some(id.into()),
+                workflow_phase: phase.map(Into::into),
+                ..Default::default()
+            }),
+            ..Usage::default()
+        })
+    }
+
+    #[test]
+    fn roles_rank_name_over_phase_over_type_and_keep_unknown() {
+        let s = session(
+            "a",
+            Source::ClaudeCode,
+            "/p",
+            vec![
+                request(10, 0, 0, false), // main, no agent_id
+                run_event("r1", Some("general-purpose"), Some("review")),
+                agent_request("r1", Some("Implement"), 1, 0, 0),
+                run_event("r2", Some("workflow-subagent"), None),
+                agent_request("r2", Some("Implement"), 1, 0, 0),
+                run_event("r3", Some("Explore"), None),
+                agent_request("r3", None, 1, 0, 0),
+                run_event("r4", None, None),
+                agent_request("r4", None, 1, 0, 0),
+                agent_request("r5", None, 1, 0, 0), // no AgentRun event at all
+            ],
+        );
+        let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
+        let got: Vec<(&str, RoleKind)> =
+            r.roles.iter().map(|r| (r.role.as_str(), r.kind)).collect();
+        for want in [
+            ("main", RoleKind::Main),
+            ("review", RoleKind::Skill),
+            ("Implement", RoleKind::WorkflowPhase),
+            ("Explore", RoleKind::AgentType),
+            ("(unknown)", RoleKind::Unknown),
+        ] {
+            assert!(got.contains(&want), "{want:?} missing in {got:?}");
+        }
+        assert_eq!(got.len(), 5, "{got:?}");
+        let unknown = r
+            .roles
+            .iter()
+            .find(|r| r.kind == RoleKind::Unknown)
+            .unwrap();
+        assert_eq!((unknown.runs, unknown.requests), (2, 2));
+    }
+
+    #[test]
+    fn first_request_context_and_uncached_after_first_per_run() {
+        let s = session(
+            "a",
+            Source::ClaudeCode,
+            "/p",
+            vec![
+                run_event("r1", Some("Explore"), None),
+                agent_request("r1", None, 5, 100, 20), // first: 125
+                agent_request("r1", None, 3, 200, 7),  // later: 3 + 7
+                agent_request("r1", None, 2, 300, 0),  // later: 2
+                run_event("r2", Some("Explore"), None),
+                agent_request("r2", None, 1, 0, 59), // first: 60
+            ],
+        );
+        let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
+        let row = &r.roles[0];
+        assert_eq!(
+            (row.role.as_str(), row.runs, row.requests),
+            ("Explore", 2, 4)
+        );
+        assert!((row.requests_per_run - 2.0).abs() < 1e-9);
+        // Means over two runs: (125 + 60) / 2 = 92.5 -> 93; (12 + 0) / 2 = 6.
+        assert_eq!(row.first_request_context.count, 93);
+        assert_eq!(row.uncached_after_first.count, 6);
+        assert!(row.first_request_context.measured);
+        assert_eq!(row.models, ["claude-sonnet-5-5"]);
+    }
+
+    #[test]
+    fn estimated_requests_make_the_context_columns_estimates() {
+        let mut u = match agent_request("r1", None, 5, 0, 0) {
+            EventKind::Usage(u) => u,
+            _ => unreachable!(),
+        };
+        u.measured = false;
+        let s = session("a", Source::ClaudeCode, "/p", vec![EventKind::Usage(u)]);
+        let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
+        assert!(!r.roles[0].first_request_context.measured);
+        assert!(!r.roles[0].cost_measured);
+    }
+
+    #[test]
+    fn source_without_runs_has_the_main_row_only_and_roles_sort_by_cost() {
+        let s = session(
+            "a",
+            Source::OpenCode,
+            "/p",
+            vec![
+                request(1_000_000, 0, 0, false),
+                request(1_000_000, 0, 0, false),
+            ],
+        );
+        let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
+        assert_eq!(r.roles.len(), 1);
+        assert_eq!(r.roles[0].role, "main");
+        assert_eq!((r.roles[0].runs, r.roles[0].requests), (1, 2));
+        assert!((r.roles[0].usd.unwrap() - 4.0).abs() < 1e-9);
+        assert!((r.roles[0].usd_per_run.unwrap() - 4.0).abs() < 1e-9);
+
+        let s = session(
+            "b",
+            Source::ClaudeCode,
+            "/p",
+            vec![
+                request(1_000_000, 0, 0, false),
+                run_event("r1", Some("Explore"), None),
+                agent_request("r1", None, 3_000_000, 0, 0),
+            ],
+        );
+        let r = analyze(&[s], &PriceTable::bundled(), CacheBy::Source);
+        assert_eq!(r.roles[0].role, "Explore", "largest cost first");
+    }
+
+    #[test]
+    fn empty_input_has_no_roles() {
+        let r = analyze(&[], &PriceTable::bundled(), CacheBy::Source);
+        assert!(r.roles.is_empty());
     }
 }

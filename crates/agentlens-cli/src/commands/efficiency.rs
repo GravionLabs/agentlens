@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use agentlens_core::adapter::{Registry, SessionFilter};
-use agentlens_core::analyzers::efficiency::{CacheBy, CacheRow, SubagentShare};
+use agentlens_core::analyzers::efficiency::{CacheBy, CacheRow, RoleRow, SubagentShare};
 use agentlens_core::env::Env;
 use agentlens_core::export;
 use agentlens_core::model::Source;
@@ -10,7 +10,7 @@ use agentlens_core::prices;
 use anyhow::{Result, anyhow};
 use serde_json::json;
 
-use crate::args::{EfficiencyBy, Format};
+use crate::args::{EfficiencyBy, EfficiencyCsv, Format};
 use crate::output;
 
 fn percent(part: f64, whole: f64) -> String {
@@ -41,10 +41,38 @@ fn share_row(s: &SubagentShare) -> Vec<String> {
     ]
 }
 
+fn role_row(r: &RoleRow, display: output::Display) -> Vec<String> {
+    let usd = |v: Option<f64>| match v {
+        Some(v) => format!("{}${v:.4}", if r.cost_measured { "" } else { "~" }),
+        None => "n/a".into(),
+    };
+    vec![
+        r.role.clone(),
+        serde_json::to_value(r.kind)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default(),
+        output::number(r.runs),
+        format!("{:.1}", r.requests_per_run),
+        display.count(r.input),
+        display.count(r.cache_read),
+        display.count(r.cache_write),
+        display.count(r.output),
+        usd(r.usd_per_run),
+        r.models.join(", "),
+        display.tokens(r.first_request_context),
+        display.tokens(r.uncached_after_first),
+        r.hit_rate
+            .map(|h| format!("{:.1}%", h * 100.0))
+            .unwrap_or_else(|| "n/a".into()),
+    ]
+}
+
 pub struct Params<'a> {
     pub price_file: Option<&'a Path>,
     pub by: EfficiencyBy,
     pub top: usize,
+    pub csv_table: EfficiencyCsv,
 }
 
 pub fn run(
@@ -59,6 +87,7 @@ pub fn run(
         price_file,
         by,
         top,
+        csv_table,
     } = params;
     let table = prices::load(env, price_file).map_err(|e| anyhow!("cannot load prices: {e}"))?;
     let cache_by = match by {
@@ -71,7 +100,10 @@ pub fn run(
 
     match display.format {
         Format::Json => println!("{}", serde_json::to_string_pretty(&json!(r))?),
-        Format::Csv => print!("{}", export::csv::cache(&r.cache)?),
+        Format::Csv => match csv_table {
+            EfficiencyCsv::Cache => print!("{}", export::csv::cache(&r.cache)?),
+            EfficiencyCsv::Roles => print!("{}", export::csv::roles(&r.roles)?),
+        },
         Format::Table => {
             let shown = if top == 0 {
                 r.cache.len()
@@ -139,6 +171,33 @@ pub fn run(
             );
             println!(
                 "Cost shares only cover requests with a price (reported or from the price table)."
+            );
+            let rows = r.roles.iter().map(|x| role_row(x, display)).collect();
+            println!("\nRoles");
+            println!(
+                "{}",
+                output::table(
+                    &[
+                        "role",
+                        "kind",
+                        "runs",
+                        "requests/run",
+                        "input",
+                        "cache read",
+                        "cache write",
+                        "output",
+                        "cost/run",
+                        "models",
+                        "first request context",
+                        "uncached after first",
+                        "hit rate"
+                    ],
+                    rows,
+                    2
+                )
+            );
+            println!(
+                "Role = forked skill name, else workflow phase, else agent type; `main` is the main agent. Context columns are means per run; `~` marks estimates."
             );
         }
     }
