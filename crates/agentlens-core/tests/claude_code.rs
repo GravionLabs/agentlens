@@ -520,20 +520,25 @@ fn runs(se: &SessionEvents) -> Vec<Run> {
 
 fn session_with(subs: &[(&str, Option<&str>)]) -> TempHome {
     let home = TempHome::new();
+    add_session(&home, "main", subs);
+    home
+}
+
+/// Adds a session `name` with the given subagents (path stem, optional meta fixture).
+fn add_session(home: &TempHome, name: &str, subs: &[(&str, Option<&str>)]) {
     home.copy_fixture(
         "claude_code/main_with_subagent.jsonl",
-        &format!("{SLUG}/main.jsonl"),
+        &format!("{SLUG}/{name}.jsonl"),
     );
     for (path, meta) in subs {
         home.copy_fixture(
             "claude_code/subagent.jsonl",
-            &format!("{SLUG}/main/subagents/{path}.jsonl"),
+            &format!("{SLUG}/{name}/subagents/{path}.jsonl"),
         );
         if let Some(meta) = meta {
-            home.copy_fixture(meta, &format!("{SLUG}/main/subagents/{path}.meta.json"));
+            home.copy_fixture(meta, &format!("{SLUG}/{name}/subagents/{path}.meta.json"));
         }
     }
-    home
 }
 
 #[test]
@@ -645,6 +650,33 @@ fn three_missing_metas_give_one_summary_warning_naming_three() {
         se.warnings[0]
             .message
             .starts_with("3 subagent transcripts have no meta file")
+    );
+}
+
+#[test]
+fn missing_metas_across_sessions_give_one_summary_for_the_whole_scan() {
+    let home = TempHome::new();
+    add_session(&home, "first", &[("agent-d1", None), ("agent-d2", None)]);
+    add_session(
+        &home,
+        "second",
+        &[
+            ("agent-d3", None),
+            ("agent-d4", Some("claude_code/agent_depth1.meta.json")),
+        ],
+    );
+    add_session(&home, "third", &[("agent-d5", None)]);
+    let sessions = read_all(&home);
+    assert_eq!(sessions.len(), 3);
+    let warnings: Vec<&str> = sessions
+        .iter()
+        .flat_map(|se| se.warnings.iter().map(|w| w.message.as_str()))
+        .collect();
+    assert_eq!(
+        warnings,
+        [
+            "4 subagent transcripts have no meta file (older Claude Code); their runs have no caller or depth"
+        ]
     );
 }
 
