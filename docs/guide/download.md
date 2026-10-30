@@ -60,6 +60,16 @@ The action is not offered for the `.deb` and `.rpm` packages, which install into
 
 ### Windows: the `PATH` entry
 
+**From the application.** Click **Command line tools** in the status bar, then **Install command line tools**. On Windows nothing is copied or linked: the application adds its install directory (the folder of `agentlens.exe` and `agentlens-mcp.exe`) to your user `PATH` (`HKEY_CURRENT_USER\Environment\Path`), and only when you click:
+
+- It adds the directory once, at the end, and keeps every other entry, their order and the type of the value (entries such as `%USERPROFILE%\...` stay unexpanded). Directories compare without regard to case or a trailing backslash, so an entry an earlier installer added counts as installed and is not added a second time.
+- Before it changes the value, it saves the old one to `HKEY_CURRENT_USER\Software\GravionLabs\AgentLens\PathBackup` (value `Path`, see [Restore `PATH` on Windows](#restore-path-on-windows)). If it cannot read your `PATH` (for example a value of another type), it changes nothing and says so.
+- **Remove command line tools** removes exactly that entry and nothing else. Clicking either button a second time changes nothing.
+- Another folder on your `PATH` that holds `agentlens.exe` (an older installation, a `cargo install`) is named but never changed.
+- Programs that are already running keep the old `PATH`: open a **new** terminal (or restart your editor) after you click.
+
+**From the installer.**
+
 The setup `.exe` adds its install directory to your user `PATH`, so `agentlens` and `agentlens-mcp` work without any further step. It installs for your account only. A setup `.exe` built for a per-machine installation adds the directory to the machine `PATH` instead, but only when it runs elevated and the install directory is under `Program Files` (a directory that only administrators can write to); with any other directory it leaves the machine `PATH` untouched.
 
 If you installed an earlier version with the `.msi`, uninstall it (Settings, Apps) before you run the setup `.exe`; the uninstall removes the `PATH` entry of the `.msi`. The `.msi` is no longer built, and the updater would otherwise install the setup `.exe` next to it.

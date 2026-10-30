@@ -501,7 +501,7 @@ export interface UpdateInfo {
   date: string | null;
 }
 
-export type CliToolMethod = "symlink" | "copy" | "unsupported";
+export type CliToolMethod = "symlink" | "copy" | "user_path" | "unsupported";
 export type CliToolState = "missing" | "installed" | "stale" | "foreign";
 export type CliToolAction =
   "created" | "repaired" | "kept" | "removed" | "absent" | "skipped_foreign" | "failed";
@@ -527,15 +527,20 @@ export interface ProfileLine {
 /** The state of the command line tools (answer of cli_tools_status, _install and _remove). */
 export interface CliTools {
   supported: boolean;
-  /** Whether the application should show the action (macOS and AppImage). */
+  /** Whether the application should show the action (macOS, AppImage and Windows). */
   offered: boolean;
+  /** user_path (Windows): dir is the install directory and goes on the user PATH, nothing is linked. */
   method: CliToolMethod;
   dir: string;
   created_dir: boolean;
-  /** Whether dir is on the PATH of the application process (a shell's PATH can differ). */
+  /**
+   * Whether dir is on the PATH of the application process (a shell's PATH can differ); for user_path
+   * whether it is an entry of the user PATH.
+   */
   on_path: boolean;
   profile_lines: ProfileLine[];
   tools: CliTool[];
+  /** Files in the way that AgentLens did not create; for user_path other folders on PATH with the CLI. */
   foreign: string[];
   note: string | null;
   /** Why the whole call did nothing (for example a temporary location of the application). */

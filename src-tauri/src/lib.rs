@@ -229,21 +229,22 @@ fn bin_dir() -> Result<std::path::PathBuf, String> {
         .ok_or_else(|| "cannot find the folder of the application".to_string())
 }
 
-/// The state of the command line tool links; writes nothing.
+/// The state of the command line tool links (on Windows: the user `PATH` entry); writes nothing.
 #[tauri::command]
 async fn cli_tools_status(ctx: Shared<'_>) -> Result<Answer<api::CliTools>, String> {
     let dir = bin_dir()?;
     blocking(&ctx, move |c| api::cli_tools_status(c, &dir)).await
 }
 
-/// Links (or copies) the CLI and the MCP server into `~/.local/bin`.
+/// Links (or copies) the CLI and the MCP server into `~/.local/bin`; on Windows adds their folder to the
+/// user `PATH`.
 #[tauri::command]
 async fn cli_tools_install(ctx: Shared<'_>) -> Result<Answer<api::CliTools>, String> {
     let dir = bin_dir()?;
     blocking(&ctx, move |c| api::install_cli_tools(c, &dir)).await
 }
 
-/// Removes the links (or copies) that `cli_tools_install` made.
+/// Removes the links (or copies, or the user `PATH` entry on Windows) that `cli_tools_install` made.
 #[tauri::command]
 async fn cli_tools_remove(ctx: Shared<'_>) -> Result<Answer<api::CliTools>, String> {
     let dir = bin_dir()?;

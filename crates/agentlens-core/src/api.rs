@@ -146,16 +146,18 @@ pub fn refresh(ctx: &Context) -> Result<Answer<()>, String> {
     answer((), 0, Vec::new())
 }
 
-/// Whether the command line tools are in `~/.local/bin` (writes nothing). `bin_dir` is the directory of
-/// the binaries shipped with the application (the directory of its executable).
+/// Whether the command line tools are in `~/.local/bin`, or on Windows whether `bin_dir` is on the user
+/// `PATH` (writes nothing). `bin_dir` is the directory of the binaries shipped with the application (the
+/// directory of its executable).
 pub fn cli_tools_status(ctx: &Context, bin_dir: &Path) -> Result<Answer<CliTools>, String> {
     let data = cli_tools::status(&ctx.env, bin_dir);
     let errors = data.errors();
     answer(data, 0, errors)
 }
 
-/// Links (or, in an AppImage, copies) the command line tools into `~/.local/bin`, on the user's click.
-/// An error where the action is not offered (Linux packages, Windows): nothing is written there.
+/// Links (or, in an AppImage, copies) the command line tools into `~/.local/bin`, on the user's click;
+/// on Windows adds `bin_dir` to the user `PATH` (ADR 0008). An error where the action is not offered
+/// (Linux packages): nothing is written there.
 pub fn install_cli_tools(ctx: &Context, bin_dir: &Path) -> Result<Answer<CliTools>, String> {
     if !cli_tools::offered(&ctx.env) {
         return Err(cli_tools::not_offered_reason(&ctx.env).to_string());
@@ -165,8 +167,9 @@ pub fn install_cli_tools(ctx: &Context, bin_dir: &Path) -> Result<Answer<CliTool
     answer(data, 0, errors)
 }
 
-/// Removes the links (or copies) [`install_cli_tools`] made; anything else in `~/.local/bin` stays.
-/// An error where the action is not offered, like [`install_cli_tools`].
+/// Removes the links (or copies) [`install_cli_tools`] made; anything else in `~/.local/bin` stays. On
+/// Windows removes the `bin_dir` entry from the user `PATH`. An error where the action is not offered,
+/// like [`install_cli_tools`].
 pub fn remove_cli_tools(ctx: &Context, bin_dir: &Path) -> Result<Answer<CliTools>, String> {
     if !cli_tools::offered(&ctx.env) {
         return Err(cli_tools::not_offered_reason(&ctx.env).to_string());
