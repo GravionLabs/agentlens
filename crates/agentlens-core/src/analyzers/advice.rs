@@ -516,6 +516,28 @@ pub struct Item {
     /// For an unused skill: the installed agents, commands and skills whose files name it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub referenced_by: Vec<Reference>,
+    /// For a session (context size): the full session id, which `--session` takes. `name` is the
+    /// recognizable label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
+/// A recognizable name for a session: the project folder and the start of the id.
+fn session_label(project: Option<&std::path::Path>, id: &str) -> String {
+    let short: String = id.chars().take(8).collect();
+    let folder = project
+        .map(|p| p.to_string_lossy().into_owned())
+        .and_then(|p| {
+            p.trim_end_matches(['/', '\\'])
+                .rsplit(['/', '\\'])
+                .next()
+                .filter(|f| !f.is_empty())
+                .map(str::to_owned)
+        });
+    match folder {
+        Some(f) => format!("{f} · {short}"),
+        None => format!("(no project) · {short}"),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -839,6 +861,7 @@ pub fn analyze_with(
                     detail
                 },
                 referenced_by: references.get(&s.name).cloned().unwrap_or_default(),
+                session_id: None,
             })
             .collect();
         let total = sum(&items);
@@ -891,6 +914,7 @@ pub fn analyze_with(
                     times(s.file_uses)
                 ),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let total = Tokens {
@@ -945,6 +969,7 @@ pub fn analyze_with(
                     n(saving(s))
                 ),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let mut f = finding(
@@ -985,6 +1010,7 @@ pub fn analyze_with(
                 requests: u64::from(s.invocations),
                 detail: format!("loaded {}", times(s.invocations)),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let mut f = finding(FindingKind::UsedButNotInstalled, items.len(), items, None);
@@ -1022,6 +1048,7 @@ pub fn analyze_with(
                     n(s.carry.requests)
                 ),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let carry_total = Tokens::estimated(bodies.iter().map(|s| s.carry.tokens.count).sum());
@@ -1098,6 +1125,7 @@ pub fn analyze_with(
                     n(s.follow_on.requests)
                 ),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let mut f = finding(FindingKind::LargeContext, heavy.len(), items, None);
@@ -1132,6 +1160,7 @@ pub fn analyze_with(
                     n(per_call(m))
                 ),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let total = Tokens {
@@ -1173,7 +1202,7 @@ pub fn analyze_with(
             .largest_sessions
             .iter()
             .map(|c| Item {
-                name: c.id.clone(),
+                name: session_label(c.project.as_deref(), &c.id),
                 tokens: Tokens {
                     count: c.average_context,
                     measured: totals.measured,
@@ -1185,6 +1214,7 @@ pub fn analyze_with(
                     n(c.requests)
                 ),
                 referenced_by: Vec::new(),
+                session_id: Some(c.id.clone()),
             })
             .collect();
         let mut f = finding(
@@ -1298,6 +1328,7 @@ pub fn analyze_with(
                     requests: r.requests,
                     detail,
                     referenced_by: Vec::new(),
+                    session_id: None,
                 }
             })
             .collect();
@@ -1594,13 +1625,50 @@ mod tests {
         let c = find(&a, FindingKind::ContextSize);
         assert_eq!(c.total, Some(Tokens::measured(900_000)));
         assert_eq!(c.share_of_total_tokens, Some(0.9));
-        assert_eq!(c.items[0].name, "s1");
+        assert_eq!(c.items[0].name, "(no project) · s1");
+        assert_eq!(c.items[0].session_id.as_deref(), Some("s1"));
         assert!(c.items[0].tokens.measured);
         assert_eq!(c.count, 3, "the sessions analyzed, not the ones listed");
         assert!(c.notes[0].contains("9,000 tokens"), "{:?}", c.notes);
         assert!(c.notes[0].contains("25.0%"), "{:?}", c.notes);
         assert!(c.notes[0].contains("10.0%"), "{:?}", c.notes);
         assert!(c.action.contains("fresh session"));
+    }
+
+    #[test]
+    fn context_size_names_a_session_by_project_folder_and_id_start() {
+        use crate::analyzers::skills::{PeriodTotals, SessionContext};
+        let session = |id: &str, project: Option<&str>| SessionContext {
+            id: id.into(),
+            project: project.map(Into::into),
+            requests: 10,
+            average_context: 9_000,
+        };
+        let mut r = report(vec![skill("idle", true, 0, 0, (10, 100))]);
+        r.totals = PeriodTotals {
+            requests: 30,
+            tokens: 100_000,
+            context_tokens: 90_000,
+            measured: true,
+            largest_sessions: vec![
+                session(
+                    "cad3c7a2-f626-4332-b1af-29291ebd5c7b",
+                    Some("/work/demo/shop/"),
+                ),
+                session("0123456789", Some("C:\\work\\api")),
+                session("abcdef12-0000", None),
+            ],
+            ..PeriodTotals::default()
+        };
+        let a = analyze(&r);
+        let c = find(&a, FindingKind::ContextSize);
+        assert_eq!(c.items[0].name, "shop · cad3c7a2");
+        assert_eq!(
+            c.items[0].session_id.as_deref(),
+            Some("cad3c7a2-f626-4332-b1af-29291ebd5c7b")
+        );
+        assert_eq!(c.items[1].name, "api · 01234567");
+        assert_eq!(c.items[2].name, "(no project) · abcdef12");
     }
 
     #[test]
