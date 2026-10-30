@@ -313,8 +313,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: "delegation",
     term: "Delegation",
     group: "Cost",
-    short:
-      "Work on a large context with almost no requests made by subagents.",
+    short: "Work on a large context with almost no requests made by subagents.",
     long: "Research and long reads in the main context are carried on every later request; a subagent reads them in its own context and returns a summary. The finding appears for Claude Code, OpenCode and Copilot CLI when a client has a subagent share below 5% of its requests and at least 20 main-agent requests with 200,000 tokens of input or more. No saving is estimated.",
   },
   {
