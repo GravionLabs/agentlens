@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::analyzers::context::ContextReport;
+use crate::analyzers::efficiency::{self, CacheBy, SubagentShare};
 use crate::analyzers::flow;
 use crate::analyzers::skills::{LARGE_CONTEXT_TOKENS, SkillReport, SkillStats};
 use crate::analyzers::unused::{calls_server, norm};
@@ -53,6 +54,15 @@ pub const MIN_HYGIENE_SHARE: f64 = 0.05;
 /// A session of a client that records no `/clear` counts as a fresh start (an estimate) when it began at
 /// most this many seconds after another session of the same client, project and branch ended.
 pub const CLEAR_PROXY_SECONDS: i64 = 60;
+/// The clients whose adapters record subagent requests. Only they can show "almost no delegation": for
+/// the others a share of zero means the client does not say, not that the user never delegates. A fixed
+/// list on purpose: a data-driven rule would leave out exactly the user who never delegates.
+pub const DELEGATING_SOURCES: [Source; 3] =
+    [Source::ClaudeCode, Source::OpenCode, Source::CopilotCli];
+/// The Delegation finding needs a subagent share below this share of a client's requests (0.05 is 5 %) ...
+pub const DELEGATION_MAX_SHARE: f64 = 0.05;
+/// ... and at least this many main-agent requests with [`LARGE_CONTEXT_TOKENS`] of input in that client.
+pub const MIN_DELEGATION_REQUESTS: u64 = 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -80,6 +90,8 @@ pub enum FindingKind {
     /// Sessions that carried their context on after the task was done: near the limit without a
     /// compaction, or compacted again and again.
     ContextHygiene,
+    /// Work on a large context with almost no subagent requests: reading and research stay in the main context.
+    Delegation,
 }
 
 impl FindingKind {
@@ -119,6 +131,9 @@ impl FindingKind {
             FindingKind::ContextHygiene => {
                 "Context that is carried on after the task is done is paid on every request. These sessions came near the limit of the context window without a compaction, or were compacted again and again instead of starting fresh."
             }
+            FindingKind::Delegation => {
+                "Research and long reads that happen in the main context are carried on every later request; a subagent reads them in its own context and returns a summary. These clients ran many requests on a large context and almost none by subagents. No saving is estimated: what a subagent would have kept out of the main context cannot be counted from the requests."
+            }
         }
     }
 
@@ -157,6 +172,9 @@ impl FindingKind {
             }
             FindingKind::ContextHygiene => {
                 "Clear the context between tasks (`/clear` in Claude Code, a new session in the other clients), compact before the limit (`/compact`), and keep sessions short."
+            }
+            FindingKind::Delegation => {
+                "Delegate file searches, log reading and reviews to subagents, and keep the main context for decisions."
             }
         }
     }
@@ -757,6 +775,108 @@ pub fn retry_saving(sessions: &[SessionEvents], prices: &PriceTable) -> RetryLoo
     }
 }
 
+/// One client in the input of the Delegation finding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DelegationSource {
+    /// The client's requests and subagent requests, as the efficiency analysis counts them.
+    pub share: SubagentShare,
+    /// Main-agent requests with at least [`LARGE_CONTEXT_TOKENS`] of input.
+    pub large_requests: u64,
+    /// Whether every request of the client was measured.
+    pub measured: bool,
+}
+
+impl DelegationSource {
+    /// Subagent requests over all requests, 0 without requests.
+    pub fn subagent_share(&self) -> f64 {
+        share(self.share.subagent_requests, self.share.requests).unwrap_or(0.0)
+    }
+
+    fn qualifies(&self) -> bool {
+        DELEGATING_SOURCES.contains(&self.share.source)
+            && self.large_requests >= MIN_DELEGATION_REQUESTS
+            && self.subagent_share() < DELEGATION_MAX_SHARE
+    }
+}
+
+/// One session in the input of the Delegation finding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DelegationSession {
+    pub id: String,
+    pub source: Source,
+    pub project: Option<PathBuf>,
+    pub large_requests: u64,
+    pub subagent_requests: u64,
+    pub measured: bool,
+}
+
+/// The input of the Delegation finding.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct DelegationUse {
+    /// Per client, ordered by client.
+    pub sources: Vec<DelegationSource>,
+    /// Sessions with at least one large-context main-agent request, most of them first.
+    pub sessions: Vec<DelegationSession>,
+    /// All requests of the period and those that were main-agent requests on a large context.
+    pub requests: u64,
+    pub large_requests: u64,
+}
+
+/// The input of the Delegation finding: per client the subagent share of [`efficiency::analyze`] and the
+/// main-agent requests with at least [`LARGE_CONTEXT_TOKENS`] of input, and the same per session.
+pub fn delegation_use(sessions: &[SessionEvents]) -> DelegationUse {
+    let shares = efficiency::analyze(sessions, &PriceTable::default(), CacheBy::Source).subagents;
+    let mut out = DelegationUse::default();
+    let mut large: BTreeMap<Source, (u64, bool)> = BTreeMap::new();
+    for se in sessions {
+        let mut row = DelegationSession {
+            id: se.session.id.clone(),
+            source: se.session.source,
+            project: se.session.project_dir.clone(),
+            large_requests: 0,
+            subagent_requests: 0,
+            measured: true,
+        };
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            out.requests += 1;
+            let entry = large.entry(row.source).or_insert((0, true));
+            entry.1 &= u.measured;
+            row.measured &= u.measured;
+            if u.subagent {
+                row.subagent_requests += 1;
+            } else if u.total_input() >= LARGE_CONTEXT_TOKENS {
+                row.large_requests += 1;
+                entry.0 += 1;
+                out.large_requests += 1;
+            }
+        }
+        if row.large_requests > 0 {
+            out.sessions.push(row);
+        }
+    }
+    out.sources = shares
+        .into_iter()
+        .map(|share| {
+            let (large_requests, measured) = large.get(&share.source).copied().unwrap_or((0, true));
+            DelegationSource {
+                share,
+                large_requests,
+                measured,
+            }
+        })
+        .collect();
+    out.sessions.sort_by(|a, b| {
+        b.large_requests
+            .cmp(&a.large_requests)
+            .then_with(|| a.source.id().cmp(b.source.id()))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    out
+}
+
 /// The small requests of the costliest model of one client, and what the next cheaper model would have cost.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ModelMixRow {
@@ -1039,6 +1159,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         &RetryLoopUse::default(),
         &ModelMixUse::default(),
         &ContextHygieneUse::default(),
+        &DelegationUse::default(),
         &Pricing::default(),
     )
 }
@@ -1162,6 +1283,7 @@ pub fn analyze_with(
     retries: &RetryLoopUse,
     model_mix: &ModelMixUse,
     hygiene: &ContextHygieneUse,
+    delegation: &DelegationUse,
     pricing: &Pricing,
 ) -> AdviceReport {
     let installed: Vec<&SkillStats> = report.skills.iter().filter(|s| s.in_inventory).collect();
@@ -2000,6 +2122,73 @@ pub fn analyze_with(
         findings.push((f, weight));
     }
 
+    // Work on a large context with almost no subagent requests. No saving: weight 0, Impact::none().
+    let delegating: Vec<&DelegationSource> = delegation
+        .sources
+        .iter()
+        .filter(|s| s.qualifies())
+        .collect();
+    if !delegating.is_empty() {
+        let pct = |part: u64, whole: u64| share(part, whole).unwrap_or(0.0) * 100.0;
+        let mut items: Vec<Item> = delegating
+            .iter()
+            .map(|s| Item {
+                name: s.share.source.id().to_owned(),
+                tokens: Tokens {
+                    count: s.share.tokens,
+                    measured: s.measured,
+                },
+                requests: s.share.requests,
+                detail: format!(
+                    "{} requests, {} on a large context, {} by subagents ({:.1}%)",
+                    n(s.share.requests),
+                    n(s.large_requests),
+                    n(s.share.subagent_requests),
+                    s.subagent_share() * 100.0
+                ),
+                referenced_by: Vec::new(),
+                session_id: None,
+            })
+            .collect();
+        let sources = items.len();
+        items.extend(
+            delegation
+                .sessions
+                .iter()
+                .filter(|s| delegating.iter().any(|d| d.share.source == s.source))
+                .take(TOP)
+                .map(|s| Item {
+                    name: session_label(s.project.as_deref(), &s.id),
+                    tokens: Tokens {
+                        count: 0,
+                        measured: s.measured,
+                    },
+                    requests: s.large_requests,
+                    detail: format!(
+                        "{} on a large context, {} by subagents",
+                        n(s.large_requests),
+                        n(s.subagent_requests)
+                    ),
+                    referenced_by: Vec::new(),
+                    session_id: Some(s.id.clone()),
+                }),
+        );
+        let mut f = finding(FindingKind::Delegation, sources, items, None);
+        f.notes.push(format!(
+            "{:.1}% of the period's requests ({} of {}) were main-agent requests on a large context (at least {} tokens of input).",
+            pct(delegation.large_requests, delegation.requests),
+            n(delegation.large_requests),
+            n(delegation.requests),
+            n(LARGE_CONTEXT_TOKENS)
+        ));
+        f.notes.push(format!(
+            "Shown for a client with a subagent share below {:.0}% and at least {} main-agent requests on a large context. The first rows are the clients, then the sessions with the most large-context requests. No saving is estimated.",
+            DELEGATION_MAX_SHARE * 100.0,
+            n(MIN_DELEGATION_REQUESTS)
+        ));
+        findings.push((f, 0.0));
+    }
+
     // Ranked by the USD saving, then by the weighted tokens, then in the order above; findings without
     // a saving last, in the order above (the sort is stable).
     findings.sort_by(|(a, wa), (b, wb)| {
@@ -2093,6 +2282,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::default(),
         )
     }
@@ -2788,6 +2978,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &pricing(),
         )
     }
@@ -3023,6 +3214,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::default(),
         );
         let f = find(&a, FindingKind::ContextSize);
@@ -3108,6 +3300,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::default(),
         );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
@@ -3130,6 +3323,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::default(),
         );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
@@ -3144,6 +3338,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::default(),
         );
         assert_eq!(
@@ -3200,6 +3395,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &p,
         );
         let f = find(&a, FindingKind::UnusedSkills);
@@ -3303,6 +3499,7 @@ mod tests {
             &retry_saving(sessions, &prices()),
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             pricing,
         )
     }
@@ -3562,6 +3759,7 @@ mod tests {
             &RetryLoopUse::default(),
             &model_mix_saving(sessions, &table),
             &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::from_sessions(sessions, &table),
         )
     }
@@ -3738,6 +3936,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &hygiene_saving(sessions, &table),
+            &DelegationUse::default(),
             &Pricing::from_sessions(sessions, &table),
         )
     }
@@ -4034,6 +4233,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &hygiene_saving(&unpriced, &table),
+            &DelegationUse::default(),
             &Pricing::from_sessions(&unpriced, &table),
         );
         assert!(
@@ -4090,6 +4290,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &hygiene,
+            &DelegationUse::default(),
             &Pricing::from_sessions(&sessions, &table),
         );
         let size = find(&a, FindingKind::ContextSize);
@@ -4130,6 +4331,7 @@ mod tests {
             &RetryLoopUse::default(),
             &ModelMixUse::default(),
             &hygiene_saving(&two, &table),
+            &DelegationUse::default(),
             &Pricing::from_sessions(&two, &table),
         );
         assert!(find_none(&a, FindingKind::ContextHygiene));
@@ -4137,5 +4339,129 @@ mod tests {
             find(&a, FindingKind::ContextSize).impact.saving.count,
             context_saving(&two, &table).tokens()
         );
+    }
+    // ---- delegation ----
+
+    /// A session of `source` with `large` main-agent requests of 250,000 input tokens, `small` main-agent
+    /// requests of 1,000 and `sub` subagent requests of 250,000.
+    fn delegating(
+        id: &str,
+        source: Source,
+        large: usize,
+        small: usize,
+        sub: usize,
+    ) -> SessionEvents {
+        let mut se = requests(id, &[]);
+        se.session.source = source;
+        let mut reqs: Vec<Req> = Vec::new();
+        reqs.extend((0..large).map(|_| ("test-model", 250_000, 0, 0, false)));
+        reqs.extend((0..small).map(|_| ("test-model", 1_000, 0, 0, false)));
+        reqs.extend((0..sub).map(|_| ("test-model", 250_000, 0, 0, true)));
+        se.events = requests(id, &reqs).events;
+        se
+    }
+
+    fn delegation_advice(sessions: &[SessionEvents]) -> AdviceReport {
+        analyze_with(
+            &report(vec![]),
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &delegation_use(sessions),
+            &Pricing::default(),
+        )
+    }
+
+    #[test]
+    fn large_context_without_subagents_is_a_delegation_finding_without_a_saving() {
+        let a = delegation_advice(&[
+            delegating("a", Source::ClaudeCode, 20, 20, 0),
+            delegating("b", Source::ClaudeCode, 25, 0, 0),
+        ]);
+        let f = find(&a, FindingKind::Delegation);
+        assert_eq!(f.count, 1, "one client");
+        assert_eq!(f.impact, Impact::none());
+        assert!(f.explanation.contains("No saving is estimated"));
+        assert_eq!(
+            f.items[0].detail,
+            "65 requests, 45 on a large context, 0 by subagents (0.0%)"
+        );
+        // Sessions follow the clients, most large-context requests first.
+        assert_eq!(f.items[1].session_id.as_deref(), Some("b"));
+        assert_eq!(f.items[1].detail, "25 on a large context, 0 by subagents");
+        assert_eq!(f.items[2].session_id.as_deref(), Some("a"));
+        assert!(f.notes[0].starts_with("69.2% of the period's requests (45 of 65)"));
+    }
+
+    #[test]
+    fn the_sessions_are_the_top_ten() {
+        let sessions: Vec<SessionEvents> = (0..12)
+            .map(|i| delegating(&format!("s{i:02}"), Source::OpenCode, 20 + i, 0, 0))
+            .collect();
+        let f = delegation_advice(&sessions);
+        let f = find(&f, FindingKind::Delegation);
+        assert_eq!(f.items.len(), 1 + TOP);
+        assert_eq!(f.items[1].session_id.as_deref(), Some("s11"));
+    }
+
+    #[test]
+    fn no_delegation_finding_where_subagents_ran() {
+        // 1 of 41 requests by a subagent is 2.4 %: below 5 %, a finding. The fixture-like session
+        // with 3 subagent requests of 43 is 7 %: none.
+        let low = delegation_advice(&[delegating("a", Source::ClaudeCode, 40, 0, 1)]);
+        assert!(!find_none(&low, FindingKind::Delegation));
+        let high = delegation_advice(&[delegating("a", Source::ClaudeCode, 40, 0, 3)]);
+        assert!(find_none(&high, FindingKind::Delegation));
+    }
+
+    #[test]
+    fn a_share_just_above_five_percent_is_no_finding() {
+        let shown = |small, sub| {
+            let a = delegation_advice(&[delegating("a", Source::ClaudeCode, 20, small, sub)]);
+            !find_none(&a, FindingKind::Delegation)
+        };
+        assert!(!shown(17, 2), "2 of 39 is 5.13 %");
+        assert!(!shown(18, 2), "2 of 40 is exactly 5 %, which is not below");
+        assert!(shown(19, 2), "2 of 41 is 4.88 %");
+    }
+
+    #[test]
+    fn fewer_than_twenty_large_context_requests_is_no_finding() {
+        let a = delegation_advice(&[delegating("a", Source::ClaudeCode, 19, 100, 0)]);
+        assert!(find_none(&a, FindingKind::Delegation));
+        let a = delegation_advice(&[
+            delegating("a", Source::ClaudeCode, 10, 0, 0),
+            delegating("b", Source::ClaudeCode, 10, 0, 0),
+        ]);
+        assert!(
+            !find_none(&a, FindingKind::Delegation),
+            "the minimum counts per client, not per session"
+        );
+    }
+
+    #[test]
+    fn subagent_requests_do_not_count_as_large_context_main_agent_requests() {
+        let a = delegation_advice(&[delegating("a", Source::ClaudeCode, 19, 0, 1)]);
+        assert!(find_none(&a, FindingKind::Delegation));
+    }
+
+    #[test]
+    fn a_client_outside_the_list_is_no_finding() {
+        for source in [Source::VsCodeCopilot, Source::Otel] {
+            let a = delegation_advice(&[delegating("a", source, 50, 0, 0)]);
+            assert!(find_none(&a, FindingKind::Delegation), "{source:?}");
+        }
+        // Next to a client of the list, it is not shown in the rows.
+        let a = delegation_advice(&[
+            delegating("a", Source::CopilotCli, 30, 0, 0),
+            delegating("b", Source::Otel, 50, 0, 0),
+        ]);
+        let f = find(&a, FindingKind::Delegation);
+        assert_eq!(f.count, 1);
+        assert_eq!(f.items.len(), 2);
+        assert_eq!(f.items[0].name, "copilot-cli");
     }
 }

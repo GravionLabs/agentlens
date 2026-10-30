@@ -19,3 +19,7 @@ Rules:
 - `claude_code/clear_at_start.jsonl`: one session (`clear-1`) opened by a `/clear`, laid out as Claude Code writes it: a `file-history-snapshot` line, the meta caveat message, the `/clear` command message and its empty `local-command-stdout`, then six requests (1,000 to 6,000 tokens) with two compactions. Part of the output-contract home.
 - `claude_code/two_compactions.jsonl`: the same six requests and two compactions without a `/clear` (`compact-2`). Part of the output-contract home.
 - `claude_code/near_limit.jsonl`: three requests of `claude-test-1` growing from 10,000 to 190,000 tokens (95% of the documented 200,000 window) without a compaction (`near-1`). Part of the output-contract home.
+
+## Delegation
+
+- `claude_code/large_context_no_subagents.jsonl`: one session (`deleg-1`, whose id the test sees as the file name) with 20 main-agent requests of `claude-test-1`, each with more than 200,000 tokens of input, and no subagent request. Not part of the output-contract home; the Delegation tests lay it out themselves.

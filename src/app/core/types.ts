@@ -117,6 +117,7 @@ export type FindingKind =
   | "context-size"
   | "retry-loops"
   | "model-mix"
+  | "delegation"
   | "context-hygiene";
 
 export interface Reference {

@@ -136,6 +136,10 @@ Measured: every number behind the saving came from the client. Estimated: some w
 
 A request is small with fewer than 500 output tokens and fewer than 50,000 tokens of input. Per client, the costliest model is the one with the highest list input price among those that ran, the cheaper one the next lower price. The saving is what the same tokens would have cost on the cheaper model (an estimate, inferred), and the finding appears only with at least 20 small requests and a saving of at least 5% of the period's cost.
 
+### Delegation
+
+Research and long reads in the main context are carried on every later request; a subagent reads them in its own context and returns a summary. The finding appears for Claude Code, OpenCode and Copilot CLI when a client has a subagent share below 5% of its requests and at least 20 main-agent requests with 200,000 tokens of input or more. No saving is estimated.
+
 ## Efficiency
 
 ### Role
