@@ -27,7 +27,12 @@ afterEach(() => {
   document.querySelectorAll(".cdk-overlay-container").forEach((e) => e.remove());
 });
 
-function render(invoke = vi.fn(async () => "0.1.0")) {
+function render(
+  invoke = vi.fn(async (command: string) =>
+    // The role filter asks for the efficiency roles of the period; the rest answers the version.
+    command === "efficiency" ? { data: { roles: [] } } : "0.1.0",
+  ),
+) {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),

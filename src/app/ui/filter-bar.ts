@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  resource,
+  signal,
+} from "@angular/core";
 import {
   HxDateTimeRangePicker,
   type HxDateTimeRangePreset,
@@ -8,7 +15,8 @@ import {
   HxSelect,
 } from "@gravionlabs/helix-ui";
 import { CUSTOM, FiltersService, LAST_UNITS, PERIODS } from "../core/filters.service";
-import { SOURCES, type SourceId } from "../core/types";
+import { Ipc } from "../core/ipc";
+import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../core/types";
 
 @Component({
   selector: "app-filter-bar",
@@ -99,6 +107,20 @@ import { SOURCES, type SourceId } from "../core/types";
           (change)="setProject($event)"
         />
       </div>
+      @if (roles().length > 0) {
+        <div class="field">
+          <label for="filter-roles">Roles</label>
+          <hx-multi-select
+            inputId="filter-roles"
+            fluid
+            [options]="roles()"
+            placeholder="All roles"
+            showClear
+            [value]="filters.roles()"
+            (valueChange)="filters.setRoles($event)"
+          />
+        </div>
+      }
     </form>
   `,
   styles: `
@@ -180,6 +202,25 @@ export class FilterBar {
     return r ? { from: new Date(r.from), to: new Date(r.to) } : { from: null, to: null };
   });
   protected readonly sources = SOURCES;
+  private readonly ipc = inject(Ipc);
+
+  // The roles of the period under the other filters, not under the role filter itself, so the
+  // options stay when one is chosen.
+  private readonly efficiency = resource({
+    params: () => {
+      return {
+        filters: { ...this.filters.payload(), roles: [] as string[] },
+        generation: this.filters.generation(),
+      };
+    },
+    loader: ({ params }) =>
+      this.ipc.invoke<Answer<EfficiencyReport>>("efficiency", { filters: params.filters }),
+  });
+  /** The row keys of the efficiency roles table; empty (and the select hidden) without runs. */
+  protected readonly roles = computed(() => {
+    const own = this.efficiency.hasValue() ? this.efficiency.value().data.roles : [];
+    return [...new Set([...own.map((r) => r.role), ...this.filters.roles()])];
+  });
 
   protected setSince(value: unknown): void {
     // A cleared or non-string value is ignored: the period keeps its last value.

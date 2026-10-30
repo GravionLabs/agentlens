@@ -5,6 +5,7 @@ import { By } from "@angular/platform-browser";
 import { HxDateTimeRangePicker, HxSelect } from "@gravionlabs/helix-ui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FiltersService } from "../core/filters.service";
+import { Ipc } from "../core/ipc";
 import { FilterBar } from "./filter-bar";
 
 beforeAll(() => {
@@ -16,7 +17,24 @@ afterEach(() => {
   document.querySelectorAll(".cdk-overlay-container").forEach((e) => e.remove());
 });
 
+const calls: Record<string, unknown>[] = [];
+let roleRows: { role: string }[] = [{ role: "main" }, { role: "explore" }];
+
 async function render() {
+  calls.length = 0;
+  TestBed.configureTestingModule({
+    providers: [
+      {
+        provide: Ipc,
+        useValue: {
+          invoke: async (_c: string, args: Record<string, unknown>) => {
+            calls.push(args);
+            return { data: { roles: roleRows } };
+          },
+        },
+      },
+    ],
+  });
   const fixture = TestBed.createComponent(FilterBar);
   fixture.detectChanges();
   await fixture.whenStable();
@@ -169,5 +187,33 @@ describe("FilterBar", () => {
     expect(filters.since()).toBe("7d");
     select.value.set("");
     expect(filters.since()).toBe("");
+  });
+
+  it("lists the roles of the period and passes the chosen ones to the filters", async () => {
+    roleRows = [{ role: "main" }, { role: "explore" }];
+    const { fixture, el, filters } = await render();
+    expect(el.querySelector('label[for="filter-roles"]')!.textContent).toContain("Roles");
+    el.querySelector<HTMLElement>("#filter-roles")!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const options = [...overlay().querySelectorAll<HTMLElement>('[role="option"]')];
+    expect(options.map((o) => o.textContent!.trim())).toEqual(["main", "explore"]);
+    options[1].click();
+    fixture.detectChanges();
+    expect(filters.roles()).toEqual(["explore"]);
+    expect(filters.payload().roles).toEqual(["explore"]);
+    // The options come from the period without the role filter itself.
+    await fixture.whenStable();
+    expect(calls.every((c) => (c["filters"] as { roles: string[] }).roles.length === 0)).toBe(true);
+    const clear = [...el.querySelectorAll<HTMLElement>("hx-multi-select [aria-label*='lear' i]")];
+    clear[clear.length - 1].click();
+    fixture.detectChanges();
+    expect(filters.payload().roles).toEqual([]);
+  });
+
+  it("hides the role select when the period has no runs", async () => {
+    roleRows = [];
+    const { el } = await render();
+    expect(el.querySelector("#filter-roles")).toBeNull();
   });
 });
