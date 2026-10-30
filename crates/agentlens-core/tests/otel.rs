@@ -436,3 +436,139 @@ fn a_vscode_copilot_export_reads_like_the_cli_and_skips_host_spans() {
         1
     );
 }
+
+fn runs(se: &SessionEvents) -> Vec<&EventKind> {
+    se.events
+        .iter()
+        .map(|e| &e.kind)
+        .filter(|k| matches!(k, EventKind::AgentRun { .. }))
+        .collect()
+}
+
+#[test]
+fn a_nested_agent_span_is_a_run_called_through_its_tool_span() {
+    let se = copilot();
+    let r = runs(&se);
+    assert_eq!(r.len(), 1, "the outermost agent is the main session");
+    let EventKind::AgentRun {
+        agent_id,
+        parent_agent_id,
+        tool_use_id,
+        depth,
+        started_at,
+        ended_at,
+        ..
+    } = r[0]
+    else {
+        unreachable!()
+    };
+    assert_eq!(agent_id, "agent2");
+    assert_eq!(*parent_agent_id, None, "its caller is the main agent");
+    assert_eq!(tool_use_id.as_deref(), Some("call_1"));
+    assert_eq!(*depth, Some(1));
+    assert_eq!(started_at.as_second(), 1780000040);
+    assert_eq!(ended_at.unwrap().as_second(), 1780000050);
+}
+
+#[test]
+fn requests_inside_a_subagent_carry_the_run_id() {
+    let se = copilot();
+    let u = usages(&se);
+    let sub = u.iter().find(|u| u.subagent).unwrap();
+    assert_eq!(
+        sub.agent.as_ref().and_then(|a| a.agent_id.as_deref()),
+        Some("agent2")
+    );
+    assert!(u.iter().filter(|u| !u.subagent).all(|u| u.agent.is_none()));
+}
+
+fn span(id: &str, parent: Option<&str>, op: &str, extra: &str) -> String {
+    let parent = parent.map_or(String::new(), |p| format!(r#""parentSpanId":"{p}","#));
+    format!(
+        r#"{{"type":"span","spanId":"{id}",{parent}"name":"{op}","startTime":[1780000100,0],"endTime":[1780000110,0],"attributes":{{"gen_ai.operation.name":"{op}","gen_ai.conversation.id":"conv-nest"{extra}}},"status":{{"code":0}},"events":[]}}"#
+    )
+}
+
+#[test]
+fn deeper_agents_name_their_calling_run_and_tool_call() {
+    let home = TempHome::new();
+    let lines = [
+        span("m", None, "invoke_agent", ""),
+        span(
+            "t1",
+            Some("m"),
+            "execute_tool",
+            r#","gen_ai.tool.name":"task","gen_ai.tool.call.id":"call_a""#,
+        ),
+        span(
+            "s1",
+            Some("t1"),
+            "invoke_agent",
+            r#","gen_ai.agent.name":"general""#,
+        ),
+        span(
+            "t2",
+            Some("s1"),
+            "execute_tool",
+            r#","gen_ai.tool.name":"task","gen_ai.tool.call.id":"call_b""#,
+        ),
+        span("s2", Some("t2"), "invoke_agent", ""),
+        span(
+            "c2",
+            Some("s2"),
+            "chat",
+            r#","gen_ai.usage.input_tokens":10"#,
+        ),
+    ];
+    let path = home.write("nest.jsonl", lines.join("\n") + "\n");
+    let se = OtelAdapter::new(vec![path])
+        .sessions(&home.env(), &SessionFilter::default())
+        .map(|r| r.unwrap())
+        .find(|s| s.session.id == "conv-nest")
+        .unwrap();
+    let mut got: Vec<_> = runs(&se)
+        .into_iter()
+        .map(|k| match k {
+            EventKind::AgentRun {
+                agent_id,
+                parent_agent_id,
+                tool_use_id,
+                agent_type,
+                depth,
+                ..
+            } => (
+                agent_id.clone(),
+                parent_agent_id.clone(),
+                tool_use_id.clone(),
+                agent_type.clone(),
+                *depth,
+            ),
+            _ => unreachable!(),
+        })
+        .collect();
+    got.sort();
+    assert_eq!(
+        got,
+        [
+            (
+                "s1".to_owned(),
+                None,
+                Some("call_a".to_owned()),
+                Some("general".to_owned()),
+                Some(1)
+            ),
+            (
+                "s2".to_owned(),
+                Some("s1".to_owned()),
+                Some("call_b".to_owned()),
+                None,
+                Some(2)
+            ),
+        ]
+    );
+    let chat = usages(&se).remove(0);
+    assert_eq!(
+        chat.agent.as_ref().and_then(|a| a.agent_id.as_deref()),
+        Some("s2")
+    );
+}

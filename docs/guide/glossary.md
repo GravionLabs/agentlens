@@ -30,6 +30,18 @@ A source is one supported client: Claude Code, OpenCode, Copilot CLI or VS Code 
 
 Subagents work in their own context. Their requests are counted separately from the main agent's, which is why context size only covers main-agent requests.
 
+### Trend
+
+A trend compares the current period with a comparison window and shows both values and the change between them. A change is “n/a” when either window has no sessions, and the percentage is “n/a” when the earlier value is 0. A change of an estimated value is an estimate.
+
+### Comparison window
+
+Without a choice, the comparison window is the period of the same length right before the current one. If the two periods differ in length, counts are compared per day. The comparison window must not overlap the current period.
+
+### Previous period
+
+It is the default comparison window of a trend: for the last 7 days, the 7 days before them. A session belongs to the period in which it ends.
+
 ## Context
 
 ### Static context
@@ -88,6 +100,10 @@ An assumption: everything that happens until something else takes over is attrib
 
 ## Cost
 
+### Subagent share
+
+Cost of the requests made by subagents divided by the cost of all requests of the session (`cost --by session`). It is n/a when the session has no priced request, because an unknown cost is not zero.
+
 ### Cost
 
 Reported cost is shown as is. Otherwise the tokens are priced with the price table. Cache writes are priced as 5-minute writes. Add prices for unknown models to ~/.config/agentlens/prices.json.
@@ -104,7 +120,27 @@ They are left out of totals and shares instead of being counted as free.
 
 Shows what the period would have cost on a different model. “Excluded” requests have no actual price and are left out of both sides.
 
+### Impact
+
+Every advice finding has an impact: its saving in tokens, the saving in USD (always an estimate, computed from the price table) and the confidence of the saving. The findings are ranked by it: by the USD saving, without any price by the tokens weighted by class (input 1, cache write 1.25, cache read 0.1); findings without a saving come last.
+
+### Saving
+
+For unused skills and costly descriptions the listing tokens that removing or shortening would have saved; for large skill bodies the body above 2,000 tokens times the requests that carried it; for MCP servers their context where none of their tools was called; for the context size the input above each session's first request on requests of at least 200,000 tokens. Findings that know their requests price each with its own model, the others with the period's average price per token class.
+
+### Confidence
+
+Measured: every number behind the saving came from the client. Estimated: some were computed from file sizes or heuristics. Inferred: the saving rests on an assumption about how the work could have run instead, for example that it could have started in a fresh session.
+
 ## Efficiency
+
+### Role
+
+`efficiency` groups the runs by role: the name of a forked skill if there is one, otherwise the workflow phase, otherwise the agent type. The main agent is a row of its own (`main`), and a run that names none of the three is `(unknown)`. The free-text description of a run is never used as a role.
+
+### First request context
+
+The static part every run pays: what the first request of a run sends to the model, cached or not. The roles table shows the mean per run. Next to it, *uncached after first* is the uncached input plus cache write of the later requests, which is what the run read. Both are measured when the requests are.
 
 ### Cache read
 

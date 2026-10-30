@@ -1,6 +1,6 @@
 # The analyses
 
-Each analysis is a command of the CLI, a view of the [application](application.md) and a tool of the [MCP server](mcp-server.md), and all three show the same numbers (what you can rely on in their output is on the [Compatibility](compatibility.md) page). Every command takes the [filters](getting-started.md#narrowing-down) (`--since`, `--until`, `--source`, `--project`) and `--format table|json|csv`.
+Each analysis is a command of the CLI, a view of the [application](application.md) and a tool of the [MCP server](mcp-server.md), and all three show the same numbers (what you can rely on in their output is on the [Compatibility](compatibility.md) page). Every command takes the [filters](getting-started.md#narrowing-down) (`--since`, `--until`, `--source`, `--project`, `--session`) and `--format table|json|csv`.
 
 ## Skills
 
@@ -45,6 +45,24 @@ What to change to save tokens, made from the skill numbers above. No model is in
 | **Context size**           | the average context of a request, the share of requests above 200,000 tokens, the share of requests that subagents made, and the sessions with the largest context (all measured where the client reports it) |
 
 Every sum is also given as a share of all tokens of the period (`share_of_total_tokens`, input, output and cache together), so that a small share is not read as the main lever (the carry of **Large skill bodies** now has a sum and a share too; the skill report's `totals` holds the period's request, subagent and context numbers): the descriptions of all installed skills are often well under 1% of the tokens, while the size of the context decides the rest. The **Context size** finding is that scale: it ends with the fixed advice to start new work in a fresh session, to clear the context between tasks and to delegate exploration and review to subagents, whose context stays separate.
+
+### Ranking by impact
+
+Every finding has an *impact*: what its action could have saved in the period (`saving`, in tokens), the same in USD (`saving_usd`) and a `confidence` (`measured`, `estimated` or `inferred`). The saving is what the action saves, not what the finding is about: the **Context size** finding is about all the context of the period, its saving only the part a fresh session would have avoided. The findings come sorted by `saving_usd`, largest first, and `rank` numbers them from 1; equal savings keep the order of the table above. Findings without a saving come last, in that order.
+
+| Kind | Saving | Priced as | Confidence |
+| :-- | :-- | :-- | :-- |
+| **Unused skills** | the listing tokens of all unused skills (= `total`) | cache read | measured if all listings were measured, else estimated |
+| **Listed but loaded by hand** | the listing tokens (= `total`) | cache read | as above |
+| **Costly descriptions** | what shortening to 40 tokens would have saved (= `total`) | cache read | estimated |
+| **Large skill bodies** | per skill, the body above 2,000 tokens (its load divided by its invocations) times the requests that carried it | split like the skill's own carry into cache read and uncached (priced as input) | estimated |
+| **Costly MCP servers** | per server, its static context in the (client, project) groups in which none of its tools was called; a group with a call saves nothing | cache read | measured if the sizes were, else estimated |
+| **Context size** | per session, on every main-agent request of at least 200,000 tokens, the input above the size of the session's first main-agent request (never below 0) | each request in its own input : cache read : cache write ratio, with its own model (a model without a price at the period's average) | inferred |
+| **Used but not installed**, **Work on a large context** | none (`saving` 0, `saving_usd` null) | – | – |
+
+`saving_usd` is always an estimate, computed from the [price table](#cost) and never reported by a client, so the CLI and the application show it with a tilde. Where a finding knows its requests (**Context size**), each request is priced with its own model; a request whose model has no price is priced with the period's average price per token class, split in its own ratio, and a note says how many were. The others are priced with the period's average price per token class (input, cache read, cache write), each class weighted with its tokens over all priced requests. Requests without a price are left out of those averages and a note says how many. So `saving_usd` is null only when the period has no price at all, and then for every finding. Without any price `saving_usd` is null and the order falls back to the tokens weighted by class: input 1, cache write 1.25, cache read 0.1.
+
+An `inferred` saving rests on an assumption: for **Context size**, that the work on the large requests could have run in a fresh session that started at the size of the session's first request. The constants are `DESCRIPTION_TARGET_TOKENS` (40), `BODY_TARGET_TOKENS` (2,000), `LARGE_CONTEXT_TOKENS` (200,000) and the weights `INPUT_WEIGHT`, `CACHE_WRITE_WEIGHT` and `CACHE_READ_WEIGHT` (1, 1.25 and 0.1). The CLI table puts the rank before each finding and its saving below the title (`Could save ~$1.23 (~45,678 tokens, estimated).`); `--format csv` repeats `rank`, `saving_tokens`, `saving_usd` and `confidence` on every row.
 
 A finding says what it cannot know: a skill that is needed only now and then may be worth keeping although it shows up as unused, and the work after a skill is activity, not cost the skill caused. The CLI prints the findings as a table (`--format json` and `--format csv` have all of them), the application has an **Advice** view, and the [MCP server](mcp-server.md) has an `advice` tool, so an agent gets the findings and only has to explain and act on them.
 
@@ -99,7 +117,7 @@ Requests, tokens and cost per model. Cost the client reported (OpenCode) is show
 { "my-model": { "input": 3, "output": 15, "cache_read": 0.3, "cache_write": 3.75 } }
 ```
 
-`--by project|branch|issue` groups the cost instead of per model. The issue number is read from the branch name when a number of 2 to 6 digits starts a `/` segment (`feat/123-title`) or follows `issue-` or `gh-`; other sessions are `(unassigned)`. Only Claude Code and Copilot CLI record the branch. `--what-if MODEL` recomputes the same tokens with the prices of another model and shows actual cost, what-if cost and the difference per model; requests without an actual price are excluded and counted. GitHub Copilot premium requests are shown separately; they are a plan allowance, not money, so treat Copilot cost as a comparison figure, not an invoice.
+`--by project|branch|issue|session` groups the cost instead of per model. `--by session` has one row per session: source, project, start, duration, issue, models, requests (and the main-thread ones), peak context (the largest `input + cache read + cache write` of a main-agent request, as in `flow`), the token counts, the cost and the *subagent share* of that cost. A session without a priced request shows `n/a`, never 0. `--top <n>` (default 25, `0` = all) limits the text table; JSON and CSV carry every row (`report.sessions`). The issue number of a session comes from two sources, tried in this order, and the first match wins: the branch name, when a number of 2 to 6 digits starts a `/` segment (`feat/123-title`) or follows `issue-` or `gh-`; then the messages of the `git commit -m` commands the session ran (Claude Code, OpenCode and Copilot CLI), where the first `(#123)`, `Closes #123` or `Refs #123` (or another GitHub closing keyword) counts. A message from a file (`-F`) is not read, and only the number is kept, never the message. Sessions that match neither are `(unassigned)`. Only Claude Code and Copilot CLI record the branch. The JSON says which source matched: `issue_source` (`branch` or `commit`) on each row of `--by issue` (for a row with sessions of both sources, `commit`) and on each session of `--by session`. `--what-if MODEL` recomputes the same tokens with the prices of another model and shows actual cost, what-if cost and the difference per model; requests without an actual price are excluded and counted. GitHub Copilot premium requests are shown separately; they are a plan allowance, not money, so treat Copilot cost as a comparison figure, not an invoice.
 
 ## Efficiency
 
@@ -109,6 +127,8 @@ agentlens efficiency --by project
 
 The cache hit rate (cache read divided by all input tokens, measured) per session, project or source, and the share of subagents in requests, tokens and cost. Sources that report no cache tokens show `n/a` instead of 0%; cost shares only cover priced requests.
 
+The *roles* table has a row per role over the period: runs, requests per run, tokens, cost per run (with a `~` when estimated), the models, the *first request context* (`input + cache read + cache write` of a run's first request, the static part every run pays), the uncached tokens after it (`input + cache write` of the later requests, what the run read) and the hit rate, sorted by total cost. A role is the name of a forked skill, else the workflow phase, else the agent type; the main agent is the row `main` and a run without any of the three is `(unknown)`. The context columns are means per run over the runs with requests; a run without requests (a workflow container, say) counts in `runs` and adds no cost. `--section all|cache|roles` (default `all`) filters the text, and `--format csv` needs `--section cache|roles` because it holds one table.
+
 ## Compare
 
 ```sh
@@ -116,6 +136,24 @@ agentlens compare --since 30d
 ```
 
 The clients side by side over the same sessions: sessions, requests, tokens, cache hit rate, tool calls and error rate, skill invocations and their estimated overhead, and session time (first to last event, so idle time is included). A value a client does not record is `n/a`.
+
+## Trend
+
+The current period next to a comparison window, with the change of every figure. `agentlens trend [--against SINCE..UNTIL]` prints it (the MCP tool `trend` returns the same data).
+
+```sh
+agentlens trend --since 7d                              # the last 7 days against the 7 before
+agentlens trend --since 2026-10-01 --against 2026-09-01..2026-09-15
+agentlens trend --format csv                            # one row per figure, two per skill
+```
+
+The table has the columns group, figure, before, after, change and change %; the skill rows come last. An estimate carries a tilde (`~`), a missing change is `n/a`, and a note line says when the values are per day. `SINCE` and `UNTIL` take the same forms as `--since`; a malformed `--against` or one that overlaps the period is a usage error. The global filters (`--since`, `--until`, `--source`, `--project`, `--session`) apply to both windows.
+
+- **Windows.** The current window is `[since, until)` of the filters; without `since` it is the last 30 days, without `until` it ends now. The comparison window is, by default, the window of the same length right before (`[since - length, since)`); it can be given explicitly. Overlapping windows are an error.
+- **Boundary rule.** A session belongs to the window in which it ends (its start if it has no end), the same rule as the period filter: a session that ends exactly at `since` is in the current window, one that ends exactly at `until` is in the next one.
+- **Normalization.** When the two windows differ in length, `normalized` is `true` and every count and amount is compared per day (figure divided by the length of the window in days). Rates (cache hit rate, subagent share) are compared as rates and never normalized. With equal lengths the values are absolute.
+- **Delta.** Each figure has `before` (comparison window), `after` (current window), `change` (`after - before`), `change_pct` (in percent of `before`) and `measured`. `change` is `n/a` when either window has no sessions, never a 100 % drop; `change_pct` is `n/a` when `before` is 0; `measured` is true only if both values were measured, so a change of an estimate is an estimate.
+- **Figures.** Volume (sessions, requests, subagent requests, tokens, context tokens, large-context requests), cost (measured and estimated USD kept apart, unpriced requests), efficiency (cache hit rate, subagent request share), errors (tool calls, failed calls, retry loops) and, per skill, loads and overhead tokens. A skill loaded in one window only has the status `new` or `gone`; the skills are sorted by the size of the change of their overhead tokens, then by name.
 
 ## Timeline
 

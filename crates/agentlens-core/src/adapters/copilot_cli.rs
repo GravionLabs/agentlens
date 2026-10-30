@@ -15,10 +15,11 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
 use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
+use crate::commit::commit_issue;
 use crate::env::Env;
 use crate::model::{
-    EventKind, Hook, PermissionPrompt, Session, SessionEvents, SkillInvoked, SkillTrigger, Source,
-    ToolCall, ToolStatus, Usage, Warning,
+    AgentInfo, EventKind, Hook, PermissionPrompt, Session, SessionEvents, SkillInvoked,
+    SkillTrigger, Source, ToolCall, ToolStatus, Usage, Warning,
 };
 
 pub struct CopilotCliAdapter;
@@ -69,9 +70,6 @@ const IGNORED: &[&str] = &[
     "session.truncation",
     "session.warning",
     "session.compaction_start",
-    "subagent.completed",
-    "subagent.failed",
-    "subagent.started",
     "system.message",
     "system.notification",
     "tool.user_requested",
@@ -189,7 +187,7 @@ fn read_usage_rows(path: &Path) -> (HashMap<String, Vec<UsageRow>>, Option<Strin
     let has = |c: &str| have.iter().any(|h| h == c);
     let sql = format!(
         "SELECT session_id, model, input_tokens, output_tokens, cache_read_tokens, \
-         cache_write_tokens, reasoning_tokens, created_at, {}, {}, {} \
+         cache_write_tokens, reasoning_tokens, created_at, {}, {}, {}, {} \
          FROM assistant_usage_events ORDER BY created_at, id",
         if subagent_cols {
             "(agent_id IS NOT NULL OR parent_tool_call_id IS NOT NULL)"
@@ -203,6 +201,11 @@ fn read_usage_rows(path: &Path) -> (HashMap<String, Vec<UsageRow>>, Option<Strin
         },
         if has("initiator") {
             "initiator"
+        } else {
+            "NULL"
+        },
+        if has("parent_tool_call_id") {
+            "parent_tool_call_id"
         } else {
             "NULL"
         },
@@ -232,7 +235,11 @@ fn read_usage_rows(path: &Path) -> (HashMap<String, Vec<UsageRow>>, Option<Strin
                         // Only requests the user started are charged; agent
                         // follow-ups ride along.
                         skill: None,
-                        agent: None,
+                        // The run is the `subagent.started` event with this tool call id.
+                        agent: r.get::<_, Option<String>>(11)?.map(|id| AgentInfo {
+                            agent_id: Some(id),
+                            ..AgentInfo::default()
+                        }),
                         premium_requests: r.get::<_, Option<f64>>(9)?.map(|m| {
                             match r.get::<_, Option<String>>(10).ok().flatten().as_deref() {
                                 Some("user") | None => m,
@@ -309,6 +316,8 @@ fn parse_session(
     let mut unknown: BTreeMap<String, u64> = BTreeMap::new();
     let mut shutdowns: Vec<(Option<Timestamp>, Vec<Usage>)> = Vec::new();
     let mut records: Vec<UsageRow> = Vec::new();
+    // `toolCallId` of a subagent -> index of its `AgentRun` event and the caller it names, if any.
+    let mut runs: HashMap<String, (usize, Option<String>)> = HashMap::new();
     let mut first: Option<Timestamp> = None;
     let mut last: Option<Timestamp> = None;
     let mut model: Option<String> = None;
@@ -371,6 +380,11 @@ fn parse_session(
                 if let Some(call_id) = str_of(data, "toolCallId") {
                     pending.insert(call_id.to_owned(), (idx, at));
                 }
+                if name == "bash"
+                    && let Some(issue) = str_of(args, "command").and_then(commit_issue)
+                {
+                    se.push(at, EventKind::CommitIssue { issue });
+                }
             }
             "tool.execution_complete" => {
                 if let Some(call_id) = str_of(data, "toolCallId")
@@ -429,6 +443,52 @@ fn parse_session(
                     p.wait_ms = elapsed_ms(started, at);
                 }
             }
+            "subagent.started" => {
+                let Some(call_id) = str_of(data, "toolCallId") else {
+                    se.warn(
+                        Warning::new("subagent.started without toolCallId; run skipped")
+                            .at(path.display().to_string()),
+                    );
+                    continue;
+                };
+                let Some(started_at) = at else {
+                    se.warn(
+                        Warning::new("subagent.started without timestamp; run skipped")
+                            .at(path.display().to_string()),
+                    );
+                    continue;
+                };
+                runs.insert(
+                    call_id.to_owned(),
+                    (
+                        se.events.len(),
+                        str_of(data, "parentToolCallId").map(str::to_owned),
+                    ),
+                );
+                se.push(
+                    at,
+                    EventKind::AgentRun {
+                        agent_id: call_id.to_owned(),
+                        parent_agent_id: None,
+                        tool_use_id: Some(call_id.to_owned()),
+                        agent_type: str_of(data, "agentName").map(str::to_owned),
+                        name: None,
+                        description: str_of(data, "agentDisplayName").map(str::to_owned),
+                        model: None,
+                        depth: Some(1),
+                        started_at,
+                        ended_at: None,
+                    },
+                );
+            }
+            "subagent.completed" | "subagent.failed" => {
+                if let Some(call_id) = str_of(data, "toolCallId")
+                    && let Some((idx, _)) = runs.get(call_id)
+                    && let EventKind::AgentRun { ended_at, .. } = &mut se.events[*idx].kind
+                {
+                    *ended_at = at;
+                }
+            }
             "session.compaction_complete" => se.push(at, EventKind::Compaction),
             "session.model_change" => {
                 model = str_of(data, "newModel").map(str::to_owned).or(model);
@@ -446,6 +506,8 @@ fn parse_session(
             other => *unknown.entry(other.to_owned()).or_default() += 1,
         }
     }
+
+    link_runs(&mut se, &runs);
 
     // Per-request rows when the store has them, else the usage records of the event log, else the
     // shutdown totals (which the records add up to, so they are not read as well).
@@ -480,6 +542,40 @@ fn parse_session(
     se.session.started_at = first;
     se.session.ended_at = last;
     Ok(se)
+}
+
+/// A run that names a caller (`parentToolCallId`) that is another run is nested in it; a caller that
+/// is not a run leaves the caller unknown. Without a named caller the main session started it.
+fn link_runs(se: &mut SessionEvents, runs: &HashMap<String, (usize, Option<String>)>) {
+    let depth_of = |id: &str| -> Option<u32> {
+        let mut depth = 1;
+        let mut cur = id;
+        for _ in 0..64 {
+            let (_, parent) = runs.get(cur)?;
+            match parent {
+                None => return Some(depth),
+                Some(p) => {
+                    cur = p.as_str();
+                    depth += 1;
+                }
+            }
+        }
+        None
+    };
+    for (id, (idx, parent)) in runs {
+        let Some(parent) = parent else { continue };
+        let known = runs.contains_key(parent);
+        let depth = if known { depth_of(id) } else { None };
+        if let EventKind::AgentRun {
+            parent_agent_id,
+            depth: d,
+            ..
+        } = &mut se.events[*idx].kind
+        {
+            *parent_agent_id = known.then(|| parent.clone());
+            *d = depth;
+        }
+    }
 }
 
 fn elapsed_ms(start: Option<Timestamp>, end: Option<Timestamp>) -> Option<u64> {

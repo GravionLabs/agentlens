@@ -10,10 +10,11 @@ use std::path::PathBuf;
 use crate::analyzers::advice::AdviceReport;
 use crate::analyzers::compare::SourceStats;
 use crate::analyzers::context::ContextRow;
-use crate::analyzers::cost::{CostRow, WhatIfReport};
-use crate::analyzers::efficiency::CacheRow;
+use crate::analyzers::cost::{CostRow, SessionCost, WhatIfReport};
+use crate::analyzers::efficiency::{CacheRow, RoleRow};
 use crate::analyzers::flow::{HookStats, SessionGrowth, ToolErrors};
 use crate::analyzers::skills::SkillStats;
+use crate::analyzers::trend::TrendReport;
 use crate::analyzers::unused::{UnusedItem, UnusedKind};
 use crate::model::ContextKind;
 
@@ -267,6 +268,71 @@ pub fn cost(rows: &[CostRow], label: &str) -> Result<String, CsvError> {
     write(&header, body)
 }
 
+/// `cost --by session`: one row per session; an unknown cost is an empty field, never 0.
+pub fn session_cost(rows: &[SessionCost]) -> Result<String, CsvError> {
+    let header = [
+        "session",
+        "source",
+        "project",
+        "started_at",
+        "duration_ms",
+        "issue",
+        "models",
+        "requests",
+        "main_requests",
+        "peak_context_tokens",
+        "input_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "output_tokens",
+        "measured_usd",
+        "estimated_usd",
+        "unpriced_requests",
+        "subagent_usd",
+        "subagent_share",
+    ];
+    let body = rows
+        .iter()
+        .map(|s| {
+            let known = s.cost_known();
+            let usd = |v: f64| {
+                if known {
+                    format!("{v:.6}")
+                } else {
+                    String::new()
+                }
+            };
+            vec![
+                s.session.clone(),
+                s.source.id().to_owned(),
+                s.project
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default(),
+                s.started_at.map(|t| t.to_string()).unwrap_or_default(),
+                s.duration_ms.map(|v| v.to_string()).unwrap_or_default(),
+                s.issue.clone().unwrap_or_default(),
+                s.models.join(";"),
+                s.requests.to_string(),
+                s.main_requests.to_string(),
+                s.peak_context.to_string(),
+                s.input.to_string(),
+                s.cache_read.to_string(),
+                s.cache_write.to_string(),
+                s.output.to_string(),
+                usd(s.measured_usd),
+                usd(s.estimated_usd),
+                s.unpriced_requests.to_string(),
+                usd(s.subagent_usd),
+                s.subagent_share()
+                    .map(|v| format!("{v:.4}"))
+                    .unwrap_or_default(),
+            ]
+        })
+        .collect();
+    write(&header, body)
+}
+
 /// `cost --what-if`: the actual and the what-if price per model.
 pub fn what_if(w: &WhatIfReport) -> Result<String, CsvError> {
     let header = [
@@ -313,6 +379,60 @@ pub fn cache(rows: &[CacheRow]) -> Result<String, CsvError> {
                 r.input.to_string(),
                 r.cache_read.to_string(),
                 r.cache_write.to_string(),
+                r.hit_rate.map(|h| format!("{h:.6}")).unwrap_or_default(),
+            ]
+        })
+        .collect();
+    write(&header, body)
+}
+
+/// `efficiency --section roles`: the roles table. An empty cell is missing data.
+pub fn roles(rows: &[RoleRow]) -> Result<String, CsvError> {
+    let header = [
+        "role",
+        "kind",
+        "runs",
+        "requests",
+        "requests_per_run",
+        "input_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "output_tokens",
+        "usd",
+        "usd_per_run",
+        "cost_measured",
+        "unpriced_requests",
+        "models",
+        "first_request_context",
+        "uncached_after_first",
+        "tokens_measured",
+        "hit_rate",
+    ];
+    let usd = |v: Option<f64>| v.map(|v| format!("{v:.6}")).unwrap_or_default();
+    let body = rows
+        .iter()
+        .map(|r| {
+            vec![
+                r.role.clone(),
+                serde_json::to_value(r.kind)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_owned))
+                    .unwrap_or_default(),
+                r.runs.to_string(),
+                r.requests.to_string(),
+                format!("{:.2}", r.requests_per_run),
+                r.input.to_string(),
+                r.cache_read.to_string(),
+                r.cache_write.to_string(),
+                r.output.to_string(),
+                usd(r.usd),
+                usd(r.usd_per_run),
+                r.cost_measured.to_string(),
+                r.unpriced_requests.to_string(),
+                r.models.join(";"),
+                r.first_request_context.count.to_string(),
+                r.uncached_after_first.count.to_string(),
+                r.first_request_context.measured.to_string(),
                 r.hit_rate.map(|h| format!("{h:.6}")).unwrap_or_default(),
             ]
         })
@@ -412,7 +532,7 @@ pub fn errors(tools: &[ToolErrors]) -> Result<String, CsvError> {
     write(&header, rows)
 }
 
-/// `advise`: one row per skill of each finding.
+/// `advise`: one row per skill of each finding, with the finding's rank and saving on every row.
 pub fn advice(report: &AdviceReport) -> Result<String, CsvError> {
     let header = [
         "finding",
@@ -421,12 +541,24 @@ pub fn advice(report: &AdviceReport) -> Result<String, CsvError> {
         "tokens_measured",
         "requests",
         "detail",
+        "rank",
+        "saving_tokens",
+        "saving_usd",
+        "confidence",
     ];
+    let id = |v: serde_json::Result<serde_json::Value>| {
+        v.ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default()
+    };
     let mut rows = Vec::new();
     for f in &report.findings {
-        let kind = serde_json::to_value(f.kind)
-            .ok()
-            .and_then(|v| v.as_str().map(str::to_owned))
+        let kind = id(serde_json::to_value(f.kind));
+        let confidence = id(serde_json::to_value(f.impact.confidence));
+        let usd = f
+            .impact
+            .saving_usd
+            .map(|u| format!("{u:.6}"))
             .unwrap_or_default();
         for i in &f.items {
             rows.push(vec![
@@ -436,8 +568,55 @@ pub fn advice(report: &AdviceReport) -> Result<String, CsvError> {
                 i.tokens.measured.to_string(),
                 i.requests.to_string(),
                 i.detail.clone(),
+                f.rank.to_string(),
+                f.impact.saving.count.to_string(),
+                usd.clone(),
+                confidence.clone(),
             ]);
         }
     }
+    write(&header, rows)
+}
+
+/// `trend`: one row per figure (two per skill) with the value in the comparison window (`before`), in
+/// the current one (`after`) and the change; a missing value is an empty cell. With `normalized`
+/// windows the counts are per day.
+pub fn trend(report: &TrendReport) -> Result<String, CsvError> {
+    let header = [
+        "group",
+        "figure",
+        "skill",
+        "status",
+        "before",
+        "after",
+        "change",
+        "change_pct",
+        "measured",
+    ];
+    let num = |v: Option<f64>| v.map(|v| format!("{v:.6}")).unwrap_or_default();
+    let rows = report
+        .figures()
+        .iter()
+        .map(|r| {
+            vec![
+                r.group.to_owned(),
+                r.figure.to_owned(),
+                r.skill.map(|s| s.name.clone()).unwrap_or_default(),
+                r.skill
+                    .map(|s| {
+                        serde_json::to_value(s.status)
+                            .ok()
+                            .and_then(|v| v.as_str().map(str::to_owned))
+                            .unwrap_or_default()
+                    })
+                    .unwrap_or_default(),
+                num(r.delta.before),
+                num(r.delta.after),
+                num(r.delta.change),
+                num(r.delta.change_pct),
+                r.delta.measured.to_string(),
+            ]
+        })
+        .collect();
     write(&header, rows)
 }

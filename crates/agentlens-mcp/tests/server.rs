@@ -130,7 +130,7 @@ impl Drop for Client {
     }
 }
 
-const TOOLS: [&str; 11] = [
+const TOOLS: [&str; 12] = [
     "sources",
     "skills",
     "advice",
@@ -140,6 +140,7 @@ const TOOLS: [&str; 11] = [
     "cost",
     "efficiency",
     "compare",
+    "trend",
     "sessions",
     "timeline",
 ];
@@ -198,6 +199,23 @@ fn a_tool_returns_what_the_application_shows() {
     assert!(
         list.iter()
             .any(|s| s["source"] == "claude-code" && s["found"] == true)
+    );
+}
+
+#[test]
+fn the_efficiency_tool_carries_the_roles_table() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    let result = client.call("efficiency", json!({"sources": ["claude-code"]}));
+    assert_eq!(result["isError"], false, "{result}");
+    let roles = result["structuredContent"]["data"]["roles"]
+        .as_array()
+        .expect("roles in the efficiency result");
+    assert!(
+        roles
+            .iter()
+            .any(|r| r["role"] == "main" && r["kind"] == "main"),
+        "{roles:?}"
     );
 }
 
@@ -399,9 +417,12 @@ fn the_optimize_prompt_tells_an_agent_how_to_analyze_a_skill_setup() {
     assert!(text.contains("last 4w"), "{text}");
     for needle in [
         "`advice`",
+        "`trend`",
         "agentlens://glossary",
         "file_uses",
         "Do not change anything",
+        "ranked by what each could have saved",
+        "An `inferred` saving rests on an assumption",
     ] {
         assert!(text.contains(needle), "{needle} missing in {text}");
     }
@@ -444,4 +465,60 @@ fn the_glossary_is_a_resource() {
 
     let unknown = client.request("resources/read", json!({"uri": "agentlens://nothing"}));
     assert!(unknown.get("error").is_some(), "{unknown}");
+}
+
+#[test]
+fn the_trend_tool_compares_two_windows_and_reads_a_bad_against() {
+    // The Claude Code session of the home ran on 2026-10-02 at 09:00.
+    let home = home();
+    let mut client = Client::start(home.path());
+    let args = |against: &str| json!({"sources": ["claude-code"], "since": "2026-10-02", "until": "2026-10-03", "against": against});
+    let ok = client.call("trend", args("2026-09-01..2026-09-02"));
+    assert_eq!(ok["isError"], false, "{ok}");
+    let data = &ok["structuredContent"]["data"];
+    assert_eq!(data["windows"]["current"]["sessions"], 1, "{ok}");
+    assert_eq!(data["windows"]["against"]["sessions"], 0);
+    assert!(data["volume"]["requests"]["change"].is_null());
+    assert!(data["volume"]["requests"]["after"].as_f64().unwrap() > 0.0);
+    // The default is the window right before; no prompt or file content is in the result.
+    let default = client.call(
+        "trend",
+        json!({"sources": ["claude-code"], "since": "2026-10-02", "until": "2026-10-03"}),
+    );
+    assert_eq!(default["isError"], false, "{default}");
+    assert_eq!(
+        default["structuredContent"]["data"]["windows"]["against"]["since"],
+        "2026-10-01T00:00:00Z"
+    );
+    let text = default["structuredContent"].to_string();
+    let fixture = fs::read_to_string(fixtures().join("claude_code/context.jsonl")).unwrap();
+    for line in fixture.lines() {
+        if let Some(prompt) = serde_json::from_str::<Value>(line)
+            .ok()
+            .and_then(|v| v["message"]["content"].as_str().map(str::to_owned))
+            .filter(|p| p.len() > 8)
+        {
+            assert!(!text.contains(&prompt), "{prompt}");
+        }
+    }
+    for bad in [
+        "2026-09-01",
+        "x..y",
+        "2026-10-01..2026-10-05",
+        "2026-09-02..2026-09-01",
+    ] {
+        let r = client.call("trend", args(bad));
+        assert_eq!(r["isError"], true, "{bad}: {r}");
+        assert!(
+            r["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("against")
+                || r["content"][0]["text"]
+                    .as_str()
+                    .unwrap()
+                    .contains("overlaps"),
+            "{bad}: {r}"
+        );
+    }
 }

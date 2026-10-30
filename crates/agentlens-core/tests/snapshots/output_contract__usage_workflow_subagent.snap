@@ -10,6 +10,7 @@ description: "The agent field of a workflow subagent's usage events (compatible:
   {
     "subagent": true,
     "agent": {
+      "agent_id": "w1",
       "agent_type": "workflow-subagent",
       "description": "implement #12",
       "workflow_phase": "Implement"

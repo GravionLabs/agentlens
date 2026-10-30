@@ -705,6 +705,17 @@ fn cost_uses_the_price_file_and_marks_computed_values() {
 }
 
 #[test]
+fn session_filter_limits_cost_to_one_session_and_unknown_ids_are_empty() {
+    let home = home();
+    let all = json(agentlens(&home).args(["cost", "--format", "json"]));
+    let one = json(agentlens(&home).args(["cost", "--format", "json", "--session", "basic"]));
+    assert!(one["total"]["requests"].as_u64() < all["total"]["requests"].as_u64());
+    assert!(one["total"]["requests"].as_u64() > Some(0));
+    let none = json(agentlens(&home).args(["cost", "--format", "json", "--session", "nope"]));
+    assert_eq!(none["total"]["requests"], 0);
+}
+
+#[test]
 fn cost_lists_models_without_a_price_instead_of_guessing() {
     let home = home_with_context();
     let v = json(agentlens(&home).args(["cost", "--format", "json"]));
@@ -815,6 +826,79 @@ fn cost_can_be_grouped_by_project_branch_and_issue() {
 }
 
 #[test]
+fn cost_by_issue_falls_back_to_the_commit_message_when_the_branch_has_none() {
+    let home = tempfile::tempdir().unwrap();
+    let projects = home.path().join(".claude/projects/-work-demo");
+    fs::create_dir_all(&projects).unwrap();
+    let text = fs::read_to_string(fixtures().join("context.jsonl")).unwrap();
+    let commit = |id: &str, branch: &str| {
+        format!(
+            r#"{{"sessionId":"{id}","cwd":"/work/demo","gitBranch":"{branch}","timestamp":"2026-10-02T09:00:40Z","type":"assistant","isSidechain":false,"requestId":"r9","message":{{"id":"m9","role":"assistant","model":"claude-test-1","content":[{{"type":"tool_use","id":"t9","name":"Bash","input":{{"command":"git add a.rs && git commit -m \"feat: x (#502)\""}}}}]}}}}"#
+        )
+    };
+    let on = |id: &str, branch: &str| {
+        let body = text
+            .replace("ctx1", id)
+            .replace("\"main\"", &format!("\"{branch}\""));
+        format!("{body}{}\n", commit(id, branch))
+    };
+    fs::write(projects.join("a.jsonl"), on("ctx1", "release/next")).unwrap();
+    fs::write(projects.join("b.jsonl"), on("ctx2", "feat/42-login")).unwrap();
+    let file = price_file(&home);
+    let by = |by: &str| {
+        json(
+            agentlens(&home)
+                .args(["cost", "--format", "json", "--by", by, "--prices"])
+                .arg(&file),
+        )
+    };
+    let issues = by("issue");
+    let mut rows: Vec<(String, String)> = issues["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                r["key"].as_str().unwrap().into(),
+                r["issue_source"].as_str().unwrap().into(),
+            )
+        })
+        .collect();
+    rows.sort();
+    assert_eq!(
+        rows,
+        [
+            ("#42".into(), "branch".into()),
+            ("#502".into(), "commit".into())
+        ],
+        "a branch match wins over a commit match"
+    );
+    let sessions = by("session");
+    let mut sessions: Vec<(String, String, String)> = sessions["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| {
+            (
+                s["session"].as_str().unwrap().into(),
+                s["issue"].as_str().unwrap().into(),
+                s["issue_source"].as_str().unwrap().into(),
+            )
+        })
+        .collect();
+    sessions.sort();
+    assert_eq!(
+        sessions,
+        [
+            ("a".into(), "#502".into(), "commit".into()),
+            ("b".into(), "#42".into(), "branch".into()),
+        ]
+    );
+    let models = by("model");
+    assert!(models["rows"][0].get("issue_source").is_none());
+}
+
+#[test]
 fn efficiency_reports_cache_hit_rate_and_subagent_share() {
     let home = home_with_context();
     let file = price_file(&home);
@@ -863,10 +947,71 @@ fn efficiency_reports_cache_hit_rate_and_subagent_share() {
 }
 
 #[test]
+fn efficiency_prints_the_roles_table_and_its_csv() {
+    let home = home_with_context();
+    let file = price_file(&home);
+    agentlens(&home)
+        .args(["efficiency", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Roles"))
+        .stdout(predicate::str::contains("first request context"))
+        .stdout(predicate::str::contains("main"));
+    let out = agentlens(&home)
+        .args(["efficiency", "--format", "csv", "--section", "roles"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert!(text.starts_with("role,kind,runs,requests,requests_per_run,"));
+    assert!(
+        text.lines()
+            .nth(1)
+            .unwrap()
+            .starts_with("main,main,1,3,3.00,")
+    );
+}
+
+#[test]
+fn efficiency_csv_needs_a_section_and_sections_filter_the_text() {
+    let home = home_with_context();
+    agentlens(&home)
+        .args(["efficiency", "--format", "csv"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--format csv holds one table; choose it with --section cache|roles",
+        ));
+    agentlens(&home)
+        .args(["efficiency", "--section", "roles"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Roles"))
+        .stdout(predicate::str::contains("Cache hit rate").not());
+    agentlens(&home)
+        .args(["efficiency", "--section", "cache"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Cache hit rate"))
+        .stdout(predicate::str::contains("Roles").not());
+}
+
+#[test]
 fn efficiency_csv_and_grouping_by_project() {
     let home = home_with_context();
     let out = agentlens(&home)
-        .args(["efficiency", "--by", "project", "--format", "csv"])
+        .args([
+            "efficiency",
+            "--by",
+            "project",
+            "--format",
+            "csv",
+            "--section",
+            "cache",
+        ])
         .assert()
         .success()
         .get_output()
@@ -1520,9 +1665,17 @@ fn advise_lists_what_to_change_in_json_csv_and_a_table() {
     let text = String::from_utf8(out).unwrap();
     assert_eq!(
         text.lines().next().unwrap(),
-        "finding,skill,tokens,tokens_measured,requests,detail"
+        "finding,skill,tokens,tokens_measured,requests,detail,rank,saving_tokens,saving_usd,confidence"
     );
     assert!(text.contains("unused-skills,unused,"));
+    let unused_row = text
+        .lines()
+        .find(|l| l.starts_with("unused-skills,unused,"))
+        .unwrap();
+    assert!(
+        unused_row.ends_with(",estimated"),
+        "estimated listings give an estimated saving: {unused_row}"
+    );
 
     agentlens(&home)
         .arg("advise")
@@ -1530,7 +1683,35 @@ fn advise_lists_what_to_change_in_json_csv_and_a_table() {
         .success()
         .stdout(predicate::str::contains("Unused skills"))
         .stdout(predicate::str::contains("What to do:"))
+        .stdout(predicate::str::contains("Could save ~"))
+        .stdout(predicate::str::contains("ranked by what they could save"))
         .stdout(predicate::str::contains("~ estimated"));
+    let ranks: Vec<u64> = findings
+        .iter()
+        .map(|f| f["rank"].as_u64().unwrap())
+        .collect();
+    assert_eq!(ranks, (1..=findings.len() as u64).collect::<Vec<_>>());
+    assert!(unused["impact"]["saving"]["count"].as_u64().unwrap() > 0);
+}
+
+#[test]
+fn advise_falls_back_to_the_bundled_prices_when_the_price_file_is_broken() {
+    let home = home();
+    let file = home.path().join(".config/agentlens/prices.json");
+    fs::create_dir_all(file.parent().unwrap()).unwrap();
+    fs::write(&file, "{ nope").unwrap();
+    let out = agentlens(&home)
+        .args(["advise", "--format", "json"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning: cannot load prices"))
+        .stderr(predicate::str::contains("prices.json"))
+        .stderr(predicate::str::contains("the bundled prices are used"))
+        .get_output()
+        .stdout
+        .clone();
+    let v: Value = serde_json::from_slice(&out).expect("valid JSON on stdout");
+    assert!(!v["findings"].as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -1655,4 +1836,197 @@ fn the_binary_carries_the_marker_of_the_command_line_tools() {
     // The desktop application recognizes an old copy in ~/.local/bin by it (without running it).
     let bin = std::path::Path::new(env!("CARGO_BIN_EXE_agentlens"));
     assert!(agentlens_core::cli_tools::has_marker(bin));
+}
+
+#[test]
+fn cost_by_session_has_a_row_per_session_and_top_limits_only_the_table() {
+    let home = home();
+    let file = price_file(&home);
+    let v = json(
+        agentlens(&home)
+            .args(["cost", "--format", "json", "--by", "session", "--prices"])
+            .arg(&file),
+    );
+    let sessions = v["sessions"].as_array().unwrap();
+    assert_eq!(sessions.len(), 2);
+    for s in sessions {
+        assert_eq!(s["project"], "/work/demo");
+        assert!(s["peak_context"].as_u64().unwrap() > 0);
+    }
+    let csv = agentlens(&home)
+        .args(["cost", "--format", "csv", "--by", "session", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert_eq!(String::from_utf8(csv).unwrap().lines().count(), 3);
+    let table = agentlens(&home)
+        .args(["cost", "--by", "session", "--top", "1", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let table = String::from_utf8(table).unwrap();
+    assert!(table.contains("subagent share"), "{table}");
+    assert!(table.contains("1 more rows"), "{table}");
+}
+
+/// The `basic` session ends at 10:02, the `skills` session at 11:06 on 2026-10-01: one in each hour.
+const THIS_HOUR: [&str; 4] = [
+    "--since",
+    "2026-10-01T10:30:00Z",
+    "--until",
+    "2026-10-01T11:30:00Z",
+];
+
+#[test]
+fn trend_compares_the_period_with_the_window_before() {
+    let home = home();
+    let v = json(
+        agentlens(&home)
+            .args(["trend", "--format", "json"])
+            .args(THIS_HOUR),
+    );
+    assert_eq!(v["windows"]["normalized"], false);
+    assert_eq!(v["windows"]["current"]["sessions"], 1);
+    assert_eq!(v["windows"]["against"]["sessions"], 1);
+    let sessions = &v["volume"]["sessions"];
+    assert_eq!(
+        (&sessions["before"], &sessions["after"]),
+        (&1.0.into(), &1.0.into())
+    );
+    assert!(v["volume"]["requests"]["change"].is_number());
+    assert!(
+        v["skills"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["name"] == "demo")
+    );
+}
+
+#[test]
+fn trend_table_marks_estimates_and_missing_changes() {
+    let home = home();
+    let table = agentlens(&home)
+        .args(["trend"])
+        .args(THIS_HOUR)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let table = String::from_utf8(table).unwrap();
+    for needle in ["volume", "cost", "efficiency", "skills", "estimated_usd"] {
+        assert!(table.contains(needle), "{needle} missing:\n{table}");
+    }
+    let est = table.lines().find(|l| l.contains("estimated_usd")).unwrap();
+    assert!(est.contains('~'), "{est}");
+    assert!(!table.contains("per day"), "{table}");
+
+    // An empty comparison window: the values are there, the change is n/a.
+    let table = agentlens(&home)
+        .args(["trend", "--against", "2026-08-01..2026-08-02"])
+        .args(["--since", "2026-10-01", "--until", "2026-10-02"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let table = String::from_utf8(table).unwrap();
+    let sessions = table
+        .lines()
+        .find(|l| l.contains("volume") && l.contains(" sessions "))
+        .unwrap();
+    assert!(sessions.contains("n/a"), "{sessions}");
+    // 1 day against 1 day is not normalized; a longer period is.
+    let table = agentlens(&home)
+        .args(["trend", "--against", "2026-08-01..2026-08-02"])
+        .args(["--since", "2026-10-01", "--until", "2026-10-05"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(String::from_utf8(table).unwrap().contains("per day"));
+}
+
+#[test]
+fn trend_csv_has_one_row_per_figure() {
+    let home = home();
+    let out = agentlens(&home)
+        .args(["trend", "--format", "csv"])
+        .args(THIS_HOUR)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let csv = String::from_utf8(out).unwrap();
+    assert!(
+        csv.starts_with("group,figure,skill,status,before,after,change,change_pct,measured\n"),
+        "{csv}"
+    );
+    assert!(
+        csv.lines()
+            .any(|l| l.starts_with("volume,sessions,,,1.000000,1.000000,0.000000"))
+    );
+    assert!(csv.lines().any(|l| l.starts_with("skills,loads,demo,")));
+}
+
+#[test]
+fn trend_rejects_a_bad_against_and_overlapping_windows_with_the_message() {
+    let home = home();
+    for (against, message) in [
+        ("2026-09-01", "expected SINCE..UNTIL"),
+        ("nonsense..2026-09-01", "--against"),
+        ("2026-09-02..2026-09-01", "must be later"),
+        ("2026-09-20..2026-10-10", "overlaps"),
+    ] {
+        agentlens(&home)
+            .args(["trend", "--against", against])
+            .args(["--since", "2026-10-01", "--until", "2026-10-05"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(message))
+            .stderr(predicate::str::contains("panicked").not());
+    }
+}
+
+#[test]
+fn trend_filters_by_source_session_and_keeps_prompts_out() {
+    let home = home();
+    let none = json(
+        agentlens(&home)
+            .args(["trend", "--format", "json", "--source", "opencode"])
+            .args(THIS_HOUR),
+    );
+    assert_eq!(none["windows"]["current"]["sessions"], 0);
+    let one = json(
+        agentlens(&home)
+            .args(["trend", "--format", "json", "--session", "basic"])
+            .args(["--since", "2026-10-01", "--until", "2026-10-02"]),
+    );
+    assert_eq!(one["windows"]["current"]["sessions"], 1);
+    // Counts, names and numbers only: nothing of the conversation.
+    let raw = agentlens(&home)
+        .args(["trend", "--format", "json"])
+        .args(THIS_HOUR)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let raw = String::from_utf8(raw).unwrap();
+    let fixture = fs::read_to_string(fixtures().join("basic.jsonl")).unwrap();
+    let prompt = fixture
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .find_map(|v| v["message"]["content"].as_str().map(str::to_owned))
+        .expect("the fixture has a user prompt");
+    assert!(!raw.contains(&prompt), "{raw}");
 }

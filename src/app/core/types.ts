@@ -128,7 +128,20 @@ export interface AdviceItem {
   detail: string;
 }
 
+/** How sure the saving of a finding is; `inferred` rests on an assumption. */
+export type Confidence = "measured" | "estimated" | "inferred";
+
+/** What the finding's action could have saved in the period. */
+export interface Impact {
+  saving: Tokens;
+  /** Always an estimate (computed from the price table); null without a price or a saving. */
+  saving_usd: number | null;
+  confidence: Confidence;
+}
+
 export interface Finding {
+  /** 1 for the largest saving; the findings come in this order. */
+  rank: number;
   kind: FindingKind;
   explanation: string;
   action: string;
@@ -138,6 +151,7 @@ export interface Finding {
   share_of_total_tokens: number | null;
   items: AdviceItem[];
   notes: string[];
+  impact: Impact;
 }
 
 export interface AdviceReport {
@@ -203,6 +217,55 @@ export interface UnusedReport {
   items: UnusedItem[];
 }
 
+export interface TrendWindow {
+  since: string;
+  until: string;
+  sessions: number;
+}
+
+export interface TrendWindows {
+  current: TrendWindow;
+  /** The comparison window. */
+  against: TrendWindow;
+  /** The windows differ in length: counts are per-day values. */
+  normalized: boolean;
+}
+
+/** A figure in the comparison window (`before`) and the current one (`after`). */
+export interface Delta {
+  before: number | null;
+  after: number | null;
+  /** `null` when either window has no sessions. */
+  change: number | null;
+  /** In percent of `before`; `null` when `before` is 0. */
+  change_pct: number | null;
+  /** `false` when either value was estimated. */
+  measured: boolean;
+}
+
+export interface SkillTrend {
+  name: string;
+  status: "new" | "gone" | "both";
+  loads: Delta;
+  overhead_tokens: Delta;
+}
+
+export interface TrendReport {
+  windows: TrendWindows;
+  volume: {
+    sessions: Delta;
+    requests: Delta;
+    subagent_requests: Delta;
+    tokens: Delta;
+    context_tokens: Delta;
+    large_context_requests: Delta;
+  };
+  cost: { measured_usd: Delta; estimated_usd: Delta; unpriced_requests: Delta };
+  efficiency: { cache_hit_rate: Delta; subagent_share: Delta };
+  errors: { tool_calls: Delta; failed_calls: Delta; retry_loops: Delta };
+  skills: SkillTrend[];
+}
+
 export interface SessionGrowth {
   source: SourceId;
   session: string;
@@ -262,6 +325,9 @@ export interface FlowData {
   };
 }
 
+/** Where the issue number of a session comes from, in the order they are tried. */
+export type IssueSource = "branch" | "commit";
+
 export interface CostRow {
   key: string;
   requests: number;
@@ -273,6 +339,8 @@ export interface CostRow {
   estimated_usd: number;
   unpriced_requests: number;
   premium_requests: number;
+  /** Only when grouped by issue; the weakest source of the row's sessions. */
+  issue_source?: IssueSource;
 }
 
 export interface WhatIfRow {
@@ -283,8 +351,36 @@ export interface WhatIfRow {
   excluded_requests: number;
 }
 
+export interface SessionCost {
+  source: SourceId;
+  session: string;
+  project: string | null;
+  started_at: string | null;
+  duration_ms: number | null;
+  issue: string | null;
+  issue_source: IssueSource | null;
+  models: string[];
+  requests: number;
+  main_requests: number;
+  peak_context: number;
+  input: number;
+  cache_read: number;
+  cache_write: number;
+  output: number;
+  measured_usd: number;
+  estimated_usd: number;
+  unpriced_requests: number;
+  subagent_usd: number;
+}
+
 export interface CostData {
-  report: { rows: CostRow[]; total: CostRow; unpriced_models: Record<string, number> };
+  report: {
+    rows: CostRow[];
+    total: CostRow;
+    unpriced_models: Record<string, number>;
+    /** Only with `by: "session"`. */
+    sessions?: SessionCost[];
+  };
   what_if: { target: string; rows: WhatIfRow[]; total: WhatIfRow } | null;
 }
 
@@ -309,9 +405,32 @@ export interface SubagentShare {
   unpriced_requests: number;
 }
 
+export type RoleKind = "main" | "skill" | "workflow-phase" | "agent-type" | "unknown";
+
+export interface RoleRow {
+  role: string;
+  kind: RoleKind;
+  runs: number;
+  requests: number;
+  requests_per_run: number;
+  input: number;
+  cache_read: number;
+  cache_write: number;
+  output: number;
+  usd: number | null;
+  usd_per_run: number | null;
+  cost_measured: boolean;
+  unpriced_requests: number;
+  models: string[];
+  first_request_context: Tokens;
+  uncached_after_first: Tokens;
+  hit_rate: number | null;
+}
+
 export interface EfficiencyReport {
   cache: CacheRow[];
   subagents: SubagentShare[];
+  roles: RoleRow[];
 }
 
 export interface SourceStats {
@@ -382,7 +501,7 @@ export interface UpdateInfo {
   date: string | null;
 }
 
-export type CliToolMethod = "symlink" | "copy" | "unsupported";
+export type CliToolMethod = "symlink" | "copy" | "user_path" | "unsupported";
 export type CliToolState = "missing" | "installed" | "stale" | "foreign";
 export type CliToolAction =
   "created" | "repaired" | "kept" | "removed" | "absent" | "skipped_foreign" | "failed";
@@ -408,15 +527,20 @@ export interface ProfileLine {
 /** The state of the command line tools (answer of cli_tools_status, _install and _remove). */
 export interface CliTools {
   supported: boolean;
-  /** Whether the application should show the action (macOS and AppImage). */
+  /** Whether the application should show the action (macOS, AppImage and Windows). */
   offered: boolean;
+  /** user_path (Windows): dir is the install directory and goes on the user PATH, nothing is linked. */
   method: CliToolMethod;
   dir: string;
   created_dir: boolean;
-  /** Whether dir is on the PATH of the application process (a shell's PATH can differ). */
+  /**
+   * Whether dir is on the PATH of the application process (a shell's PATH can differ); for user_path
+   * whether it is an entry of the user PATH.
+   */
   on_path: boolean;
   profile_lines: ProfileLine[];
   tools: CliTool[];
+  /** Files in the way that AgentLens did not create; for user_path other folders on PATH with the CLI. */
   foreign: string[];
   note: string | null;
   /** Why the whole call did nothing (for example a temporary location of the application). */

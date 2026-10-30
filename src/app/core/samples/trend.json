@@ -1,0 +1,146 @@
+{
+  "schema_version": 2,
+  "data": {
+    "windows": {
+      "current": {
+        "since": "2026-10-01T00:00:00Z",
+        "until": "2026-10-15T00:00:00Z",
+        "sessions": 1
+      },
+      "against": {
+        "since": "2026-07-01T00:00:00Z",
+        "until": "2026-07-31T00:00:00Z",
+        "sessions": 1
+      },
+      "normalized": true
+    },
+    "volume": {
+      "sessions": {
+        "before": 0.03333333333333333,
+        "after": 0.07142857142857142,
+        "change": 0.03809523809523809,
+        "change_pct": 114.28571428571428,
+        "measured": true
+      },
+      "requests": {
+        "before": 0.03333333333333333,
+        "after": 0.21428571428571427,
+        "change": 0.18095238095238095,
+        "change_pct": 542.8571428571429,
+        "measured": true
+      },
+      "subagent_requests": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": true
+      },
+      "tokens": {
+        "before": 3666.6,
+        "after": 207.5,
+        "change": -3459.1,
+        "change_pct": -94.34080619647631,
+        "measured": true
+      },
+      "context_tokens": {
+        "before": 3333.3,
+        "after": 206.42857142857142,
+        "change": -3126.8714285714286,
+        "change_pct": -93.80708092795214,
+        "measured": true
+      },
+      "large_context_requests": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": true
+      }
+    },
+    "cost": {
+      "measured_usd": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": true
+      },
+      "estimated_usd": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": false
+      },
+      "unpriced_requests": {
+        "before": 0.03333333333333333,
+        "after": 0.21428571428571427,
+        "change": 0.18095238095238095,
+        "change_pct": 542.8571428571429,
+        "measured": true
+      }
+    },
+    "efficiency": {
+      "cache_hit_rate": {
+        "before": null,
+        "after": 0.3460207612456747,
+        "change": null,
+        "change_pct": null,
+        "measured": true
+      },
+      "subagent_share": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": true
+      }
+    },
+    "errors": {
+      "tool_calls": {
+        "before": 0.06666666666666667,
+        "after": 0.0,
+        "change": -0.06666666666666667,
+        "change_pct": -100.0,
+        "measured": true
+      },
+      "failed_calls": {
+        "before": 0.03333333333333333,
+        "after": 0.0,
+        "change": -0.03333333333333333,
+        "change_pct": -100.0,
+        "measured": true
+      },
+      "retry_loops": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": true
+      }
+    },
+    "skills": [
+      {
+        "name": "demo-skill",
+        "status": "gone",
+        "loads": {
+          "before": 0.03333333333333333,
+          "after": 0.0,
+          "change": -0.03333333333333333,
+          "change_pct": -100.0,
+          "measured": true
+        },
+        "overhead_tokens": {
+          "before": 0.1,
+          "after": 0.0,
+          "change": -0.1,
+          "change_pct": -100.0,
+          "measured": false
+        }
+      }
+    ]
+  },
+  "warnings": 2,
+  "errors": []
+}

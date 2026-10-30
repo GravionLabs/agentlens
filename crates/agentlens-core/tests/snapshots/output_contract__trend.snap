@@ -1,0 +1,168 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "schema_version": 2,
+  "data": {
+    "windows": {
+      "current": {
+        "since": "2026-10-01T00:00:00Z",
+        "until": "2026-10-15T00:00:00Z",
+        "sessions": 3
+      },
+      "against": {
+        "since": "2026-07-01T00:00:00Z",
+        "until": "2026-07-31T00:00:00Z",
+        "sessions": 1
+      },
+      "normalized": true
+    },
+    "volume": {
+      "sessions": {
+        "before": 0.03333333333333333,
+        "after": 0.21428571428571427,
+        "change": 0.18095238095238095,
+        "change_pct": 542.8571428571429,
+        "measured": true
+      },
+      "requests": {
+        "before": 0.03333333333333333,
+        "after": 0.7142857142857143,
+        "change": 0.680952380952381,
+        "change_pct": 2042.8571428571431,
+        "measured": true
+      },
+      "subagent_requests": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": true
+      },
+      "tokens": {
+        "before": 3666.6,
+        "after": 265.0,
+        "change": -3401.6,
+        "change_pct": -92.77259586537937,
+        "measured": true
+      },
+      "context_tokens": {
+        "before": 3333.3,
+        "after": 261.42857142857144,
+        "change": -3071.8714285714286,
+        "change_pct": -92.15706442778713,
+        "measured": true
+      },
+      "large_context_requests": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": true
+      }
+    },
+    "cost": {
+      "measured_usd": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": true
+      },
+      "estimated_usd": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": false
+      },
+      "unpriced_requests": {
+        "before": 0.03333333333333333,
+        "after": 0.7142857142857143,
+        "change": 0.680952380952381,
+        "change_pct": 2042.8571428571431,
+        "measured": true
+      }
+    },
+    "efficiency": {
+      "cache_hit_rate": {
+        "before": null,
+        "after": 0.4644808743169399,
+        "change": null,
+        "change_pct": null,
+        "measured": true
+      },
+      "subagent_share": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": true
+      }
+    },
+    "errors": {
+      "tool_calls": {
+        "before": 0.06666666666666667,
+        "after": 0.42857142857142855,
+        "change": 0.3619047619047619,
+        "change_pct": 542.8571428571429,
+        "measured": true
+      },
+      "failed_calls": {
+        "before": 0.03333333333333333,
+        "after": 0.0,
+        "change": -0.03333333333333333,
+        "change_pct": -100.0,
+        "measured": true
+      },
+      "retry_loops": {
+        "before": 0.0,
+        "after": 0.0,
+        "change": 0.0,
+        "change_pct": null,
+        "measured": true
+      }
+    },
+    "skills": [
+      {
+        "name": "cliff-setup",
+        "status": "new",
+        "loads": {
+          "before": 0.0,
+          "after": 0.07142857142857142,
+          "change": 0.07142857142857142,
+          "change_pct": null,
+          "measured": true
+        },
+        "overhead_tokens": {
+          "before": 0.0,
+          "after": 12.857142857142858,
+          "change": 12.857142857142858,
+          "change_pct": null,
+          "measured": false
+        }
+      },
+      {
+        "name": "demo-skill",
+        "status": "gone",
+        "loads": {
+          "before": 0.03333333333333333,
+          "after": 0.0,
+          "change": -0.03333333333333333,
+          "change_pct": -100.0,
+          "measured": true
+        },
+        "overhead_tokens": {
+          "before": 0.1,
+          "after": 0.0,
+          "change": -0.1,
+          "change_pct": -100.0,
+          "measured": false
+        }
+      }
+    ]
+  },
+  "warnings": 2,
+  "errors": []
+}

@@ -112,6 +112,10 @@ fn the_json_of_every_analysis_keeps_its_shape() {
         text(&home, &api::cost(&ctx, &all(), "model", None).unwrap()),
     );
     snap(
+        "cost_by_session",
+        text(&home, &api::cost(&ctx, &all(), "session", None).unwrap()),
+    );
+    snap(
         "cost_what_if",
         text(
             &home,
@@ -123,6 +127,27 @@ fn the_json_of_every_analysis_keeps_its_shape() {
         text(&home, &api::efficiency(&ctx, &all(), "source").unwrap()),
     );
     snap("compare", text(&home, &api::compare(&ctx, &all()).unwrap()));
+    snap(
+        "trend",
+        text(
+            &home,
+            // Fixed windows of different length (14 and 30 days), so that the snapshot shows
+            // the per-day values and nothing depends on today's date.
+            &api::trend(
+                &ctx,
+                &Filters {
+                    since: Some("2026-10-01".into()),
+                    until: Some("2026-10-15".into()),
+                    ..Filters::default()
+                },
+                Some((
+                    "2026-07-01T00:00:00Z".parse().unwrap(),
+                    "2026-07-31T00:00:00Z".parse().unwrap(),
+                )),
+            )
+            .unwrap(),
+        ),
+    );
     snap(
         "sessions",
         text(&home, &api::sessions(&ctx, &all()).unwrap()),

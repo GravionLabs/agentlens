@@ -9,9 +9,10 @@ import { Ipc } from "../../core/ipc";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { tokenFormat } from "../../core/token-format.service";
 import type { Finding } from "../../core/types";
-import { Advice, findingTitle, findingTotal, itemView } from "./advice";
+import { Advice, findingSaving, findingTitle, findingTotal, itemView } from "./advice";
 
 const finding = (over: Partial<Finding>): Finding => ({
+  rank: 1,
   kind: "unused-skills",
   explanation: "",
   action: "",
@@ -21,6 +22,11 @@ const finding = (over: Partial<Finding>): Finding => ({
   share_of_total_tokens: null,
   items: [],
   notes: [],
+  impact: {
+    saving: { count: 12_235_734, measured: false },
+    saving_usd: 1.5,
+    confidence: "estimated",
+  },
   ...over,
 });
 
@@ -56,6 +62,48 @@ describe("findings", () => {
       ),
     ).toBe("Together they cost 9 tokens, 0.00% of all tokens.");
     expect(findingTotal(finding({ total: null }))).toBeNull();
+  });
+});
+
+describe("finding savings", () => {
+  it("give the USD saving with a tilde, the tokens and the confidence", () => {
+    expect(findingSaving(finding({}))).toBe("Could save ~$1.50 (~12,235,734 tokens, estimated).");
+    expect(
+      findingSaving(
+        finding({
+          impact: {
+            saving: { count: 400, measured: true },
+            saving_usd: 0.004,
+            confidence: "measured",
+          },
+        }),
+      ),
+    ).toBe("Could save ~$0.00 (400 tokens, measured).");
+  });
+
+  it("say when no price is known, and nothing without a saving", () => {
+    expect(
+      findingSaving(
+        finding({
+          impact: {
+            saving: { count: 9, measured: false },
+            saving_usd: null,
+            confidence: "inferred",
+          },
+        }),
+      ),
+    ).toBe("Could save ~9 tokens (inferred; no price known).");
+    expect(
+      findingSaving(
+        finding({
+          impact: {
+            saving: { count: 0, measured: true },
+            saving_usd: null,
+            confidence: "measured",
+          },
+        }),
+      ),
+    ).toBeNull();
   });
 });
 
@@ -162,6 +210,43 @@ describe("Advice table on helix", () => {
       detail: "",
     });
     expect(v).toMatchObject({ tokens: 5, tokensText: "~5", estimated: true });
+  });
+
+  it("keeps the server order and shows rank and saving", async () => {
+    payload = {
+      ...(payload as object),
+      findings: [
+        finding({ rank: 1, kind: "context-size" }),
+        finding({
+          rank: 2,
+          kind: "unused-skills",
+          impact: { saving: { count: 5, measured: true }, saving_usd: 9, confidence: "measured" },
+        }),
+        finding({
+          rank: 3,
+          kind: "large-context",
+          impact: {
+            saving: { count: 0, measured: true },
+            saving_usd: null,
+            confidence: "measured",
+          },
+        }),
+      ],
+    };
+    const { el } = await render();
+    const titles = [...el.querySelectorAll("h3")].map((h) =>
+      h.textContent!.replace(/\s+/g, " ").trim(),
+    );
+    expect(titles).toEqual([
+      "1. Context size (2)",
+      "2. Unused skills (2)",
+      "3. Work on a large context (2)",
+    ]);
+    const savings = [...el.querySelectorAll(".saving")].map((p) => p.textContent!.trim());
+    expect(savings).toEqual([
+      "Could save ~$1.50 (~12,235,734 tokens, estimated).",
+      "Could save ~$9.00 (5 tokens, measured).",
+    ]);
   });
 
   it("links the Tokens and Requests headers to their glossary entries", async () => {

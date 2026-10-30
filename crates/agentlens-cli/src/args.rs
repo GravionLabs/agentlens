@@ -1,5 +1,5 @@
 use agentlens_core::adapter::SessionFilter;
-use agentlens_core::api::{DEFAULT_UNUSED_DAYS, Filters};
+use agentlens_core::api::{DEFAULT_PERIOD_DAYS, Filters};
 use agentlens_core::model::Source;
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -27,6 +27,10 @@ pub struct Cli {
     /// Only sessions that ran in this project directory (or below it)
     #[arg(long, global = true, value_name = "DIR")]
     pub project: Option<std::path::PathBuf>,
+
+    /// Only the session with this id (repeatable); the id of Claude Code's `session_id` or OpenCode's session
+    #[arg(long, global = true, value_name = "ID")]
+    pub session: Vec<String>,
 
     /// OpenTelemetry export (OTLP JSON lines of Claude Code logs) to analyze as well (repeatable)
     #[arg(long, global = true, value_name = "FILE")]
@@ -81,9 +85,22 @@ pub enum Command {
         /// Rows per table (0 shows all); JSON and CSV always contain everything
         #[arg(long, default_value_t = 25)]
         top: usize,
+        /// Only sessions that started a run of this role (repeatable): the key of the efficiency roles table (forked skill, workflow phase or agent type)
+        #[arg(long, value_name = "ROLE")]
+        role: Vec<String>,
     },
     /// Compare the clients side by side over the same period
-    Compare,
+    Compare {
+        /// Only sessions that started a run of this role (repeatable): the key of the efficiency roles table (forked skill, workflow phase or agent type)
+        #[arg(long, value_name = "ROLE")]
+        role: Vec<String>,
+    },
+    /// Show the period next to the one before it, with the change of every figure
+    Trend {
+        /// The comparison window as SINCE..UNTIL (each in the forms of --since); default: the window of the same length right before the period
+        #[arg(long, value_name = "SINCE..UNTIL")]
+        against: Option<String>,
+    },
     /// Show cache hit rate and the share of work done by subagents
     Efficiency {
         /// Group the cache table by session, project or source
@@ -95,10 +112,16 @@ pub enum Command {
         /// Price file that overrides or extends the bundled prices (used for the cost share)
         #[arg(long, value_name = "FILE")]
         prices: Option<std::path::PathBuf>,
+        /// Which section to show; `--format csv` needs `cache` or `roles`
+        #[arg(long, value_enum, default_value_t = EfficiencySection::All)]
+        section: EfficiencySection,
+        /// Only sessions that started a run of this role (repeatable): the key of the efficiency roles table (forked skill, workflow phase or agent type)
+        #[arg(long, value_name = "ROLE")]
+        role: Vec<String>,
     },
     /// Show what the sessions cost
     Cost {
-        /// Group the cost by model, project, git branch or issue number (parsed from the branch name)
+        /// Group the cost by model, project, git branch, issue number (from the branch name, else from the session's commit messages) or session
         #[arg(long, value_enum, default_value_t = CostBy::Model)]
         by: CostBy,
         /// Price file that overrides or extends the bundled prices
@@ -107,11 +130,17 @@ pub enum Command {
         /// Recompute the usage with the prices of this model (id prefix) and compare
         #[arg(long, value_name = "MODEL")]
         what_if: Option<String>,
+        /// Rows of the session table with --by session (0 shows all); JSON and CSV always contain everything
+        #[arg(long, default_value_t = 25)]
+        top: usize,
+        /// Only sessions that started a run of this role (repeatable): the key of the efficiency roles table (forked skill, workflow phase or agent type)
+        #[arg(long, value_name = "ROLE")]
+        role: Vec<String>,
     },
     /// List installed skills, agents and MCP servers that were not used
     Unused {
         /// Length of the period to look at (ignored if --since is given; counted back from --until if set)
-        #[arg(long, value_name = "DAYS", default_value_t = DEFAULT_UNUSED_DAYS)]
+        #[arg(long, value_name = "DAYS", default_value_t = DEFAULT_PERIOD_DAYS)]
         days: u32,
         /// Also list items that were used
         #[arg(long)]
@@ -166,11 +195,19 @@ pub enum EfficiencyBy {
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EfficiencySection {
+    All,
+    Cache,
+    Roles,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CostBy {
     Model,
     Project,
     Branch,
     Issue,
+    Session,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -211,6 +248,9 @@ impl Cli {
             until: self.until.clone(),
             sources: self.source.iter().map(|s| s.id().to_owned()).collect(),
             project: self.project.clone(),
+            session: self.session.clone(),
+            // `--role` belongs to four commands and is passed to them directly.
+            roles: Vec::new(),
         }
     }
 

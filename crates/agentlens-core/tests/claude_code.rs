@@ -202,6 +202,37 @@ fn skills_by_tool_call_slash_command_and_builtin() {
 }
 
 #[test]
+fn session_filter_reads_only_the_named_session_with_its_subagents() {
+    let home = TempHome::new();
+    home.copy_fixture("claude_code/basic.jsonl", &format!("{SLUG}/basic.jsonl"));
+    home.copy_fixture(
+        "claude_code/main_with_subagent.jsonl",
+        &format!("{SLUG}/main.jsonl"),
+    );
+    home.copy_fixture(
+        "claude_code/subagent.jsonl",
+        &format!("{SLUG}/main/subagents/agent-1.jsonl"),
+    );
+    let env = home.env();
+    let read = |ids: &[&str]| -> Vec<SessionEvents> {
+        let filter = SessionFilter {
+            session: ids.iter().map(|s| (*s).to_owned()).collect(),
+            ..SessionFilter::default()
+        };
+        ClaudeCodeAdapter
+            .sessions(&env, &filter)
+            .map(|r| r.unwrap())
+            .collect()
+    };
+    let one = read(&["main"]);
+    assert_eq!(one.len(), 1);
+    assert_eq!(one[0].session.id, "main");
+    assert_eq!(usages(&one[0]).iter().filter(|u| u.subagent).count(), 1);
+    assert_eq!(read(&["main", "basic"]).len(), 2);
+    assert!(read(&["unknown"]).is_empty());
+}
+
+#[test]
 fn subagent_transcripts_are_merged_and_flagged() {
     let home = TempHome::new();
     home.copy_fixture(
@@ -437,5 +468,274 @@ fn malformed_meta_is_ignored() {
     let se = read_all(&home).remove(0);
     let u = usages(&se);
     assert_eq!(u.iter().filter(|u| u.subagent).count(), 1);
-    assert!(u.iter().all(|u| u.agent.is_none()));
+    // Only the run id is known; the type, description and phase are not.
+    assert!(u.iter().filter(|u| !u.subagent).all(|u| u.agent.is_none()));
+}
+
+struct Run {
+    id: String,
+    parent: Option<String>,
+    tool_use: Option<String>,
+    agent_type: Option<String>,
+    name: Option<String>,
+    model: Option<String>,
+    depth: Option<u32>,
+    started: String,
+    ended: Option<String>,
+}
+
+fn runs(se: &SessionEvents) -> Vec<Run> {
+    let mut v: Vec<Run> = se
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::AgentRun {
+                agent_id,
+                parent_agent_id,
+                tool_use_id,
+                agent_type,
+                name,
+                model,
+                depth,
+                started_at,
+                ended_at,
+                ..
+            } => Some(Run {
+                id: agent_id.clone(),
+                parent: parent_agent_id.clone(),
+                tool_use: tool_use_id.clone(),
+                agent_type: agent_type.clone(),
+                name: name.clone(),
+                model: model.clone(),
+                depth: *depth,
+                started: started_at.to_string(),
+                ended: ended_at.map(|t| t.to_string()),
+            }),
+            _ => None,
+        })
+        .collect();
+    v.sort_by(|a, b| a.id.cmp(&b.id));
+    v
+}
+
+fn session_with(subs: &[(&str, Option<&str>)]) -> TempHome {
+    let home = TempHome::new();
+    add_session(&home, "main", subs);
+    home
+}
+
+/// Adds a session `name` with the given subagents (path stem, optional meta fixture).
+fn add_session(home: &TempHome, name: &str, subs: &[(&str, Option<&str>)]) {
+    home.copy_fixture(
+        "claude_code/main_with_subagent.jsonl",
+        &format!("{SLUG}/{name}.jsonl"),
+    );
+    for (path, meta) in subs {
+        home.copy_fixture(
+            "claude_code/subagent.jsonl",
+            &format!("{SLUG}/{name}/subagents/{path}.jsonl"),
+        );
+        if let Some(meta) = meta {
+            home.copy_fixture(meta, &format!("{SLUG}/{name}/subagents/{path}.meta.json"));
+        }
+    }
+}
+
+#[test]
+fn depth_one_run_carries_its_caller_and_times() {
+    let home = session_with(&[("agent-a1", Some("claude_code/agent_depth1.meta.json"))]);
+    let se = read_all(&home).remove(0);
+    let r = runs(&se);
+    assert_eq!(r.len(), 1);
+    assert_eq!(r[0].id, "a1");
+    assert_eq!(r[0].parent, None);
+    assert_eq!(r[0].depth, Some(1));
+    assert_eq!(r[0].tool_use.as_deref(), Some("toolu_01"));
+    assert_eq!(r[0].agent_type.as_deref(), Some("general-purpose"));
+    assert_eq!(r[0].model.as_deref(), Some("claude-sonnet-4-5"));
+    assert_eq!(r[0].started, "2026-10-01T12:00:05Z");
+    assert_eq!(r[0].ended.as_deref(), Some("2026-10-01T12:00:07Z"));
+    // Requests of the run are charged to it; main-session requests are not.
+    let u = usages(&se);
+    let sub: Vec<_> = u.iter().filter(|u| u.subagent).collect();
+    assert_eq!(sub.len(), 1);
+    assert_eq!(
+        sub[0].agent.as_ref().and_then(|a| a.agent_id.as_deref()),
+        Some("a1")
+    );
+    assert!(u.iter().filter(|u| !u.subagent).all(|u| u.agent.is_none()));
+    assert!(se.warnings.is_empty());
+}
+
+#[test]
+fn depth_two_run_names_its_parent() {
+    let home = session_with(&[("agent-a2", Some("claude_code/agent_depth2.meta.json"))]);
+    let r = runs(&read_all(&home).remove(0));
+    assert_eq!(r[0].parent.as_deref(), Some("parent-1"));
+    assert_eq!(r[0].depth, Some(2));
+    assert_eq!(r[0].tool_use.as_deref(), Some("toolu_02"));
+}
+
+#[test]
+fn forked_skill_run_keeps_its_name() {
+    let home = session_with(&[("agent-a3", Some("claude_code/agent_forked_skill.meta.json"))]);
+    let r = runs(&read_all(&home).remove(0));
+    assert_eq!(r[0].name.as_deref(), Some("review"));
+    assert_eq!(r[0].depth, Some(1));
+    assert_eq!(r[0].parent, None);
+}
+
+#[test]
+fn old_meta_directly_in_subagents_is_depth_one() {
+    let home = session_with(&[("agent-a4", Some("claude_code/agent_old.meta.json"))]);
+    let r = runs(&read_all(&home).remove(0));
+    assert_eq!(r[0].depth, Some(1));
+    assert_eq!(r[0].parent, None);
+    assert_eq!(r[0].agent_type.as_deref(), Some("Explore"));
+}
+
+#[test]
+fn workflow_run_is_a_node_above_its_subagents() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/main_with_subagent.jsonl",
+        &format!("{SLUG}/main.jsonl"),
+    );
+    for id in ["w1", "w2"] {
+        home.copy_fixture(
+            "claude_code/subagent.jsonl",
+            &format!("{SLUG}/main/subagents/workflows/run-1/agent-{id}.jsonl"),
+        );
+        home.copy_fixture(
+            "claude_code/workflow_subagent.meta.json",
+            &format!("{SLUG}/main/subagents/workflows/run-1/agent-{id}.meta.json"),
+        );
+    }
+    let r = runs(&read_all(&home).remove(0));
+    assert_eq!(
+        r.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
+        ["run-1", "w1", "w2"]
+    );
+    assert_eq!(r[0].agent_type.as_deref(), Some("workflow"));
+    assert_eq!((r[0].depth, r[0].parent.clone()), (Some(1), None));
+    assert_eq!(r[0].started, "2026-10-01T12:00:05Z");
+    assert_eq!(r[0].ended.as_deref(), Some("2026-10-01T12:00:07Z"));
+    for sub in &r[1..] {
+        assert_eq!(sub.depth, Some(2));
+        assert_eq!(sub.parent.as_deref(), Some("run-1"));
+        assert_eq!(sub.agent_type.as_deref(), Some("workflow-subagent"));
+    }
+}
+
+#[test]
+fn missing_meta_leaves_the_caller_unknown_and_summarizes_once() {
+    let home = session_with(&[("agent-a5", None)]);
+    let se = read_all(&home).remove(0);
+    let r = runs(&se);
+    assert_eq!((r[0].depth, r[0].parent.clone()), (None, None));
+    assert_eq!(se.warnings.len(), 1);
+    assert_eq!(
+        se.warnings[0].message,
+        "1 subagent transcripts have no meta file (older Claude Code); their runs have no caller or depth"
+    );
+    assert_eq!(usages(&se).iter().filter(|u| u.subagent).count(), 1);
+}
+
+#[test]
+fn three_missing_metas_give_one_summary_warning_naming_three() {
+    let home = session_with(&[("agent-b1", None), ("agent-b2", None), ("agent-b3", None)]);
+    let se = read_all(&home).remove(0);
+    assert_eq!(se.warnings.len(), 1);
+    assert!(
+        se.warnings[0]
+            .message
+            .starts_with("3 subagent transcripts have no meta file")
+    );
+}
+
+#[test]
+fn missing_metas_across_sessions_give_one_summary_for_the_whole_scan() {
+    let home = TempHome::new();
+    add_session(&home, "first", &[("agent-d1", None), ("agent-d2", None)]);
+    add_session(
+        &home,
+        "second",
+        &[
+            ("agent-d3", None),
+            ("agent-d4", Some("claude_code/agent_depth1.meta.json")),
+        ],
+    );
+    add_session(&home, "third", &[("agent-d5", None)]);
+    let sessions = read_all(&home);
+    assert_eq!(sessions.len(), 3);
+    let warnings: Vec<&str> = sessions
+        .iter()
+        .flat_map(|se| se.warnings.iter().map(|w| w.message.as_str()))
+        .collect();
+    assert_eq!(
+        warnings,
+        [
+            "4 subagent transcripts have no meta file (older Claude Code); their runs have no caller or depth"
+        ]
+    );
+}
+
+#[test]
+fn complete_metas_give_no_meta_warning() {
+    let home = session_with(&[("agent-c1", Some("claude_code/agent_depth1.meta.json"))]);
+    assert!(read_all(&home).remove(0).warnings.is_empty());
+}
+
+#[test]
+fn unreadable_meta_warns_per_file_and_the_scan_goes_on() {
+    let home = session_with(&[("agent-a6", Some("claude_code/basic.jsonl"))]);
+    let se = read_all(&home).remove(0);
+    let r = runs(&se);
+    assert_eq!((r[0].depth, r[0].parent.clone()), (None, None));
+    assert_eq!(se.warnings.len(), 1);
+    assert_eq!(
+        se.warnings[0].location.as_deref(),
+        Some("agent-a6.meta.json")
+    );
+    assert_eq!(usages(&se).len(), 3);
+}
+
+#[test]
+fn efficiency_roles_cover_skill_phase_type_and_main() {
+    use agentlens_core::analyzers::efficiency::{CacheBy, RoleKind, analyze};
+    use agentlens_core::prices::PriceTable;
+
+    let home = session_with(&[
+        ("agent-a1", Some("claude_code/agent_depth1.meta.json")),
+        ("agent-a3", Some("claude_code/agent_forked_skill.meta.json")),
+        (
+            "workflows/run-1/agent-w1",
+            Some("claude_code/workflow_subagent.meta.json"),
+        ),
+    ]);
+    let report = analyze(&read_all(&home), &PriceTable::bundled(), CacheBy::Source);
+    let roles: Vec<(&str, RoleKind, u64)> = report
+        .roles
+        .iter()
+        .map(|r| (r.role.as_str(), r.kind, r.runs))
+        .collect();
+    for want in [
+        ("main", RoleKind::Main, 1),
+        ("review", RoleKind::Skill, 1),
+        ("Implement", RoleKind::WorkflowPhase, 1),
+        ("general-purpose", RoleKind::AgentType, 1),
+    ] {
+        assert!(roles.contains(&want), "{want:?} missing in {roles:?}");
+    }
+    // The workflow container made no request but is a run of its own.
+    assert_eq!(roles.len(), 5, "{roles:?}");
+    let container = report.roles.iter().find(|r| r.role == "workflow").unwrap();
+    assert_eq!((container.runs, container.requests), (1, 0));
+    assert_eq!(container.usd, None);
+    let skill = report.roles.iter().find(|r| r.role == "review").unwrap();
+    // The subagent fixture request: 10 input + 100 cache read + 200 cache write.
+    assert_eq!(skill.requests, 1);
+    assert_eq!(skill.first_request_context.count, 310);
+    assert_eq!(skill.uncached_after_first.count, 0);
+    assert!(skill.first_request_context.measured);
 }

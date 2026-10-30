@@ -2,7 +2,7 @@
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { TestBed } from "@angular/core/testing";
 import { By } from "@angular/platform-browser";
-import { HxSelect } from "@gravionlabs/helix-ui";
+import { HxDateTimeRangePicker, HxSelect } from "@gravionlabs/helix-ui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FiltersService } from "../core/filters.service";
 import { FilterBar } from "./filter-bar";
@@ -77,10 +77,67 @@ describe("FilterBar", () => {
     expect(filters.project()).toBe("/work/demo");
   });
 
-  it("renders no custom window until it is wired to the filters (#337)", async () => {
+  it("shows no custom inputs for a preset", async () => {
     const { el } = await render();
     expect(el.querySelector("hx-date-time-range-picker")).toBeNull();
-    expect(el.querySelector("#filter-window")).toBeNull();
+    expect(el.querySelector("#filter-last")).toBeNull();
+  });
+
+  async function chooseCustom(ctx: Awaited<ReturnType<typeof render>>) {
+    ctx.el.querySelector<HTMLElement>("#filter-period")!.click();
+    ctx.fixture.detectChanges();
+    await ctx.fixture.whenStable();
+    [...overlay().querySelectorAll<HTMLElement>('[role="option"]')]
+      .find((o) => o.textContent!.includes("Custom"))!
+      .click();
+    ctx.fixture.detectChanges();
+    await ctx.fixture.whenStable();
+  }
+
+  it("opens the number input and the date range with Custom and keeps the filter", async () => {
+    const ctx = await render();
+    await chooseCustom(ctx);
+    expect(ctx.el.querySelector("#filter-last")).not.toBeNull();
+    expect(ctx.el.querySelector("hx-date-time-range-picker")).not.toBeNull();
+    expect(ctx.filters.since()).toBe("30d");
+  });
+
+  it("applies a valid last N and shows an error for zero without sending it", async () => {
+    const ctx = await render();
+    await chooseCustom(ctx);
+    const input = ctx.el.querySelector<HTMLInputElement>("#filter-last")!;
+    input.value = "6";
+    input.dispatchEvent(new Event("change"));
+    ctx.fixture.detectChanges();
+    expect(ctx.filters.last()).toEqual({ last: 6, unit: "d" });
+    input.value = "0";
+    input.dispatchEvent(new Event("change"));
+    ctx.fixture.detectChanges();
+    expect(ctx.el.querySelector('[role="alert"]')!.textContent).toContain("greater than zero");
+    expect(ctx.filters.last()).toEqual({ last: 6, unit: "d" });
+  });
+
+  it("shows an error when the end is before the start and keeps the last valid range", async () => {
+    const ctx = await render();
+    await chooseCustom(ctx);
+    const picker = ctx.fixture.debugElement.query(By.directive(HxDateTimeRangePicker))
+      .componentInstance as HxDateTimeRangePicker;
+    picker.value.set({
+      from: new Date("2026-10-01T00:00:00Z"),
+      to: new Date("2026-10-08T00:00:00Z"),
+    });
+    ctx.fixture.detectChanges();
+    expect(ctx.filters.range()).toEqual({
+      from: "2026-10-01T00:00:00.000Z",
+      to: "2026-10-08T00:00:00.000Z",
+    });
+    picker.value.set({
+      from: new Date("2026-10-09T00:00:00Z"),
+      to: new Date("2026-10-02T00:00:00Z"),
+    });
+    ctx.fixture.detectChanges();
+    expect(ctx.el.querySelector('[role="alert"]')!.textContent).toContain("after the start");
+    expect(ctx.filters.range()!.from).toBe("2026-10-01T00:00:00.000Z");
   });
 
   it("selects several sources and clears them with the clear button", async () => {

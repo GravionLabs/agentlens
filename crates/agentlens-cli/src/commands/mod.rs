@@ -10,6 +10,7 @@ mod mcp_setup;
 mod report;
 mod scan;
 mod skills;
+mod trend;
 mod unused;
 
 use agentlens_core::adapters::registry_with_otel;
@@ -23,6 +24,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Env::from_system().context("cannot determine the home directory (HOME or USERPROFILE)")?;
     let registry = registry_with_otel(cli.otel.clone());
     let filter = cli.filter()?;
+    let filters = cli.filters();
     let display = crate::output::Display {
         format: cli.format,
         rounded: cli.rounded,
@@ -50,7 +52,13 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Scan => scan::run(&registry, &env, &filter, &cli.source, display),
         Command::Skills => skills::run(&registry, &env, &filter, &cli.source, est, display),
         Command::Advise => advise::run(&registry, &env, &filter, &cli.source, est, display),
-        Command::Compare => compare::run(&registry, &env, &filter, &cli.source, est, display),
+        Command::Compare { role } => {
+            compare::run(&registry, &env, &filter, &cli.source, &role, est, display)
+        }
+        Command::Trend { against } => {
+            let ctx = agentlens_core::api::Context { env, registry };
+            trend::run(&ctx, &filters, against.as_deref(), display)
+        }
         Command::Context { kind } => {
             context::run(&registry, &env, &filter, &cli.source, est, kind, display)
         }
@@ -58,33 +66,52 @@ pub fn run(cli: Cli) -> Result<()> {
             by,
             prices,
             what_if,
+            top,
+            role,
         } => cost::run(
             &registry,
             &env,
             &filter,
             &cli.source,
+            &role,
             cost::Params {
                 price_file: prices.as_deref(),
                 by,
                 what_if: what_if.as_deref(),
-            },
-            display,
-        ),
-        Command::Efficiency { by, top, prices } => efficiency::run(
-            &registry,
-            &env,
-            &filter,
-            &cli.source,
-            efficiency::Params {
-                price_file: prices.as_deref(),
-                by,
                 top,
             },
             display,
         ),
-        Command::Flow { section, top } => {
-            flow::run(&registry, &env, &filter, &cli.source, section, top, display)
-        }
+        Command::Efficiency {
+            by,
+            top,
+            prices,
+            section,
+            role,
+        } => efficiency::run(
+            &registry,
+            &env,
+            &filter,
+            &cli.source,
+            &role,
+            efficiency::Params {
+                price_file: prices.as_deref(),
+                by,
+                top,
+                section,
+            },
+            display,
+        ),
+        Command::Flow { section, top, role } => flow::run(
+            &registry,
+            &env,
+            &filter,
+            &cli.source,
+            &role,
+            section,
+            top,
+            display,
+        ),
         Command::Unused { days, all } => {
             // The period ends at --until, or now.
             let filter =

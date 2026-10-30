@@ -5,7 +5,7 @@
 //! The format is not documented; the parser only relies on a handful of fields
 //! and skips everything it does not understand.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -14,6 +14,7 @@ use jiff::Timestamp;
 use serde_json::Value;
 
 use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
+use crate::commit::commit_issue;
 use crate::env::Env;
 use crate::model::{
     AgentInfo, ContextItem, ContextKind, Event, EventKind, Session, SessionEvents, SkillInvoked,
@@ -94,23 +95,39 @@ impl Adapter for ClaudeCodeAdapter {
             Ok(files) => files,
             Err(e) => return Box::new(std::iter::once(Err(e))),
         };
+        // One summary for the whole scan, counted over the sessions that were kept.
+        let parsed = dedupe(parse_all(&files));
+        let missing: usize = parsed
+            .iter()
+            .filter_map(|r| r.as_ref().ok())
+            .map(|(_, m)| m)
+            .sum();
+        let mut results: Vec<Result<SessionEvents, AdapterError>> =
+            parsed.into_iter().map(|r| r.map(|(se, _)| se)).collect();
+        if missing > 0
+            && let Some(Ok(se)) = results.iter_mut().find(|r| r.is_ok())
+        {
+            se.warnings.push(Warning::new(format!(
+                "{missing} subagent transcripts have no meta file (older Claude Code); their runs have no caller or depth"
+            )));
+        }
         Box::new(
-            dedupe(parse_all(&files))
+            results
                 .into_iter()
                 .filter(|r| !matches!(r, Ok(se) if se.events.is_empty() && se.warnings.is_empty())),
         )
     }
 }
 
+type Parsed = Result<(SessionEvents, usize), AdapterError>;
+
 /// The same session can sit under two project directories (a moved or renamed
 /// project, a resumed session). It is one session: the copy with the most events
 /// is kept (the first one on a tie).
-fn dedupe(
-    results: Vec<Result<SessionEvents, AdapterError>>,
-) -> Vec<Result<SessionEvents, AdapterError>> {
+fn dedupe(results: Vec<Parsed>) -> Vec<Parsed> {
     let mut best: HashMap<String, (usize, usize)> = HashMap::new();
     for (i, r) in results.iter().enumerate() {
-        if let Ok(se) = r {
+        if let Ok((se, _)) = r {
             let events = se.events.len();
             let entry = best.entry(se.session.id.clone()).or_insert((i, events));
             if events > entry.1 {
@@ -122,7 +139,7 @@ fn dedupe(
         .into_iter()
         .enumerate()
         .filter(|(i, r)| match r {
-            Ok(se) => best[&se.session.id].0 == *i,
+            Ok((se, _)) => best[&se.session.id].0 == *i,
             Err(_) => true,
         })
         .map(|(_, r)| r)
@@ -130,7 +147,7 @@ fn dedupe(
 }
 
 /// Parses the session files on all cores; the order of `files` is kept.
-fn parse_all(files: &[SessionFile]) -> Vec<Result<SessionEvents, AdapterError>> {
+fn parse_all(files: &[SessionFile]) -> Vec<Parsed> {
     let workers = std::thread::available_parallelism()
         .map_or(1, |n| n.get())
         .min(files.len().max(1));
@@ -141,8 +158,7 @@ fn parse_all(files: &[SessionFile]) -> Vec<Result<SessionEvents, AdapterError>> 
             .collect();
     }
     let next = std::sync::atomic::AtomicUsize::new(0);
-    let mut slots: Vec<Option<Result<SessionEvents, AdapterError>>> =
-        (0..files.len()).map(|_| None).collect();
+    let mut slots: Vec<Option<Parsed>> = (0..files.len()).map(|_| None).collect();
     let results = std::sync::Mutex::new(&mut slots);
     std::thread::scope(|scope| {
         for _ in 0..workers {
@@ -190,16 +206,69 @@ fn subagent_files(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// Reads `agent-<id>.meta.json` next to a subagent transcript, if any.
-fn read_agent_meta(path: &Path) -> Option<AgentInfo> {
-    let text = fs::read_to_string(path.with_extension("meta.json")).ok()?;
-    let v: Value = serde_json::from_str(&text).ok()?;
-    let info = AgentInfo {
-        agent_type: str_of(&v, "agentType").map(str::to_owned),
-        description: str_of(&v, "description").map(str::to_owned),
-        workflow_phase: str_of(&v, "workflowPhase").map(str::to_owned),
-    };
-    (info != AgentInfo::default()).then_some(info)
+/// The keys of `agent-<id>.meta.json` that are read; nothing else (never `worktreePath` or prompts).
+#[derive(Default)]
+struct AgentMeta {
+    agent_type: Option<String>,
+    name: Option<String>,
+    description: Option<String>,
+    model: Option<String>,
+    parent_agent_id: Option<String>,
+    spawn_depth: Option<u32>,
+    tool_use_id: Option<String>,
+    workflow_phase: Option<String>,
+}
+
+/// Why an `agent-<id>.meta.json` could not be read. A missing file is expected from older
+/// Claude Code versions: it is counted and summarized once per scan. The others are warned
+/// per file.
+enum MetaError {
+    Missing,
+    Unreadable(String),
+}
+
+/// Reads `agent-<id>.meta.json` next to a subagent transcript.
+fn read_agent_meta(path: &Path) -> Result<AgentMeta, MetaError> {
+    let file = path.with_extension("meta.json");
+    let text = fs::read_to_string(&file).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            MetaError::Missing
+        } else {
+            MetaError::Unreadable(format!("no readable agent meta file: {e}"))
+        }
+    })?;
+    let v: Value = serde_json::from_str(&text)
+        .map_err(|e| MetaError::Unreadable(format!("invalid agent meta: {e}")))?;
+    let own = |key| str_of(&v, key).map(str::to_owned);
+    Ok(AgentMeta {
+        agent_type: own("agentType"),
+        name: own("name"),
+        description: own("description"),
+        model: own("model"),
+        parent_agent_id: own("parentAgentId"),
+        spawn_depth: v
+            .get("spawnDepth")
+            .and_then(Value::as_u64)
+            .and_then(|d| u32::try_from(d).ok()),
+        tool_use_id: own("toolUseId"),
+        workflow_phase: own("workflowPhase"),
+    })
+}
+
+/// A subagent transcript sits in a run folder `subagents/workflows/<run>/`; returns the run id.
+fn workflow_run_of(path: &Path) -> Option<String> {
+    let dir = path.parent()?;
+    (dir.parent()?.file_name()? == "workflows")
+        .then(|| dir.file_name().map(|n| n.to_string_lossy().into_owned()))?
+}
+
+fn agent_id_of(path: &Path) -> String {
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    stem.strip_prefix("agent-")
+        .map_or(stem.clone(), str::to_owned)
 }
 
 fn jsonl_files(dir: &Path) -> Vec<PathBuf> {
@@ -226,6 +295,14 @@ fn discover(projects: &Path, filter: &SessionFilter) -> Result<Vec<SessionFile>,
     let mut out = Vec::new();
     for slug in slugs {
         for path in jsonl_files(&slug) {
+            // The file is named after the session, so a session filter needs no parsing.
+            if !filter.session.is_empty()
+                && !path
+                    .file_stem()
+                    .is_some_and(|s| filter.session.iter().any(|id| s == id.as_str()))
+            {
+                continue;
+            }
             if untouched_since(&path, filter.since) {
                 continue;
             }
@@ -254,17 +331,26 @@ struct Meta {
     model: Option<String>,
     first: Option<Timestamp>,
     last: Option<Timestamp>,
+    /// Time range of the transcript being read (reset for each subagent transcript).
+    file_first: Option<Timestamp>,
+    file_last: Option<Timestamp>,
 }
 
 impl Meta {
     fn seen_at(&mut self, ts: Timestamp) {
+        self.file_first = Some(self.file_first.map_or(ts, |f| f.min(ts)));
+        self.file_last = Some(self.file_last.map_or(ts, |l| l.max(ts)));
         self.first = Some(self.first.map_or(ts, |f| f.min(ts)));
         self.last = Some(self.last.map_or(ts, |l| l.max(ts)));
     }
 }
 
-/// Reads one session: the main transcript and its subagent transcripts.
-pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents, AdapterError> {
+/// Reads one session: the main transcript and its subagent transcripts. Also returns the
+/// number of subagent transcripts without a meta file, so the scan can summarize them once.
+pub fn parse_session(
+    path: &Path,
+    subagents: &[PathBuf],
+) -> Result<(SessionEvents, usize), AdapterError> {
     let id = path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -272,13 +358,103 @@ pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents
     let mut warnings = Vec::new();
     let mut meta = Meta::default();
     let mut events = Vec::new();
-    parse_file(path, false, &mut events, &mut warnings, &mut meta)?;
+    parse_file(path, None, &mut events, &mut warnings, &mut meta)?;
+    // Workflow run id -> (earliest start, latest end) over its subagents.
+    let mut workflows: BTreeMap<String, (Timestamp, Timestamp)> = BTreeMap::new();
+    let mut missing_meta = 0usize;
     for sub in subagents {
+        let agent_id = agent_id_of(sub);
+        let run = workflow_run_of(sub);
+        let file = sub
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let raw = match read_agent_meta(sub) {
+            Ok(m) => Some(m),
+            Err(MetaError::Missing) => {
+                missing_meta += 1;
+                None
+            }
+            Err(MetaError::Unreadable(e)) => {
+                let meta_file = sub.with_extension("meta.json");
+                let name = meta_file
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                warnings.push(Warning::new(e).at(name));
+                None
+            }
+        };
+        let m = raw.as_ref();
+        let (parent_agent_id, depth) = if let Some(run) = &run {
+            (Some(run.clone()), Some(2))
+        } else if let Some(m) = m {
+            match (&m.parent_agent_id, m.spawn_depth) {
+                (None, None) => (None, Some(1)),
+                (parent, depth) => (parent.clone(), depth),
+            }
+        } else {
+            (None, None)
+        };
+        let info = AgentInfo {
+            agent_id: Some(agent_id.clone()),
+            agent_type: m.and_then(|m| m.agent_type.clone()),
+            description: m.and_then(|m| m.description.clone()),
+            workflow_phase: m.and_then(|m| m.workflow_phase.clone()),
+        };
         let mut sub_events = Vec::new();
-        match parse_file(sub, true, &mut sub_events, &mut warnings, &mut meta) {
-            Ok(()) => events.append(&mut sub_events),
+        meta.file_first = None;
+        meta.file_last = None;
+        match parse_file(sub, Some(info), &mut sub_events, &mut warnings, &mut meta) {
+            Ok(()) => {
+                if let (Some(first), Some(last)) = (meta.file_first, meta.file_last) {
+                    if let Some(run) = run {
+                        let w = workflows.entry(run).or_insert((first, last));
+                        w.0 = w.0.min(first);
+                        w.1 = w.1.max(last);
+                    }
+                    sub_events.push(Event {
+                        at: Some(first),
+                        kind: EventKind::AgentRun {
+                            agent_id,
+                            parent_agent_id,
+                            tool_use_id: m.and_then(|m| m.tool_use_id.clone()),
+                            agent_type: m.and_then(|m| m.agent_type.clone()),
+                            name: m.and_then(|m| m.name.clone()),
+                            description: m.and_then(|m| m.description.clone()),
+                            model: m.and_then(|m| m.model.clone()),
+                            depth,
+                            started_at: first,
+                            ended_at: Some(last),
+                        },
+                    });
+                } else {
+                    warnings.push(
+                        Warning::new("subagent transcript without timestamps; run skipped")
+                            .at(file),
+                    );
+                }
+                events.append(&mut sub_events);
+            }
             Err(e) => warnings.push(Warning::new(e.to_string())),
         }
+    }
+    for (run, (first, last)) in workflows {
+        events.push(Event {
+            at: Some(first),
+            kind: EventKind::AgentRun {
+                agent_id: run,
+                parent_agent_id: None,
+                tool_use_id: None,
+                agent_type: Some("workflow".to_owned()),
+                name: None,
+                description: None,
+                model: None,
+                depth: Some(1),
+                started_at: first,
+                ended_at: Some(last),
+            },
+        });
     }
     // Interleave subagent events by time, but only if that is well defined.
     if !subagents.is_empty() && events.iter().all(|e| e.at.is_some()) {
@@ -290,11 +466,14 @@ pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents
     session.model = meta.model;
     session.started_at = meta.first;
     session.ended_at = meta.last;
-    Ok(SessionEvents {
-        session,
-        events,
-        warnings,
-    })
+    Ok((
+        SessionEvents {
+            session,
+            events,
+            warnings,
+        },
+        missing_meta,
+    ))
 }
 
 struct Parser<'a> {
@@ -316,7 +495,7 @@ struct Parser<'a> {
 
 fn parse_file(
     path: &Path,
-    subagent: bool,
+    agent: Option<AgentInfo>,
     events: &mut Vec<Event>,
     warnings: &mut Vec<Warning>,
     meta: &mut Meta,
@@ -327,12 +506,8 @@ fn parse_file(
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default(),
-        force_subagent: subagent,
-        agent: if subagent {
-            read_agent_meta(path)
-        } else {
-            None
-        },
+        force_subagent: agent.is_some(),
+        agent,
         events,
         warnings,
         meta,
@@ -520,6 +695,11 @@ impl Parser<'_> {
             let tool_id = str_of(block, "id").map(str::to_owned);
             if let Some(id) = &tool_id {
                 self.tool_idx.insert(id.clone(), (idx, at));
+            }
+            if name == "Bash"
+                && let Some(issue) = str_of(input, "command").and_then(commit_issue)
+            {
+                self.push(at, EventKind::CommitIssue { issue });
             }
             for skill in skill_folders_touched(&name, input) {
                 self.push(at, EventKind::SkillFileUse(skill));

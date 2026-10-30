@@ -22,7 +22,7 @@ use rmcp::{
 };
 use serde::{Deserialize, Serialize};
 
-/// The filter every analysis takes, like `--since`, `--until`, `--source` and `--project` of the CLI.
+/// The filter every analysis takes, like `--since`, `--until`, `--source`, `--project` and `--session` of the CLI.
 /// The period is `[since, until)`; both take `30d`, `12h`, `4w` (counted back from now), a date
 /// (`2026-10-01`, midnight UTC) or an RFC 3339 instant.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -37,6 +37,8 @@ pub struct Query {
     pub sources: Option<Vec<String>>,
     /// Only sessions that ran in this directory or below it.
     pub project: Option<String>,
+    /// Only the session with this id (Claude Code `session_id`, OpenCode session id). Unknown id: empty result.
+    pub session: Option<String>,
 }
 
 impl Query {
@@ -50,7 +52,37 @@ impl Query {
                 .as_ref()
                 .filter(|p| !p.trim().is_empty())
                 .map(Into::into),
+            session: self
+                .session
+                .iter()
+                .filter(|s| !s.trim().is_empty())
+                .cloned()
+                .collect(),
+            roles: Vec::new(),
         }
+    }
+
+    fn filters_with_roles(&self, role: &Option<Vec<String>>) -> Filters {
+        Filters {
+            roles: role.clone().unwrap_or_default(),
+            ..self.filters()
+        }
+    }
+}
+
+/// The filter plus the `role` filter, for the analyses that take one (`flow`, `compare`).
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct RoleQuery {
+    #[serde(flatten)]
+    pub query: Query,
+    /// Only sessions that started a run of one of these roles: the keys of the `roles` table of the
+    /// efficiency tool (forked skill name, else workflow phase, else agent type). Empty: all sessions.
+    pub role: Option<Vec<String>>,
+}
+
+impl RoleQuery {
+    fn filters(&self) -> Filters {
+        self.query.filters_with_roles(&self.role)
     }
 }
 
@@ -59,10 +91,13 @@ impl Query {
 pub struct CostQuery {
     #[serde(flatten)]
     pub query: Query,
-    /// Grouping: `model` (default), `project`, `branch` or `issue`.
+    /// Grouping: `model` (default), `project`, `branch`, `issue` or `session`.
     pub by: Option<String>,
     /// A model id prefix: what the usage would have cost with that model.
     pub what_if: Option<String>,
+    /// Only sessions that started a run of one of these roles: the keys of the `roles` table of the
+    /// efficiency tool (forked skill name, else workflow phase, else agent type). Empty: all sessions.
+    pub role: Option<Vec<String>>,
 }
 
 /// The efficiency analysis: the filter and the grouping of the cache table.
@@ -72,6 +107,19 @@ pub struct EfficiencyQuery {
     pub query: Query,
     /// Grouping of the cache table: `session` (default), `project` or `source`.
     pub by: Option<String>,
+    /// Only sessions that started a run of one of these roles: the keys of the `roles` table of the
+    /// efficiency tool (forked skill name, else workflow phase, else agent type). Empty: all sessions.
+    pub role: Option<Vec<String>>,
+}
+
+/// The trend: the filter (the current period) and the window to compare it with.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct TrendQuery {
+    #[serde(flatten)]
+    pub query: Query,
+    /// The comparison window as `SINCE..UNTIL`, each bound in the forms of `since` (`2026-09-01..2026-10-01`).
+    /// Empty: the window of the same length right before the period. It must not overlap the period.
+    pub against: Option<String>,
 }
 
 /// One session of the timeline.
@@ -187,17 +235,17 @@ impl AgentLensServer {
         description = "How sessions unfold: context growth with compactions, tool errors and retry loops, hooks and permission waits.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
-    async fn flow(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
+    async fn flow(&self, Parameters(q): Parameters<RoleQuery>) -> CallToolResult {
         let f = q.filters();
         self.run(move |c| api::flow(c, &f)).await
     }
 
     #[tool(
-        description = "What the usage costs in USD, grouped by model, project, branch or issue, split into measured (`measured_usd`, reported by the client) and estimated (`estimated_usd`, tokens times a price table) cost, optionally compared with another model.",
+        description = "What the usage costs in USD, grouped by model, project, branch, issue or session (one row per session in `report.sessions`, with peak context and the subagent share of the cost), split into measured (`measured_usd`, reported by the client) and estimated (`estimated_usd`, tokens times a price table) cost, optionally compared with another model.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn cost(&self, Parameters(q): Parameters<CostQuery>) -> CallToolResult {
-        let f = q.query.filters();
+        let f = q.query.filters_with_roles(&q.role);
         let by = q.by.unwrap_or_else(|| "model".into());
         let what_if = q.what_if;
         self.run(move |c| api::cost(c, &f, &by, what_if.as_deref()))
@@ -209,7 +257,7 @@ impl AgentLensServer {
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn efficiency(&self, Parameters(q): Parameters<EfficiencyQuery>) -> CallToolResult {
-        let f = q.query.filters();
+        let f = q.query.filters_with_roles(&q.role);
         let by = q.by.unwrap_or_else(|| "session".into());
         self.run(move |c| api::efficiency(c, &f, &by)).await
     }
@@ -218,9 +266,30 @@ impl AgentLensServer {
         description = "The coding agents side by side over the same sessions: requests, tokens, cache hit rate, tool errors, skills and time. A value a client does not record is null; `skill_overhead_tokens` has a `measured` flag.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
-    async fn compare(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
+    async fn compare(&self, Parameters(q): Parameters<RoleQuery>) -> CallToolResult {
         let f = q.filters();
         self.run(move |c| api::compare(c, &f)).await
+    }
+
+    #[tool(
+        description = "What changed: the period (`since`/`until`, default the last 30 days) next to a comparison window (`against` as `SINCE..UNTIL`, default the window of the same length right before), with `before`, `after`, `change` and `change_pct` for sessions, requests, tokens, USD (measured and estimated apart), cache hit rate, subagent share, tool errors and, per skill, loads and overhead tokens. A change is null when a window has no sessions; when the windows differ in length (`windows.normalized`) counts are per day. A change of an estimate has `measured: false`.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn trend(&self, Parameters(q): Parameters<TrendQuery>) -> CallToolResult {
+        let f = q.query.filters();
+        let against = match q
+            .against
+            .as_deref()
+            .map(str::trim)
+            .filter(|a| !a.is_empty())
+        {
+            Some(a) => match api::parse_against(a, "against") {
+                Ok(w) => Some(w),
+                Err(e) => return failure(e),
+            },
+            None => None,
+        };
+        self.run(move |c| api::trend(c, &f, against)).await
     }
 
     #[tool(
@@ -256,11 +325,12 @@ impl AgentLensServer {
         let since = args.since.as_deref().unwrap_or("30d");
         let text = format!(
             "Analyze how my coding agents use skills and what that costs in tokens, with the agentlens tools, and propose concrete changes. Look at the last {since} (pass it as `since`).\n\n\
-1. Call `advice` first. Its findings are computed from the numbers, not guessed: explain them in plain language and rank the suggestions by what they would save.\n\
+1. Call `advice` first. Its findings are computed from the numbers, not guessed, and come ranked by what each could have saved in the period (`rank`, `impact.saving`, `impact.saving_usd`, an estimate from the price table): explain them in plain language in that order.\n\
 2. If a field is unclear (load, carry, baseline, follow-on, file uses, overhead), read the resource {GLOSSARY_URI} instead of guessing.\n\
-3. Look closer at anything surprising with the other tools: `skills` for one skill, `unused` for agents and MCP servers, `context` for instruction files and tool definitions, `sessions` and `timeline` for a long session.\n\n\
+3. Look closer at anything surprising with the other tools: `skills` for one skill, `unused` for agents and MCP servers, `context` for instruction files and tool definitions, `sessions` and `timeline` for a long session, `trend` for what changed against the period before (cost, tokens, cache hit rate, skill overhead).\n\n\
 Rules for the conclusions:\n\
 - Trust a number without a tilde (`measured: true`); say so when a conclusion rests on an estimate (`~`, `measured: false`).\n\
+- `impact.confidence` says how sure a saving is: `measured`, `estimated`, or `inferred`. An `inferred` saving rests on an assumption (for the context size: that the work could have run in a fresh session); say so.\n\
 - A skill is only unused if both `invocations` and `file_uses` are 0, and one that is needed rarely can still be worth keeping.\n\
 - Follow-on is the activity after a skill, not cost the skill caused.\n\
 - Do not change anything yourself. List the changes, with the saving each would bring, and let me decide."

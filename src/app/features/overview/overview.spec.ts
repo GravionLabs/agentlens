@@ -58,7 +58,7 @@ describe("Overview", () => {
     const card = el.querySelectorAll<HTMLElement>(".card")[2];
     const text = card.textContent!.replace(/\s+/g, " ");
     expect(text).toContain("1 sessions");
-    expect(text).toContain("12 events");
+    expect(text).toContain("13 events");
     expect(text).toContain("2 warnings");
     expect(text).toContain("/home/user/.copilot/session-state");
     expect(card.classList.contains("missing")).toBe(false);

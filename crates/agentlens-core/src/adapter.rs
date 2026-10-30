@@ -7,6 +7,7 @@ use jiff::Timestamp;
 
 use crate::env::Env;
 use crate::model::{Event, EventKind, Session, SessionEvents, Source};
+use crate::worktree::WorktreeResolver;
 
 /// A problem that prevents reading a whole session (as opposed to a
 /// [`crate::model::Warning`], which only skips a record).
@@ -58,6 +59,9 @@ pub struct SessionFilter {
     pub until: Option<Timestamp>,
     /// Only sessions whose project directory is this directory or inside it.
     pub project: Option<PathBuf>,
+    /// Only sessions with one of these ids. Unlike the other filters, a session
+    /// without an id does not pass. Empty: no restriction.
+    pub session: Vec<String>,
 }
 
 impl SessionFilter {
@@ -67,6 +71,9 @@ impl SessionFilter {
     /// A session counts at its end (its start if it has no end): it passes when
     /// that instant is at or after `since` and before `until`.
     pub fn matches(&self, session: &Session) -> bool {
+        if !self.session.is_empty() && !self.session.contains(&session.id) {
+            return false;
+        }
         if let Some(last) = session.ended_at.or(session.started_at) {
             if self.since.is_some_and(|since| last < since) {
                 return false;
@@ -177,6 +184,7 @@ type CacheKey = (
     Option<Timestamp>,
     Option<Timestamp>,
     Option<PathBuf>,
+    Vec<String>,
     Vec<Source>,
 );
 type Cached = (
@@ -248,7 +256,13 @@ impl Registry {
         };
         let mut sources = only.to_vec();
         sources.sort();
-        let key: CacheKey = (filter.since, filter.until, filter.project.clone(), sources);
+        let key: CacheKey = (
+            filter.since,
+            filter.until,
+            filter.project.clone(),
+            filter.session.clone(),
+            sources,
+        );
         let fresh = {
             let entries = cache.entries.lock().unwrap_or_else(|e| e.into_inner());
             entries
@@ -293,11 +307,20 @@ impl Registry {
                 .map(|s| filter.matches(&s.session))
                 .unwrap_or(true)
         };
+        // A worktree resolves to its repository here, once for every adapter,
+        // before the project filter looks at the directory.
+        let mut resolver = WorktreeResolver::new();
+        let resolve = move |mut r: Result<SessionEvents, AdapterError>| {
+            if let Ok(s) = &mut r {
+                resolver.apply(&mut s.session);
+            }
+            r
+        };
         let local = locals
             .into_iter()
             .flat_map(move |a| a.sessions(env, filter));
         if exports.is_empty() {
-            return Box::new(local.filter(matches));
+            return Box::new(local.map(resolve).filter(matches));
         }
 
         // Exports are read first: a session that is also local is merged, one
@@ -333,7 +356,13 @@ impl Registry {
                 .pop()
                 .map(Ok),
         });
-        Box::new(errors.into_iter().chain(merged).filter(matches))
+        Box::new(
+            errors
+                .into_iter()
+                .chain(merged)
+                .map(resolve)
+                .filter(matches),
+        )
     }
 }
 
@@ -395,6 +424,57 @@ mod tests {
         r.sessions(&env, filter, only)
             .map(|s| s.unwrap().session.id)
             .collect()
+    }
+
+    #[test]
+    fn sessions_of_a_worktree_belong_to_the_main_repository() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        let wt = repo.join(".worktrees/feat");
+        let admin = repo.join(".git/worktrees/feat");
+        std::fs::create_dir_all(&admin).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::write(admin.join("commondir"), "../..\n").unwrap();
+        std::fs::write(wt.join(".git"), format!("gitdir: {}\n", admin.display())).unwrap();
+        let mut main = Session::new("main", Source::ClaudeCode);
+        main.project_dir = Some(repo.clone());
+        let mut linked = Session::new("linked", Source::ClaudeCode);
+        linked.project_dir = Some(wt.clone());
+        let mut r = Registry::new();
+        r.register(Box::new(Dummy {
+            source: Source::ClaudeCode,
+            found: true,
+            sessions: vec![main, linked],
+        }));
+        let env = Env::for_home("/h");
+        let filter = SessionFilter {
+            project: Some(repo.clone()),
+            ..SessionFilter::default()
+        };
+        let found: Vec<Session> = r
+            .sessions(&env, &filter, &[])
+            .map(|s| s.unwrap().session)
+            .collect();
+        assert_eq!(found.len(), 2);
+        assert!(
+            found
+                .iter()
+                .all(|s| s.project_dir.as_deref() == Some(repo.as_path()))
+        );
+        assert_eq!(found[0].worktree_dir, None);
+        assert_eq!(found[1].worktree_dir.as_deref(), Some(wt.as_path()));
+    }
+
+    #[test]
+    fn session_filter_keeps_only_listed_ids() {
+        let f = SessionFilter {
+            session: vec!["a".into(), "c".into()],
+            ..SessionFilter::default()
+        };
+        assert!(f.matches(&Session::new("a", Source::ClaudeCode)));
+        assert!(!f.matches(&Session::new("b", Source::ClaudeCode)));
+        assert!(!f.matches(&Session::new("", Source::ClaudeCode)));
+        assert!(SessionFilter::default().matches(&Session::new("", Source::ClaudeCode)));
     }
 
     #[test]

@@ -4,11 +4,13 @@
 //! is estimated; requests of models without a price are counted as unpriced and
 //! never contribute zero dollars silently.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::model::{EventKind, SessionEvents};
+use crate::model::{EventKind, SessionEvents, Source};
 use crate::prices::PriceTable;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -26,6 +28,10 @@ pub struct CostRow {
     pub unpriced_requests: u64,
     /// Premium requests (GitHub Copilot); a plan allowance, not money.
     pub premium_requests: f64,
+    /// How the issue of the row was found; only grouped by issue. With sessions of several
+    /// sources, the weakest of them (`commit` before `branch`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_source: Option<IssueSource>,
 }
 
 impl CostRow {
@@ -60,6 +66,56 @@ pub struct CostReport {
     pub total: CostRow,
     /// Models with unpriced requests and how many.
     pub unpriced_models: BTreeMap<String, u64>,
+    /// One row per session; only filled when grouped by session.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sessions: Vec<SessionCost>,
+}
+
+/// What one session cost.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionCost {
+    pub source: Source,
+    pub session: String,
+    pub project: Option<PathBuf>,
+    pub started_at: Option<Timestamp>,
+    pub duration_ms: Option<u64>,
+    /// `#123` as `--by issue` resolves it ([`session_issue`]).
+    pub issue: Option<String>,
+    /// How `issue` was found.
+    pub issue_source: Option<IssueSource>,
+    pub models: Vec<String>,
+    pub requests: u64,
+    /// Requests of the main agent (not made by subagents).
+    pub main_requests: u64,
+    /// Largest `input + cache_read + cache_write` of a main-agent request.
+    pub peak_context: u64,
+    pub input: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
+    pub output: u64,
+    /// Cost the client reported.
+    pub measured_usd: f64,
+    /// Cost computed from the price table.
+    pub estimated_usd: f64,
+    pub unpriced_requests: u64,
+    /// Cost of the requests made by subagents (measured and estimated).
+    pub subagent_usd: f64,
+}
+
+impl SessionCost {
+    pub fn total_usd(&self) -> f64 {
+        self.measured_usd + self.estimated_usd
+    }
+
+    /// No request has a price: the cost is unknown, not zero.
+    pub fn cost_known(&self) -> bool {
+        self.requests > self.unpriced_requests
+    }
+
+    /// The part of the cost that subagents caused (0 to 1); `None` if the cost is unknown or zero.
+    pub fn subagent_share(&self) -> Option<f64> {
+        (self.cost_known() && self.total_usd() > 0.0).then(|| self.subagent_usd / self.total_usd())
+    }
 }
 
 /// What the cost is grouped by.
@@ -70,11 +126,34 @@ pub enum Grouping {
     Project,
     Branch,
     Issue,
+    Session,
 }
 
 pub const NO_PROJECT: &str = "(no project)";
 pub const NO_BRANCH: &str = "(no branch)";
 pub const UNASSIGNED: &str = "(unassigned)";
+
+/// Where the issue number of a session comes from, in the order they are tried.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IssueSource {
+    /// The branch name ([`issue_number`]).
+    Branch,
+    /// The message of a `git commit -m` the session ran ([`crate::commit::commit_issue`]).
+    Commit,
+}
+
+/// The issue a session worked on: from the branch name, else from the first commit message of
+/// the session that refers to an issue.
+pub fn session_issue(se: &SessionEvents) -> Option<(u32, IssueSource)> {
+    if let Some(n) = se.session.branch.as_deref().and_then(issue_number) {
+        return Some((n, IssueSource::Branch));
+    }
+    se.events.iter().find_map(|e| match e.kind {
+        EventKind::CommitIssue { issue } => Some((issue, IssueSource::Commit)),
+        _ => None,
+    })
+}
 
 /// The issue number a branch name refers to, if any.
 ///
@@ -127,12 +206,10 @@ fn group_key(se: &SessionEvents, group: Grouping) -> Option<String> {
                 .clone()
                 .unwrap_or_else(|| NO_BRANCH.into()),
         ),
+        Grouping::Session => Some(se.session.id.clone()),
         Grouping::Issue => Some(
-            se.session
-                .branch
-                .as_deref()
-                .and_then(issue_number)
-                .map(|n| format!("#{n}"))
+            session_issue(se)
+                .map(|(n, _)| format!("#{n}"))
                 .unwrap_or_else(|| UNASSIGNED.into()),
         ),
     }
@@ -143,11 +220,18 @@ pub fn by_model(sessions: &[SessionEvents], prices: &PriceTable) -> CostReport {
     analyze(sessions, prices, Grouping::Model)
 }
 
-/// Cost grouped by model, project, branch or issue.
+/// Cost grouped by model, project, branch, issue or session.
 pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, group: Grouping) -> CostReport {
     let mut rows: BTreeMap<String, CostRow> = BTreeMap::new();
     let mut unpriced: BTreeMap<String, u64> = BTreeMap::new();
+    let mut per_session: Vec<SessionCost> = Vec::new();
     for se in sessions {
+        let mut sc = (group == Grouping::Session).then(|| session_cost(se));
+        let mut models: BTreeSet<String> = BTreeSet::new();
+        let key = group_key(se, group);
+        let issue_source = (group == Grouping::Issue)
+            .then(|| session_issue(se).map(|(_, source)| source))
+            .flatten();
         for e in &se.events {
             let EventKind::Usage(u) = &e.kind else {
                 continue;
@@ -157,10 +241,11 @@ pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, group: Grouping)
                 .clone()
                 .or_else(|| se.session.model.clone())
                 .unwrap_or_else(|| "unknown".into());
-            let key = group_key(se, group).unwrap_or_else(|| model.clone());
+            let key = key.clone().unwrap_or_else(|| model.clone());
             let row = rows
                 .entry(key.clone())
                 .or_insert_with(|| CostRow::new(&key));
+            row.issue_source = row.issue_source.max(issue_source);
             row.requests += 1;
             row.input += u.input;
             row.output += u.output;
@@ -169,16 +254,56 @@ pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, group: Grouping)
             row.premium_requests += u.premium_requests.unwrap_or(0.0);
             let mut usage = u.clone();
             usage.model = Some(model.clone());
-            match prices.cost(&usage) {
+            let cost = prices.cost(&usage);
+            match &cost {
                 Some(c) if c.measured => row.measured_usd += c.usd,
                 Some(c) => row.estimated_usd += c.usd,
                 None => {
                     row.unpriced_requests += 1;
-                    *unpriced.entry(model).or_default() += 1;
+                    *unpriced.entry(model.clone()).or_default() += 1;
+                }
+            }
+            if let Some(sc) = sc.as_mut() {
+                models.insert(model);
+                sc.requests += 1;
+                sc.input += u.input;
+                sc.output += u.output;
+                sc.cache_read += u.cache_read;
+                sc.cache_write += u.cache_write;
+                if !u.subagent {
+                    sc.main_requests += 1;
+                    sc.peak_context = sc.peak_context.max(u.total_input());
+                }
+                match cost {
+                    Some(c) => {
+                        if c.measured {
+                            sc.measured_usd += c.usd;
+                        } else {
+                            sc.estimated_usd += c.usd;
+                        }
+                        if u.subagent {
+                            sc.subagent_usd += c.usd;
+                        }
+                    }
+                    None => sc.unpriced_requests += 1,
                 }
             }
         }
+        if let Some(mut sc) = sc {
+            sc.models = models.into_iter().collect();
+            per_session.push(sc);
+        }
     }
+    per_session.sort_by(|a, b| {
+        b.cost_known()
+            .cmp(&a.cost_known())
+            .then_with(|| {
+                b.total_usd()
+                    .partial_cmp(&a.total_usd())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| a.session.cmp(&b.session))
+    });
     let mut total = CostRow::new("total");
     for r in rows.values() {
         total.add(r);
@@ -194,6 +319,36 @@ pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, group: Grouping)
         rows,
         total,
         unpriced_models: unpriced,
+        sessions: per_session,
+    }
+}
+
+fn session_cost(se: &SessionEvents) -> SessionCost {
+    let s = &se.session;
+    let issue = session_issue(se);
+    SessionCost {
+        source: s.source,
+        session: s.id.clone(),
+        project: s.project_dir.clone(),
+        started_at: s.started_at,
+        duration_ms: match (s.started_at, s.ended_at) {
+            (Some(a), Some(b)) => u64::try_from(b.as_millisecond() - a.as_millisecond()).ok(),
+            _ => None,
+        },
+        issue: issue.map(|(n, _)| format!("#{n}")),
+        issue_source: issue.map(|(_, source)| source),
+        models: Vec::new(),
+        requests: 0,
+        main_requests: 0,
+        peak_context: 0,
+        input: 0,
+        cache_read: 0,
+        cache_write: 0,
+        output: 0,
+        measured_usd: 0.0,
+        estimated_usd: 0.0,
+        unpriced_requests: 0,
+        subagent_usd: 0.0,
     }
 }
 
@@ -323,6 +478,41 @@ mod tests {
     }
 
     #[test]
+    fn session_grouping_has_a_row_per_session_with_peak_context_and_subagent_share() {
+        let sub = |input, cost| {
+            EventKind::Usage(Usage {
+                model: Some("claude-sonnet-5-5".into()),
+                input,
+                cost_usd: Some(cost),
+                subagent: true,
+                ..Usage::default()
+            })
+        };
+        let mut a = session(vec![
+            usage(Some("claude-sonnet-5-5"), 500, 0, Some(0.75)),
+            usage(Some("claude-sonnet-5-5"), 900, 0, Some(0.25)),
+            sub(5_000, 1.0),
+        ]);
+        a.session.branch = Some("feat/12-x".into());
+        let mut b = SessionEvents::new(Session::new("b", Source::OpenCode));
+        b.push(None, usage(Some("mystery"), 10, 10, None));
+        let idle = SessionEvents::new(Session::new("c", Source::CopilotCli));
+        let r = analyze(&[b, idle, a], &PriceTable::bundled(), Grouping::Session);
+        let ids: Vec<&str> = r.sessions.iter().map(|s| s.session.as_str()).collect();
+        assert_eq!(ids, ["s", "b", "c"], "known cost first, then unknown");
+        let s = &r.sessions[0];
+        assert_eq!((s.requests, s.main_requests), (3, 2));
+        assert_eq!(s.peak_context, 900, "subagent requests do not count");
+        assert_eq!(s.issue.as_deref(), Some("#12"));
+        assert!((s.total_usd() - 2.0).abs() < 1e-9);
+        assert_eq!(s.subagent_share(), Some(0.5));
+        for unknown in &r.sessions[1..] {
+            assert!(!unknown.cost_known(), "{} is n/a, not 0", unknown.session);
+            assert_eq!(unknown.subagent_share(), None);
+        }
+    }
+
+    #[test]
     fn requests_without_a_model_use_the_session_model_or_are_unknown() {
         let mut se = session(vec![usage(None, 1_000_000, 0, None)]);
         se.session.model = Some("claude-sonnet-5-5".into());
@@ -351,6 +541,48 @@ mod tests {
         ] {
             assert_eq!(issue_number(branch), want, "{branch}");
         }
+    }
+
+    #[test]
+    fn the_issue_comes_from_the_branch_then_the_first_commit() {
+        let commit = |issue| EventKind::CommitIssue { issue };
+        let mut branch_only = session(vec![]);
+        branch_only.session.branch = Some("feat/12-x".into());
+        assert_eq!(session_issue(&branch_only), Some((12, IssueSource::Branch)));
+        let mut commit_only = session(vec![commit(502), commit(503)]);
+        commit_only.session.branch = Some("release/next".into());
+        assert_eq!(
+            session_issue(&commit_only),
+            Some((502, IssueSource::Commit)),
+            "the first commit wins"
+        );
+        let mut both = session(vec![commit(502)]);
+        both.session.branch = Some("feat/12-x".into());
+        assert_eq!(session_issue(&both), Some((12, IssueSource::Branch)));
+        assert_eq!(session_issue(&session(vec![])), None);
+    }
+
+    #[test]
+    fn an_issue_row_names_its_weakest_source() {
+        let u = || usage(Some("claude-sonnet-5-5"), 1_000, 0, None);
+        let sessions = [
+            on("/a", Some("feat/12-x"), vec![u()]),
+            on(
+                "/a",
+                Some("release/next"),
+                vec![EventKind::CommitIssue { issue: 12 }, u()],
+            ),
+            on("/a", Some("feat/13-y"), vec![u()]),
+            on("/a", None, vec![u()]),
+        ];
+        let r = analyze(&sessions, &PriceTable::bundled(), Grouping::Issue);
+        let source = |key: &str| r.rows.iter().find(|r| r.key == key).unwrap().issue_source;
+        assert_eq!(source("#12"), Some(IssueSource::Commit));
+        assert_eq!(source("#13"), Some(IssueSource::Branch));
+        assert_eq!(source(UNASSIGNED), None);
+        assert_eq!(r.total.issue_source, None);
+        let by_branch = analyze(&sessions, &PriceTable::bundled(), Grouping::Branch);
+        assert!(by_branch.rows.iter().all(|r| r.issue_source.is_none()));
     }
 
     fn on(project: &str, branch: Option<&str>, kinds: Vec<EventKind>) -> SessionEvents {

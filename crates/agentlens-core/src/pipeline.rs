@@ -20,6 +20,7 @@ use crate::inventory::{self, Inventory};
 use crate::model::{SessionEvents, Source};
 use crate::references;
 use crate::tokens::TokenEstimator;
+use crate::worktree::WorktreeResolver;
 
 /// What one source holds on this machine.
 #[derive(Debug, Clone)]
@@ -53,14 +54,18 @@ pub fn scan_sources(
                 errors: Vec::new(),
             };
             if scan.detection.found {
+                let mut resolver = WorktreeResolver::new();
                 for r in a.sessions(env, filter) {
                     match r {
-                        Ok(se) if filter.matches(&se.session) => {
+                        Ok(mut se) => {
+                            resolver.apply(&mut se.session);
+                            if !filter.matches(&se.session) {
+                                continue;
+                            }
                             scan.sessions += 1;
                             scan.events += se.events.len() as u64;
                             scan.warnings += se.warnings.len() as u64;
                         }
-                        Ok(_) => {}
                         Err(e) => scan.errors.push(e.to_string()),
                     }
                 }
@@ -86,13 +91,15 @@ pub struct AdviceRun {
     pub errors: Vec<String>,
 }
 
-/// The findings about the skills of the selected sessions: what to change to save tokens.
+/// The findings about the skills of the selected sessions: what to change to save tokens, ranked by
+/// what each would have saved, priced with `prices`.
 pub fn advice_run(
     registry: &Registry,
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
     estimator: &dyn TokenEstimator,
+    prices: &crate::prices::PriceTable,
 ) -> AdviceRun {
     let (sessions, errors) = read_sessions(registry, env, filter, only);
     let run = skill_run_from(env, &sessions, errors, estimator);
@@ -107,8 +114,10 @@ pub fn advice_run(
     let instructions = instructions::scan(env, &run.projects, estimator);
     let context_report = context::analyze(&sessions, &instructions.files, estimator);
     let mcp = advice::mcp_servers(&context_report, &sessions);
+    let context_saving = advice::context_saving(&sessions, prices);
+    let pricing = advice::Pricing::from_sessions(&sessions, prices);
     AdviceRun {
-        report: advice::analyze_with(&run.report, &references, &mcp),
+        report: advice::analyze_with(&run.report, &references, &mcp, &context_saving, &pricing),
         warnings: run.warnings + catalog.warnings.len() as u64 + instructions.warnings.len() as u64,
         errors: run.errors,
     }
@@ -137,7 +146,8 @@ pub fn skill_run(
     skill_run_from(env, &sessions, errors, estimator)
 }
 
-fn read_sessions(
+/// Reads the sessions of the selected sources once, with the errors of those that could not be read.
+pub fn read_sessions(
     registry: &Registry,
     env: &Env,
     filter: &SessionFilter,
@@ -286,11 +296,29 @@ pub struct FlowRun {
 }
 
 /// Reads the sessions and analyzes how they unfold.
+/// The `--role` filter: keeps the sessions that started at least one run of one of `roles`, with all
+/// their requests. No roles keeps everything; a session without runs never matches.
+pub fn retain_roles(sessions: &mut Vec<SessionEvents>, roles: &[String]) {
+    let roles: Vec<&str> = roles
+        .iter()
+        .map(|r| r.trim())
+        .filter(|r| !r.is_empty())
+        .collect();
+    if roles.is_empty() {
+        return;
+    }
+    sessions.retain(|se| {
+        let have = efficiency::session_roles(se);
+        roles.iter().any(|r| have.contains(*r))
+    });
+}
+
 pub fn flow_run(
     registry: &Registry,
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
 ) -> FlowRun {
     let mut sessions: Vec<SessionEvents> = Vec::new();
     let mut errors = Vec::new();
@@ -300,6 +328,7 @@ pub fn flow_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    retain_roles(&mut sessions, roles);
     FlowRun {
         growth: flow::growth(&sessions),
         tool_errors: flow::errors(&sessions),
@@ -319,11 +348,13 @@ pub struct CostRun {
 }
 
 /// Reads the sessions and prices their usage.
+#[allow(clippy::too_many_arguments)]
 pub fn cost_run(
     registry: &Registry,
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
     prices: &crate::prices::PriceTable,
     group: Grouping,
     what_if: Option<&str>,
@@ -336,6 +367,7 @@ pub fn cost_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    retain_roles(&mut sessions, roles);
     CostRun {
         warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
         report: cost::analyze(&sessions, prices, group),
@@ -357,6 +389,7 @@ pub fn efficiency_run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
     prices: &crate::prices::PriceTable,
     by: CacheBy,
 ) -> EfficiencyRun {
@@ -368,6 +401,7 @@ pub fn efficiency_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    retain_roles(&mut sessions, roles);
     EfficiencyRun {
         warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
         report: efficiency::analyze(&sessions, prices, by),
@@ -388,6 +422,7 @@ pub fn compare_run(
     env: &Env,
     filter: &SessionFilter,
     only: &[Source],
+    roles: &[String],
     estimator: &dyn TokenEstimator,
 ) -> CompareRun {
     let mut sessions: Vec<SessionEvents> = Vec::new();
@@ -398,6 +433,7 @@ pub fn compare_run(
             Err(e) => errors.push(e.to_string()),
         }
     }
+    retain_roles(&mut sessions, roles);
     let projects: BTreeSet<PathBuf> = sessions
         .iter()
         .filter_map(|s| s.session.project_dir.clone())

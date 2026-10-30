@@ -7,6 +7,7 @@ pub mod analyzers;
 pub mod api;
 pub mod catalog;
 pub mod cli_tools;
+pub mod commit;
 pub mod env;
 pub mod exact;
 pub mod export;
@@ -20,6 +21,7 @@ pub mod references;
 pub mod report;
 pub mod since;
 pub mod tokens;
+pub mod worktree;
 
 /// Version of this crate, for report metadata.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

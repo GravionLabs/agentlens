@@ -302,3 +302,80 @@ describe("CliTools messages", () => {
     expect(status).toContain("Restart the terminal.");
   });
 });
+
+describe("CliTools on Windows (user PATH)", () => {
+  const dir = "C:\\Users\\user\\AppData\\Local\\AgentLens";
+  const tools = base.tools.map((t) => ({
+    ...t,
+    path: `${dir}\\${t.name}.exe`,
+    target: `${dir}\\${t.name}.exe`,
+  }));
+  const windows = (data: Partial<CliToolsData>, errors: string[] = []) =>
+    answer({ offered: true, method: "user_path", dir, profile_lines: [], tools, ...data }, errors);
+
+  it("says to open a new terminal after adding the folder, without a profile line", async () => {
+    const added = windows({
+      on_path: true,
+      tools: tools.map((t) => ({ ...t, state: "installed" as const, action: "created" as const })),
+    });
+    const { text, click } = await render(async (command) =>
+      command === "cli_tools_install" ? added : windows({}),
+    );
+    await click("Command line tools");
+    expect(text()).toContain("not on PATH");
+    expect(text()).toContain(`${dir} is not on your user PATH.`);
+    expect(text()).not.toContain("Open a new terminal");
+    await click("Install command line tools");
+    expect(text()).toContain("added to PATH");
+    expect(text()).toContain(`${dir} is on your user PATH.`);
+    expect(text()).toContain("Open a new terminal");
+    expect(text()).not.toContain("export PATH");
+    expect(text()).not.toContain("shell profile");
+  });
+
+  it("labels an entry that was there already and a removal", async () => {
+    const kept = windows({
+      on_path: true,
+      tools: tools.map((t) => ({ ...t, state: "installed" as const, action: "kept" as const })),
+    });
+    const removed = windows({
+      tools: tools.map((t) => ({ ...t, action: "removed" as const })),
+    });
+    const { text, click } = await render(async (command) =>
+      command === "cli_tools_install"
+        ? kept
+        : command === "cli_tools_remove"
+          ? removed
+          : windows({}),
+    );
+    await click("Command line tools");
+    await click("Install command line tools");
+    expect(text()).toContain("already on PATH");
+    expect(text()).not.toContain("Open a new terminal");
+    await click("Remove command line tools");
+    expect(text()).toContain("removed from PATH");
+    expect(text()).toContain("Open a new terminal");
+  });
+
+  it("names another folder with the tools on PATH and an unreadable PATH", async () => {
+    const failed = windows(
+      {
+        foreign: ["C:\\Old\\AgentLens"],
+        tools: tools.map((t) => ({ ...t, action: "failed" as const })),
+        error: "cannot read the user PATH; it was left alone",
+      },
+      ["cannot read the user PATH; it was left alone"],
+    );
+    const { el, text, click } = await render(async (command) =>
+      command === "cli_tools_install" ? failed : windows({}),
+    );
+    await click("Command line tools");
+    await click("Install command line tools");
+    expect(text()).toContain("C:\\Old\\AgentLens on your PATH also holds the command line tools");
+    expect(text()).not.toContain("Not touched");
+    const alerts = Array.from(el.querySelectorAll('[role="alert"]')).map((a) =>
+      a.textContent?.trim(),
+    );
+    expect(alerts).toEqual(["cannot read the user PATH; it was left alone"]);
+  });
+});
