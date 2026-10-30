@@ -623,21 +623,47 @@ fn workflow_run_is_a_node_above_its_subagents() {
 }
 
 #[test]
-fn missing_meta_warns_and_leaves_the_caller_unknown() {
+fn missing_meta_leaves_the_caller_unknown_and_summarizes_once() {
     let home = session_with(&[("agent-a5", None)]);
     let se = read_all(&home).remove(0);
     let r = runs(&se);
     assert_eq!((r[0].depth, r[0].parent.clone()), (None, None));
     assert_eq!(se.warnings.len(), 1);
+    assert_eq!(
+        se.warnings[0].message,
+        "1 subagent transcripts have no meta file (older Claude Code); their runs have no caller or depth"
+    );
     assert_eq!(usages(&se).iter().filter(|u| u.subagent).count(), 1);
 }
 
 #[test]
-fn unreadable_meta_warns_and_the_scan_goes_on() {
+fn three_missing_metas_give_one_summary_warning_naming_three() {
+    let home = session_with(&[("agent-b1", None), ("agent-b2", None), ("agent-b3", None)]);
+    let se = read_all(&home).remove(0);
+    assert_eq!(se.warnings.len(), 1);
+    assert!(
+        se.warnings[0]
+            .message
+            .starts_with("3 subagent transcripts have no meta file")
+    );
+}
+
+#[test]
+fn complete_metas_give_no_meta_warning() {
+    let home = session_with(&[("agent-c1", Some("claude_code/agent_depth1.meta.json"))]);
+    assert!(read_all(&home).remove(0).warnings.is_empty());
+}
+
+#[test]
+fn unreadable_meta_warns_per_file_and_the_scan_goes_on() {
     let home = session_with(&[("agent-a6", Some("claude_code/basic.jsonl"))]);
     let se = read_all(&home).remove(0);
     let r = runs(&se);
     assert_eq!((r[0].depth, r[0].parent.clone()), (None, None));
     assert_eq!(se.warnings.len(), 1);
+    assert_eq!(
+        se.warnings[0].location.as_deref(),
+        Some("agent-a6.meta.json")
+    );
     assert_eq!(usages(&se).len(), 3);
 }

@@ -204,12 +204,25 @@ struct AgentMeta {
     workflow_phase: Option<String>,
 }
 
+/// Why an `agent-<id>.meta.json` could not be read. A missing file is expected from older
+/// Claude Code versions and is summarized per session; the others are warned per file.
+enum MetaError {
+    Missing,
+    Unreadable(String),
+}
+
 /// Reads `agent-<id>.meta.json` next to a subagent transcript.
-fn read_agent_meta(path: &Path) -> Result<AgentMeta, String> {
+fn read_agent_meta(path: &Path) -> Result<AgentMeta, MetaError> {
     let file = path.with_extension("meta.json");
-    let text =
-        fs::read_to_string(&file).map_err(|e| format!("no readable agent meta file: {e}"))?;
-    let v: Value = serde_json::from_str(&text).map_err(|e| format!("invalid agent meta: {e}"))?;
+    let text = fs::read_to_string(&file).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            MetaError::Missing
+        } else {
+            MetaError::Unreadable(format!("no readable agent meta file: {e}"))
+        }
+    })?;
+    let v: Value = serde_json::from_str(&text)
+        .map_err(|e| MetaError::Unreadable(format!("invalid agent meta: {e}")))?;
     let own = |key| str_of(&v, key).map(str::to_owned);
     Ok(AgentMeta {
         agent_type: own("agentType"),
@@ -328,6 +341,7 @@ pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents
     parse_file(path, None, &mut events, &mut warnings, &mut meta)?;
     // Workflow run id -> (earliest start, latest end) over its subagents.
     let mut workflows: BTreeMap<String, (Timestamp, Timestamp)> = BTreeMap::new();
+    let mut missing_meta = 0usize;
     for sub in subagents {
         let agent_id = agent_id_of(sub);
         let run = workflow_run_of(sub);
@@ -337,8 +351,17 @@ pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents
             .unwrap_or_default();
         let raw = match read_agent_meta(sub) {
             Ok(m) => Some(m),
-            Err(e) => {
-                warnings.push(Warning::new(e).at(file.clone()));
+            Err(MetaError::Missing) => {
+                missing_meta += 1;
+                None
+            }
+            Err(MetaError::Unreadable(e)) => {
+                let meta_file = sub.with_extension("meta.json");
+                let name = meta_file
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                warnings.push(Warning::new(e).at(name));
                 None
             }
         };
@@ -395,6 +418,11 @@ pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents
             }
             Err(e) => warnings.push(Warning::new(e.to_string())),
         }
+    }
+    if missing_meta > 0 {
+        warnings.push(Warning::new(format!(
+            "{missing_meta} subagent transcripts have no meta file (older Claude Code); their runs have no caller or depth"
+        )));
     }
     for (run, (first, last)) in workflows {
         events.push(Event {
