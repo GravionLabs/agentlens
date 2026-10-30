@@ -1,4 +1,5 @@
-//! The Windows installer puts the install directory on PATH: the NSIS hook file
+//! The Windows uninstaller removes the install directory from PATH and the
+//! installer leaves PATH alone (ADR 0008): the NSIS hook file
 //! (`bundle.windows.nsis.installerHooks`) is wired into the bundle configuration
 //! and keeps the rules of the PATH edit.
 //!
@@ -69,8 +70,19 @@ fn position(statements: &[&str], wanted: impl Fn(&str) -> bool, what: &str) -> u
         .unwrap_or_else(|| panic!("statement not found: {what}"))
 }
 
+/// The body of `Function <name>` up to its `FunctionEnd`.
+fn function_body(text: &str, name: &str) -> String {
+    let head = format!("Function {name}");
+    let start = text
+        .find(&format!("{head}\n"))
+        .unwrap_or_else(|| panic!("function {name} is defined"));
+    let rest = &text[start..];
+    let end = rest.find("FunctionEnd").expect("function is closed");
+    rest[..end].to_owned()
+}
+
 fn edit_function() -> String {
-    macro_body(&hook_text(), "AgentLensDefineEditPath").to_owned()
+    function_body(&hook_text(), "un.AgentLensRemovePath")
 }
 
 // ---- helpers: makensis ----
@@ -83,9 +95,10 @@ fn makensis() -> Option<PathBuf> {
 }
 
 /// A minimal stand-in for Tauri's installer.nsi: the hook file is included before
-/// INSTALLMODE is defined (as in the template), the hooks run in the install and
-/// the uninstall section, and `$MultiUser.InstallMode` exists only in "both" mode.
-fn wrapper(mode: &str, hooks: &Path, out: &Path, uninstall_body: &str) -> String {
+/// INSTALLMODE is defined (as in the template), each hook runs in the install or
+/// the uninstall section only when it is defined (`!ifmacrodef`, as in the
+/// template), and `$MultiUser.InstallMode` exists only in "both" mode.
+fn wrapper(mode: &str, hooks: &Path, out: &Path, install_body: &str) -> String {
     let multi_user = if mode == "both" {
         "Var MultiUser.InstallMode\nFunction .onInit\n  StrCpy $MultiUser.InstallMode \"CurrentUser\"\nFunctionEnd\n"
     } else {
@@ -94,8 +107,9 @@ fn wrapper(mode: &str, hooks: &Path, out: &Path, uninstall_body: &str) -> String
     format!(
         "Unicode true\nOutFile \"{out}\"\nRequestExecutionLevel user\n{multi_user}\
          !include \"{hooks}\"\n!define INSTALLMODE \"{mode}\"\n\
-         Section\n  !insertmacro NSIS_HOOK_POSTINSTALL\n  WriteUninstaller \"$INSTDIR\\uninstall.exe\"\nSectionEnd\n\
-         Section Uninstall\n{uninstall_body}\nSectionEnd\n",
+         Section\n{install_body}\n  !ifmacrodef NSIS_HOOK_POSTINSTALL\n    !insertmacro NSIS_HOOK_POSTINSTALL\n  !endif\n\
+         WriteUninstaller \"$INSTDIR\\uninstall.exe\"\nSectionEnd\n\
+         Section Uninstall\n  !ifmacrodef NSIS_HOOK_POSTUNINSTALL\n    !insertmacro NSIS_HOOK_POSTUNINSTALL\n  !endif\nSectionEnd\n",
         out = out.display(),
         hooks = hooks.display(),
     )
@@ -143,7 +157,7 @@ fn hook_file_compiles_in_every_install_mode() {
             mode,
             &hook_path(),
             &out.path().join(format!("{mode}.exe")),
-            "  !insertmacro NSIS_HOOK_POSTUNINSTALL",
+            "",
         );
         let (ok, log) = compile(&makensis, &script);
         assert!(ok, "{mode}: makensis failed:\n{log}");
@@ -151,9 +165,8 @@ fn hook_file_compiles_in_every_install_mode() {
 }
 
 #[test]
-fn compile_check_rejects_an_installer_function_in_the_uninstaller() {
-    // proves the check would catch the mistake of calling a plain function from
-    // the uninstall section
+fn compile_check_rejects_the_uninstaller_function_in_the_installer() {
+    // the PATH edit exists only in the uninstaller: the installer cannot call it
     let Some(makensis) = require_makensis() else {
         return;
     };
@@ -162,7 +175,7 @@ fn compile_check_rejects_an_installer_function_in_the_uninstaller() {
         "currentUser",
         &hook_path(),
         &out.path().join("bad.exe"),
-        "  Push \"remove\"\n  Push \"HKCU\"\n  Call AgentLensEditPath",
+        "  Push \"HKCU\"\n  Call un.AgentLensRemovePath",
     );
     let (ok, log) = compile(&makensis, &script);
     assert!(!ok, "makensis accepted the script:\n{log}");
@@ -172,30 +185,73 @@ fn compile_check_rejects_an_installer_function_in_the_uninstaller() {
 // ---- NSIS: wiring and structure ----
 
 #[test]
-fn hook_file_is_referenced_and_defines_both_hooks() {
+fn hook_file_is_referenced_and_defines_only_the_uninstall_hook() {
     let text = hook_text();
-    macro_body(&text, "NSIS_HOOK_POSTINSTALL");
-    macro_body(&text, "NSIS_HOOK_POSTUNINSTALL");
+    let uninstall = macro_body(&text, "NSIS_HOOK_POSTUNINSTALL");
+    assert!(statements(uninstall).contains(&"!insertmacro AgentLensRemovePath"));
+    // install and update (the updater runs the setup silently) leave PATH alone
+    assert!(
+        !statements(&text)
+            .iter()
+            .any(|s| s.starts_with("!macro NSIS_HOOK_PRE")
+                || s.starts_with("!macro NSIS_HOOK_POSTINSTALL")),
+        "the hook file defines an install hook"
+    );
     assert!(text.contains("!include \"WinMessages.nsh\""));
     assert!(text.contains("!include \"LogicLib.nsh\""));
 }
 
 #[test]
-fn edit_function_exists_for_installer_and_uninstaller() {
+fn path_is_edited_only_by_an_uninstaller_function_that_only_removes() {
     let text = hook_text();
-    let defines: Vec<_> = statements(&text)
+    let functions: Vec<&str> = statements(&text)
         .into_iter()
-        .filter(|s| s.starts_with("!insertmacro AgentLensDefineEditPath"))
+        .filter(|s| s.starts_with("Function "))
         .collect();
-    assert!(defines.contains(&"!insertmacro AgentLensDefineEditPath \"\""));
-    assert!(defines.contains(&"!insertmacro AgentLensDefineEditPath \"un.\""));
-    assert!(edit_function().contains("Function ${un}AgentLensEditPath"));
-    assert!(macro_body(&text, "AgentLensEditPathCall").contains("Call ${un}AgentLensEditPath"));
+    assert_eq!(functions, ["Function un.AgentLensRemovePath"]);
+    assert!(macro_body(&text, "AgentLensRemovePathCall").contains("Call un.AgentLensRemovePath"));
 
-    let install = macro_body(&text, "NSIS_HOOK_POSTINSTALL");
-    let uninstall = macro_body(&text, "NSIS_HOOK_POSTUNINSTALL");
-    assert!(install.contains("!insertmacro AgentLensPath \"\" \"add\""));
-    assert!(uninstall.contains("!insertmacro AgentLensPath \"un.\" \"remove\""));
+    let body = edit_function();
+    let statements = statements(&body);
+    // the install directory is never appended and no backup is written
+    assert!(!statements.iter().any(|s| s.contains("$2;$INSTDIR")));
+    assert!(
+        !statements
+            .iter()
+            .any(|s| s.starts_with("StrCpy $2 $INSTDIR"))
+    );
+    assert!(!text.contains("PathBackup"));
+    assert!(!text.contains("MessageBox"));
+    let writes: Vec<&&str> = statements
+        .iter()
+        .filter(|s| s.starts_with("WriteReg"))
+        .collect();
+    assert_eq!(
+        writes,
+        [
+            &"WriteRegExpandStr HKLM \"${AGENTLENS_MACHINE_ENV}\" \"Path\" $2",
+            &"WriteRegExpandStr HKCU \"Environment\" \"Path\" $2",
+        ]
+    );
+}
+
+#[test]
+fn path_without_the_entry_or_without_a_value_is_not_written() {
+    let body = edit_function();
+    let statements = statements(&body);
+    let split = position(&statements, |s| s == "${While} $1 != \"\"", "split loop");
+    // the first "$3 == 0" is the Program Files check, before the split
+    let not_found = statements[split..]
+        .iter()
+        .position(|s| *s == "${If} $3 == 0")
+        .expect("not found check after the split")
+        + split;
+    let write = position(&statements, |s| s.starts_with("WriteRegExpandStr"), "write");
+    assert!(split < not_found && not_found < write);
+    assert_eq!(statements[not_found + 2], "Goto done");
+    assert!(
+        statements.contains(&"DetailPrint \"AgentLens: PATH not changed, there is no PATH value\"")
+    );
 }
 
 #[test]
@@ -203,10 +259,9 @@ fn section_macros_leave_registers_alone() {
     // the hooks run inside the template's sections, which use $0 and friends
     let text = hook_text();
     for name in [
-        "NSIS_HOOK_POSTINSTALL",
         "NSIS_HOOK_POSTUNINSTALL",
-        "AgentLensPath",
-        "AgentLensEditPathCall",
+        "AgentLensRemovePath",
+        "AgentLensRemovePathCall",
     ] {
         for statement in statements(macro_body(&text, name)) {
             let writes = [
@@ -326,17 +381,13 @@ fn path_near_the_nsis_string_limit_is_left_untouched() {
     let old_len = position(&statements, |s| s == "StrLen $7 $0", "old length");
     let old_guard = position(&statements, |s| s == "${If} $7 >= 1023", "old guard");
     let split = position(&statements, |s| s == "${While} $1 != \"\"", "split loop");
-    assert!(read < old_len && old_len + 1 == old_guard && old_guard < split);
-
-    let new_guard = position(&statements, |s| s == "${If} $7 > 1023", "new guard");
-    let append = position(&statements, |s| s == "StrCpy $2 \"$2;$INSTDIR\"", "append");
     let write = position(&statements, |s| s.starts_with("WriteRegExpandStr"), "write");
-    assert!(split < new_guard && new_guard < append && append < write);
+    assert!(read < old_len && old_len + 1 == old_guard && old_guard < split && split < write);
 }
 
 #[test]
 fn existing_entry_is_marked_as_found() {
-    // without this an update would append the directory a second time
+    // without this the uninstaller would never remove the entry
     let body = edit_function();
     let statements = statements(&body);
     let branch = position(
@@ -345,12 +396,14 @@ fn existing_entry_is_marked_as_found() {
         "existing entry branch",
     );
     assert_eq!(statements[branch + 1], "StrCpy $3 1");
+    // and it is left out of the rebuilt value
+    assert_eq!(statements[branch + 2], "${Else}");
 }
 
 #[test]
 fn install_mode_variable_is_used_only_in_both_mode() {
     let text = hook_text();
-    let path_macro = macro_body(&text, "AgentLensPath");
+    let path_macro = macro_body(&text, "AgentLensRemovePath");
     let statements = statements(path_macro);
     let both = position(
         &statements,
@@ -381,7 +434,7 @@ fn statements_outside(text: &str, part: &str) -> String {
 #[test]
 fn environment_change_is_broadcast() {
     let text = hook_text();
-    let path_macro = macro_body(&text, "AgentLensPath");
+    let path_macro = macro_body(&text, "AgentLensRemovePath");
     assert!(statements(path_macro).contains(
         &"SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 \"STR:Environment\" /TIMEOUT=5000"
     ));
@@ -431,50 +484,6 @@ fn unreadable_path_is_told_from_a_missing_one_and_left_untouched() {
         .expect("skip")
         + exists;
     assert!(statements[skip - 1].contains("could not be read"));
-}
-
-#[test]
-fn unreadable_path_shows_manual_instructions_unless_silent() {
-    let body = edit_function();
-    let statements = statements(&body);
-    let silent = position(&statements, |s| s == "${IfNot} ${Silent}", "silent check");
-    let message = statements[silent + 1];
-    assert!(message.starts_with("MessageBox MB_OK"), "{message}");
-    assert!(message.contains("Edit environment variables for your account"));
-    assert!(message.contains("$INSTDIR"));
-}
-
-#[test]
-fn old_value_is_backed_up_before_the_write_and_never_by_the_uninstaller() {
-    let body = edit_function();
-    let statements = statements(&body);
-    let backup = position(
-        &statements,
-        |s| s == "WriteRegExpandStr HKCU \"${AGENTLENS_BACKUP_KEY}\" \"Path\" $0",
-        "user backup",
-    );
-    let machine_backup = position(
-        &statements,
-        |s| s == "WriteRegExpandStr HKLM \"${AGENTLENS_BACKUP_KEY}\" \"Path\" $0",
-        "machine backup",
-    );
-    let write = position(
-        &statements,
-        |s| s == "WriteRegExpandStr HKCU \"Environment\" \"Path\" $2",
-        "user write",
-    );
-    assert!(backup < write && machine_backup < write);
-    // only the installer ("add") makes a backup
-    let guard = statements[..backup]
-        .iter()
-        .rposition(|s| *s == "${If} $R8 == \"add\"")
-        .expect("backup is guarded by the add mode");
-    assert_eq!(statements[guard + 1], "${AndIf} $0 != \"\"");
-    assert!(
-        hook_text().contains(
-            "!define AGENTLENS_BACKUP_KEY \"Software\\GravionLabs\\AgentLens\\PathBackup\""
-        )
-    );
 }
 
 #[test]
