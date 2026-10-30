@@ -24,7 +24,7 @@ The [analyses](analyses.md) page explains what each one means.
 
 ## Filters and refresh
 
-The filter bar in the toolbar above the open view sets the period, the sources and the project for every view. The application keeps the sessions it has read for a few minutes so that switching views is quick; **Refresh** in the top bar forgets them and reads the files again. On a narrow window the top bar folds Refresh into its menu.
+The filter bar in the top bar sets the period, the sources and the project for every view. The application keeps the sessions it has read for a few minutes so that switching views is quick; **Refresh** in the top bar forgets them and reads the files again. On a narrow window the top bar folds Refresh into its menu.
 
 ### Period
 
@@ -37,7 +37,7 @@ Input that cannot be used (zero or negative N, an end before the start) is expla
 
 ## Tables
 
-Tables are sortable by their column headers. Where a table has a filter (for example the group of the cache efficiency table or the skill and kind columns), it is a filter row under the headers, one field per filterable column, instead of a single search box. Filtering by source is left to the filter bar above the view. Long tables have a paginator; its rows-per-page list ends with **Show all**.
+Tables are sortable by their column headers. Where a table has a filter (for example the group of the cache efficiency table or the skill and kind columns), it is a filter row under the headers, one field per filterable column, instead of a single search box. Filtering by source is left to the filter bar in the top bar. Long tables have a paginator; its rows-per-page list ends with **Show all**.
 
 ## Explaining the numbers
 

@@ -38,7 +38,7 @@ Charts:
   - `help-link.ts` (glossary "?" links, `termTitle`) and `term.ts` (dotted-underline word linking to the glossary): glossary integration, which helix does not know.
   - `sort.ts` (`nullsLast`): sort function for `hx-data-table` that puts `n/a` last.
   - `legend.ts` and `term.ts`: checked in #351, they hold no logic beyond a template and a one-line glossary lookup, so they have no spec of their own.
-  - `view-frame.ts`: route component holding the filter bar, toolbar and main area; `filter-bar.ts`, `status-bar.ts` (content of the shell's status bar), `cli-tools.ts` and `update-status.ts`: application features.
+  - `view-frame.ts`: route component holding the main area (the filter bar sits in the topbar slot since #383); `filter-bar.ts`, `status-bar.ts` (content of the shell's status bar), `cli-tools.ts` and `update-status.ts`: application features.
   - `status.ts`: loading, failure and warning messages of one analysis, built from `hx-message` and `hx-progress-spinner`.
   - `helix-dark.ts`: host directive on the root component that maps the AgentLens dark mode (`data-theme`, `prefers-color-scheme`) to helix.
   - The SVG charts: `stacked-bars.ts` (with the estimate hatching in its pattern definitions) and the timeline chart (`features/timeline/chart.ts`), kept by ruling (see above), and `legend.ts`, the swatch legend they share.
