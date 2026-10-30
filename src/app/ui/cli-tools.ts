@@ -8,7 +8,8 @@ type Busy = "install" | "remove" | null;
 
 /**
  * “Command line tools” in the status bar: installs or removes the links to the bundled CLI and MCP
- * server in a folder on PATH. Only shown where the backend offers it (macOS and AppImage).
+ * server in a folder on PATH, or on Windows the folder of AgentLens as an entry of the user PATH. Only
+ * shown where the backend offers it (macOS, AppImage and Windows).
  */
 @Component({
   selector: "app-cli-tools",
@@ -78,12 +79,35 @@ type Busy = "install" | "remove" | null;
               >
             }
             @for (f of s.foreign; track f) {
-              <hx-message severity="warn" variant="simple" size="small">
-                Not touched: {{ f }} is a file AgentLens did not create. Remove or rename it by hand
-                to install the tool there.
-              </hx-message>
+              @if (userPath(s)) {
+                <hx-message severity="warn" variant="simple" size="small">
+                  {{ f }} on your PATH also holds the command line tools (another installation). It
+                  stays as it is; remove it from PATH by hand if it is out of date.
+                </hx-message>
+              } @else {
+                <hx-message severity="warn" variant="simple" size="small">
+                  Not touched: {{ f }} is a file AgentLens did not create. Remove or rename it by
+                  hand to install the tool there.
+                </hx-message>
+              }
             }
-            @if (s.on_path) {
+            @if (userPath(s)) {
+              @if (s.on_path) {
+                <hx-message severity="info" variant="simple" size="small"
+                  >{{ s.dir }} is on your user PATH.</hx-message
+                >
+              } @else {
+                <hx-message severity="info" variant="simple" size="small"
+                  >{{ s.dir }} is not on your user PATH.</hx-message
+                >
+              }
+              @if (changed(s)) {
+                <hx-message severity="info" variant="simple" size="small">
+                  Open a new terminal to use the change: programs that are already running, such as
+                  open terminals and editors, keep the old PATH.
+                </hx-message>
+              }
+            } @else if (s.on_path) {
               <hx-message severity="info" variant="simple" size="small"
                 >{{ s.dir }} is on your PATH.</hx-message
               >
@@ -213,7 +237,17 @@ export class CliTools {
     }
   }
 
+  protected userPath(s: CliToolsData): boolean {
+    return s.method === "user_path";
+  }
+
+  /** Whether the call changed the user PATH (Windows), so that running programs have an old one. */
+  protected changed(s: CliToolsData): boolean {
+    return s.tools.some((t) => t.action === "created" || t.action === "removed");
+  }
+
   protected describe(tool: CliTool, s: CliToolsData): string {
+    if (s.method === "user_path") return describeUserPath(tool);
     const copy = s.method === "copy";
     switch (tool.action) {
       case "created":
@@ -236,6 +270,24 @@ export class CliTools {
         }
         return STATES[tool.state];
     }
+  }
+}
+
+/** The labels on Windows, where the tool is installed while its folder is on the user PATH. */
+function describeUserPath(tool: CliTool): string {
+  switch (tool.action) {
+    case "created":
+      return "added to PATH";
+    case "kept":
+      return "already on PATH";
+    case "removed":
+      return "removed from PATH";
+    case "absent":
+      return "was not on PATH";
+    case "failed":
+      return "failed";
+    default:
+      return tool.state === "installed" ? "on PATH" : "not on PATH";
   }
 }
 

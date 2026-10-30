@@ -44,9 +44,22 @@
 //! binaries, but it still carries [`MARKER`], so it is reported as stale: installing again replaces
 //! it and removing deletes it.
 //!
-//! On Windows nothing is installed: the result says the action is unsupported.
+//! # Windows
+//!
+//! On Windows nothing is linked or copied: the binaries stay in the install directory (`bin_dir`), and
+//! [`install`] adds that directory to the user `PATH` (`HKCU\Environment\Path`), [`remove`] takes the
+//! entry out again and [`status`] reads it ([`Method::UserPath`], [ADR 0008](../../../docs/adr/0008-windows-path-entry.md)).
+//! Only that entry is written, the value keeps its type and its other entries, and the old value is
+//! saved first; the rules and the string logic are in [`user_path`]. The fields of [`CliTools`] then
+//! mean: `dir` is `bin_dir`, `on_path` whether the entry is in the user `PATH`, `tools` the two
+//! binaries in `bin_dir` (installed while the entry is there), `foreign` other folders on `PATH` that
+//! hold the CLI, and there are no profile lines (a new terminal sees the change).
+//!
+//! On other platforms without symlinks nothing is installed: the result says the action is unsupported.
 //!
 //! [offered]: CliTools::offered
+
+pub mod user_path;
 
 use std::fs::{self, File};
 use std::io::{self, Read};
@@ -104,7 +117,9 @@ pub enum Method {
     Symlink,
     /// Copies of the binaries (AppImage, whose binaries have no stable path).
     Copy,
-    /// Not supported on this platform (Windows).
+    /// The install directory as an entry of the user `PATH` (Windows).
+    UserPath,
+    /// Not supported on this platform (neither Unix nor Windows).
     Unsupported,
 }
 
@@ -168,13 +183,13 @@ pub struct ProfileLine {
 /// The state of the command line tools, the answer of [`status`], [`install`] and [`remove`].
 #[derive(Debug, Clone, Serialize)]
 pub struct CliTools {
-    /// Whether this platform can install the tools at all (not on Windows).
+    /// Whether this platform can install the tools at all.
     pub supported: bool,
-    /// Whether the application should offer the action: on macOS and in an AppImage, not for the
-    /// Linux packages (which install the tools themselves) and not on Windows.
+    /// Whether the application should offer the action: on macOS, in an AppImage and on Windows, not
+    /// for the Linux packages (which install the tools themselves).
     pub offered: bool,
     pub method: Method,
-    /// `~/.local/bin`.
+    /// `~/.local/bin`; on Windows the install directory that goes on the user `PATH`.
     pub dir: PathBuf,
     /// Whether the call created `dir`.
     pub created_dir: bool,
@@ -214,7 +229,9 @@ pub fn bin_home(env: &Env) -> PathBuf {
 
 /// How the tools are installed in this environment.
 pub fn method(env: &Env) -> Method {
-    if !cfg!(unix) {
+    if cfg!(windows) {
+        Method::UserPath
+    } else if !cfg!(unix) {
         Method::Unsupported
     } else if env.var("APPIMAGE").is_some() {
         Method::Copy
@@ -223,10 +240,10 @@ pub fn method(env: &Env) -> Method {
     }
 }
 
-/// Whether the application offers the action here: in an AppImage and on macOS.
+/// Whether the application offers the action here: in an AppImage, on macOS and on Windows.
 pub fn offered(env: &Env) -> bool {
     match method(env) {
-        Method::Copy => true,
+        Method::Copy | Method::UserPath => true,
         Method::Symlink => cfg!(target_os = "macos"),
         Method::Unsupported => false,
     }
@@ -235,7 +252,9 @@ pub fn offered(env: &Env) -> bool {
 /// Why the action is not offered here, for an error of a command that should not have been called.
 pub fn not_offered_reason(env: &Env) -> &'static str {
     match method(env) {
-        Method::Unsupported => "installing the command line tools is not supported on Windows",
+        Method::Unsupported => {
+            "installing the command line tools is not supported on this platform"
+        }
         _ => {
             "installing the command line tools is only offered on macOS and in an AppImage; \
              the .deb and .rpm packages put them in /usr/bin"
@@ -256,8 +275,11 @@ const UNSTABLE: &str = "AgentLens runs from a temporary location (a disk image o
      Translocation), so links to its programs would break: move AgentLens.app to /Applications, \
      start it from there and install the command line tools again.";
 
-/// What is installed, without writing anything.
+/// What is installed (on Windows: whether `bin_dir` is on the user `PATH`), without writing anything.
 pub fn status(env: &Env, bin_dir: &Path) -> CliTools {
+    if method(env) == Method::UserPath {
+        return user_path::status(&*user_path::system_store(), bin_dir);
+    }
     let mut out = base(env, bin_dir);
     out.tools = TOOLS
         .iter()
@@ -278,8 +300,11 @@ pub fn status(env: &Env, bin_dir: &Path) -> CliTools {
 }
 
 /// Links (or copies) the tools into `~/.local/bin`; creates the directory, replaces old links and
-/// copies of ours and leaves foreign files alone.
+/// copies of ours and leaves foreign files alone. On Windows adds `bin_dir` to the user `PATH`.
 pub fn install(env: &Env, bin_dir: &Path) -> CliTools {
+    if method(env) == Method::UserPath {
+        return user_path::install(&*user_path::system_store(), bin_dir);
+    }
     let mut out = base(env, bin_dir);
     let method = out.method;
     if method == Method::Unsupported {
@@ -334,8 +359,12 @@ pub fn install(env: &Env, bin_dir: &Path) -> CliTools {
     finish(out)
 }
 
-/// Removes our links (and copies, old ones too) from `~/.local/bin`; anything else stays.
+/// Removes our links (and copies, old ones too) from `~/.local/bin`; anything else stays. On Windows
+/// removes the entry of `bin_dir` from the user `PATH`.
 pub fn remove(env: &Env, bin_dir: &Path) -> CliTools {
+    if method(env) == Method::UserPath {
+        return user_path::remove_entry(&*user_path::system_store(), bin_dir);
+    }
     let mut out = base(env, bin_dir);
     out.tools = TOOLS
         .iter()
@@ -369,8 +398,9 @@ fn base(env: &Env, bin_dir: &Path) -> CliTools {
     let on_path = on_path(env, &dir);
     let note = match method {
         Method::Unsupported => {
-            Some("Installing the command line tools is not supported on Windows.".to_string())
+            Some("Installing the command line tools is not supported on this platform.".to_string())
         }
+        Method::UserPath => None,
         Method::Copy => Some(
             "The AppImage has no stable path for its programs, so the tools are copies: \
              click Install again after an update of the AppImage to replace them."
@@ -630,7 +660,7 @@ fn write_temp(tmp: &Path, target: &Path, method: Method) -> io::Result<()> {
             // The umask may have taken bits off the mode of `open`.
             fs::set_permissions(tmp, fs::Permissions::from_mode(0o755))
         }
-        Method::Unsupported => Err(unsupported()),
+        Method::UserPath | Method::Unsupported => Err(unsupported()),
     }
 }
 
@@ -650,17 +680,21 @@ fn unsupported() -> io::Error {
 mod tests {
     use super::*;
 
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     #[test]
-    fn is_unsupported_without_symlinks() {
+    fn uses_the_user_path_on_windows() {
         let home = tempfile::tempdir().unwrap();
         let env = Env::for_home(home.path());
-        let out = install(&env, &home.path().join("app"));
-        assert!(!out.supported);
-        assert!(!out.offered);
-        assert!(!offered(&env.clone().with_var("APPIMAGE", "x")));
-        assert_eq!(out.method, Method::Unsupported);
-        assert!(out.note.is_some());
+        assert_eq!(method(&env), Method::UserPath);
+        assert!(offered(&env));
+        assert!(offered(&env.clone().with_var("APPIMAGE", "x")));
+        // The status only reads the registry.
+        let bin = home.path().join("app");
+        let out = status(&env, &bin);
+        assert!(out.supported);
+        assert_eq!(out.method, Method::UserPath);
+        assert_eq!(out.dir, bin);
+        assert!(out.profile_lines.is_empty());
         assert!(!bin_home(&env).exists());
     }
 
@@ -728,8 +762,9 @@ mod tests {
             assert_eq!(method(&appimage), Method::Copy);
             assert_eq!(method(&env), Method::Symlink);
         }
-        // The .deb and .rpm packages install the tools themselves; macOS has no installer for them.
-        assert_eq!(offered(&env), cfg!(target_os = "macos"));
+        // The .deb and .rpm packages install the tools themselves; macOS has no installer for them,
+        // and on Windows the action edits the user PATH.
+        assert_eq!(offered(&env), cfg!(target_os = "macos") || cfg!(windows));
         assert!(!not_offered_reason(&env).is_empty());
     }
 
