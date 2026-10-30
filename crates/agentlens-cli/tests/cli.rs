@@ -947,10 +947,71 @@ fn efficiency_reports_cache_hit_rate_and_subagent_share() {
 }
 
 #[test]
+fn efficiency_prints_the_roles_table_and_its_csv() {
+    let home = home_with_context();
+    let file = price_file(&home);
+    agentlens(&home)
+        .args(["efficiency", "--prices"])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Roles"))
+        .stdout(predicate::str::contains("first request context"))
+        .stdout(predicate::str::contains("main"));
+    let out = agentlens(&home)
+        .args(["efficiency", "--format", "csv", "--section", "roles"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert!(text.starts_with("role,kind,runs,requests,requests_per_run,"));
+    assert!(
+        text.lines()
+            .nth(1)
+            .unwrap()
+            .starts_with("main,main,1,3,3.00,")
+    );
+}
+
+#[test]
+fn efficiency_csv_needs_a_section_and_sections_filter_the_text() {
+    let home = home_with_context();
+    agentlens(&home)
+        .args(["efficiency", "--format", "csv"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--format csv holds one table; choose it with --section cache|roles",
+        ));
+    agentlens(&home)
+        .args(["efficiency", "--section", "roles"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Roles"))
+        .stdout(predicate::str::contains("Cache hit rate").not());
+    agentlens(&home)
+        .args(["efficiency", "--section", "cache"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Cache hit rate"))
+        .stdout(predicate::str::contains("Roles").not());
+}
+
+#[test]
 fn efficiency_csv_and_grouping_by_project() {
     let home = home_with_context();
     let out = agentlens(&home)
-        .args(["efficiency", "--by", "project", "--format", "csv"])
+        .args([
+            "efficiency",
+            "--by",
+            "project",
+            "--format",
+            "csv",
+            "--section",
+            "cache",
+        ])
         .assert()
         .success()
         .get_output()

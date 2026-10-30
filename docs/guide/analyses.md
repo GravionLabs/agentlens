@@ -127,6 +127,8 @@ agentlens efficiency --by project
 
 The cache hit rate (cache read divided by all input tokens, measured) per session, project or source, and the share of subagents in requests, tokens and cost. Sources that report no cache tokens show `n/a` instead of 0%; cost shares only cover priced requests.
 
+The *roles* table has a row per role over the period: runs, requests per run, tokens, cost per run (with a `~` when estimated), the models, the *first request context* (`input + cache read + cache write` of a run's first request, the static part every run pays), the uncached tokens after it (`input + cache write` of the later requests, what the run read) and the hit rate, sorted by total cost. A role is the name of a forked skill, else the workflow phase, else the agent type; the main agent is the row `main` and a run without any of the three is `(unknown)`. The context columns are means per run over the runs with requests; a run without requests (a workflow container, say) counts in `runs` and adds no cost. `--section all|cache|roles` (default `all`) filters the text, and `--format csv` needs `--section cache|roles` because it holds one table.
+
 ## Compare
 
 ```sh

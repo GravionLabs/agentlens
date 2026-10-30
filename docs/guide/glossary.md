@@ -122,6 +122,14 @@ Measured: every number behind the saving came from the client. Estimated: some w
 
 ## Efficiency
 
+### Role
+
+`efficiency` groups the runs by role: the name of a forked skill if there is one, otherwise the workflow phase, otherwise the agent type. The main agent is a row of its own (`main`), and a run that names none of the three is `(unknown)`. The free-text description of a run is never used as a role.
+
+### First request context
+
+The static part every run pays: what the first request of a run sends to the model, cached or not. The roles table shows the mean per run. Next to it, *uncached after first* is the uncached input plus cache write of the later requests, which is what the run read. Both are measured when the requests are.
+
 ### Cache read
 
 Repeated prefixes of a conversation are cached by the provider. Reading from the cache is much cheaper and faster than sending new input.

@@ -399,7 +399,8 @@ pub struct ExportOptions {
     pub what_if: Option<String>,
     /// The unused view lists items that have been used too, like `--all`.
     pub all: Option<bool>,
-    /// The tab of the flow view: `growth`, `errors` or `hooks`.
+    /// The tab of the flow view (`growth`, `errors` or `hooks`) or the table of the efficiency
+    /// view (`cache` or `roles`).
     pub section: Option<String>,
 }
 
@@ -540,7 +541,12 @@ pub fn export(
         ("efficiency", "csv") => {
             let by = options.by.as_deref().unwrap_or("session");
             let a = efficiency(ctx, f, by)?;
-            csv_file(view, csv_export::cache(&a.data.cache), a.warnings, a.errors)
+            let content = match options.section.as_deref().unwrap_or("cache") {
+                "cache" => csv_export::cache(&a.data.cache),
+                "roles" => csv_export::roles(&a.data.roles),
+                other => return Err(format!("unknown section `{other}`")),
+            };
+            csv_file(view, content, a.warnings, a.errors)
         }
         ("flow", "csv") => {
             let a = flow(ctx, f)?;
@@ -733,6 +739,30 @@ mod tests {
             registry: default_registry(),
         };
         (dir, ctx)
+    }
+
+    #[test]
+    fn efficiency_csv_export_follows_the_section() {
+        let (_dir, ctx) = old_session_context();
+        let f = Filters::default();
+        let run = |section: Option<&str>| {
+            export(
+                &ctx,
+                "efficiency",
+                "csv",
+                &f,
+                &ExportOptions {
+                    section: section.map(Into::into),
+                    ..ExportOptions::default()
+                },
+            )
+        };
+        let cache = run(None).unwrap().content;
+        assert!(cache.starts_with("key,"), "{cache}");
+        assert_eq!(run(Some("cache")).unwrap().content, cache);
+        let roles = run(Some("roles")).unwrap().content;
+        assert!(roles.starts_with("role,kind,runs,"), "{roles}");
+        assert_eq!(run(Some("nope")).unwrap_err(), "unknown section `nope`");
     }
 
     #[test]

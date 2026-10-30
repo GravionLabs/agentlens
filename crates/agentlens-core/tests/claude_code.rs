@@ -699,3 +699,43 @@ fn unreadable_meta_warns_per_file_and_the_scan_goes_on() {
     );
     assert_eq!(usages(&se).len(), 3);
 }
+
+#[test]
+fn efficiency_roles_cover_skill_phase_type_and_main() {
+    use agentlens_core::analyzers::efficiency::{CacheBy, RoleKind, analyze};
+    use agentlens_core::prices::PriceTable;
+
+    let home = session_with(&[
+        ("agent-a1", Some("claude_code/agent_depth1.meta.json")),
+        ("agent-a3", Some("claude_code/agent_forked_skill.meta.json")),
+        (
+            "workflows/run-1/agent-w1",
+            Some("claude_code/workflow_subagent.meta.json"),
+        ),
+    ]);
+    let report = analyze(&read_all(&home), &PriceTable::bundled(), CacheBy::Source);
+    let roles: Vec<(&str, RoleKind, u64)> = report
+        .roles
+        .iter()
+        .map(|r| (r.role.as_str(), r.kind, r.runs))
+        .collect();
+    for want in [
+        ("main", RoleKind::Main, 1),
+        ("review", RoleKind::Skill, 1),
+        ("Implement", RoleKind::WorkflowPhase, 1),
+        ("general-purpose", RoleKind::AgentType, 1),
+    ] {
+        assert!(roles.contains(&want), "{want:?} missing in {roles:?}");
+    }
+    // The workflow container made no request but is a run of its own.
+    assert_eq!(roles.len(), 5, "{roles:?}");
+    let container = report.roles.iter().find(|r| r.role == "workflow").unwrap();
+    assert_eq!((container.runs, container.requests), (1, 0));
+    assert_eq!(container.usd, None);
+    let skill = report.roles.iter().find(|r| r.role == "review").unwrap();
+    // The subagent fixture request: 10 input + 100 cache read + 200 cache write.
+    assert_eq!(skill.requests, 1);
+    assert_eq!(skill.first_request_context.count, 310);
+    assert_eq!(skill.uncached_after_first.count, 0);
+    assert!(skill.first_request_context.measured);
+}

@@ -70,6 +70,20 @@ export const GLOSSARY: GlossaryEntry[] = [
     long: "Cost of the requests made by subagents divided by the cost of all requests of the session (`cost --by session`). It is n/a when the session has no priced request, because an unknown cost is not zero.",
   },
   {
+    id: "role",
+    term: "Role",
+    group: "Efficiency",
+    short: "What a run is for: its forked skill, else its workflow phase, else its agent type.",
+    long: "`efficiency` groups the runs by role: the name of a forked skill if there is one, otherwise the workflow phase, otherwise the agent type. The main agent is a row of its own (`main`), and a run that names none of the three is `(unknown)`. The free-text description of a run is never used as a role.",
+  },
+  {
+    id: "first-request-context",
+    term: "First request context",
+    group: "Efficiency",
+    short: "Input, cache read and cache write tokens of a run's first request.",
+    long: "The static part every run pays: what the first request of a run sends to the model, cached or not. The roles table shows the mean per run. Next to it, *uncached after first* is the uncached input plus cache write of the later requests, which is what the run read. Both are measured when the requests are.",
+  },
+  {
     id: "context",
     term: "Static context",
     group: "Context",

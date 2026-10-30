@@ -99,6 +99,9 @@ pub enum Command {
         /// Price file that overrides or extends the bundled prices (used for the cost share)
         #[arg(long, value_name = "FILE")]
         prices: Option<std::path::PathBuf>,
+        /// Which section to show; `--format csv` needs `cache` or `roles`
+        #[arg(long, value_enum, default_value_t = EfficiencySection::All)]
+        section: EfficiencySection,
     },
     /// Show what the sessions cost
     Cost {
@@ -170,6 +173,13 @@ pub enum EfficiencyBy {
     Session,
     Project,
     Source,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EfficiencySection {
+    All,
+    Cache,
+    Roles,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]

@@ -72,7 +72,12 @@ pub fn run(cli: Cli) -> Result<()> {
             },
             display,
         ),
-        Command::Efficiency { by, top, prices } => efficiency::run(
+        Command::Efficiency {
+            by,
+            top,
+            prices,
+            section,
+        } => efficiency::run(
             &registry,
             &env,
             &filter,
@@ -81,6 +86,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 price_file: prices.as_deref(),
                 by,
                 top,
+                section,
             },
             display,
         ),
