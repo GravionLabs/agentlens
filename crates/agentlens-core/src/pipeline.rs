@@ -347,6 +347,7 @@ pub struct CostRun {
 }
 
 /// Reads the sessions and prices their usage.
+#[allow(clippy::too_many_arguments)]
 pub fn cost_run(
     registry: &Registry,
     env: &Env,

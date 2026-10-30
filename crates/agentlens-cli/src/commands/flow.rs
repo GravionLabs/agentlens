@@ -226,6 +226,7 @@ fn hooks_table(r: &HooksReport, top: usize) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     registry: &Registry,
     env: &Env,
