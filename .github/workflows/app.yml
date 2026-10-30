@@ -116,7 +116,8 @@ jobs:
         env:
           AGENTLENS_REQUIRE_MAKENSIS: '1'
 
-  # Installs the NSIS setup against a synthetic user PATH (issue #443).
+  # Installs and uninstalls the NSIS setup against a synthetic user PATH: install
+  # leaves it unchanged, uninstall removes only the AgentLens entry (#443, #463).
   windows:
     needs: changes
     if: needs.changes.outputs.windows == 'true'
@@ -134,7 +135,7 @@ jobs:
       - run: scripts/stage-sidecars.ps1
         shell: pwsh
       - run: pnpm tauri build --bundles nsis
-      - name: Test the installer against synthetic PATH values
+      - name: Test install and uninstall against synthetic PATH values
         shell: pwsh
         run: |
           $setup = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe, target/release/bundle/nsis/*-setup.exe -ErrorAction SilentlyContinue | Select-Object -First 1

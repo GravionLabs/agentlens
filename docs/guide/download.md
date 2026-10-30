@@ -39,11 +39,11 @@ Unpack the archive and put `agentlens` and `agentlens-mcp` (the [MCP server](mcp
 
 | Installer                       | Where `agentlens` and `agentlens-mcp` are                                       |
 | ------------------------------- | ------------------------------------------------------------------------------- |
-| Windows setup `.exe`            | the install directory of the application                                        |
+| Windows setup `.exe`            | the install directory of the application; the action *Install command line tools* adds it to your `PATH` (see below) |
 | Linux `.deb` or `.rpm`          | `/usr/bin`, which is on your `PATH` already                                     |
 | macOS `.dmg` and Linux AppImage | inside the application; the action *Install command line tools* makes them available (see below) |
 
-The Windows installer adds its install directory to your `PATH` (next section). The Linux and macOS installers do not.
+No installer changes your `PATH`: on Windows, use **Install command line tools** in the application ([Windows: the `PATH` entry](#windows-the-path-entry)).
 
 ### Install command line tools (macOS and AppImage)
 
@@ -56,7 +56,7 @@ On macOS and in an AppImage, click **Install command line tools** in the status 
 - **Remove:** **Remove command line tools** removes only those links and copies (old ones too) and nothing else.
 - **`PATH`:** if `~/.local/bin` is not on your `PATH`, the application shows the line to add for zsh and bash (`export PATH="$HOME/.local/bin:$PATH"`). It never edits a shell profile; you add the line yourself. The check uses the `PATH` the application was started with, which can differ from your shell's: an application started from the macOS Finder or Dock does not read your shell profile, so it may report the folder as missing although your terminal has it. Check with `echo $PATH` in a terminal.
 
-The action is not offered for the `.deb` and `.rpm` packages, which install into `/usr/bin` already, and not on Windows, where the installer adds the program folder to `PATH`. The demo in the browser does not have it.
+The action is not offered for the `.deb` and `.rpm` packages, which install into `/usr/bin` already. On Windows it adds a `PATH` entry instead (next section). The demo in the browser does not have it.
 
 ### Windows: the `PATH` entry
 
@@ -68,15 +68,18 @@ The action is not offered for the `.deb` and `.rpm` packages, which install into
 - Another folder on your `PATH` that holds `agentlens.exe` (an older installation, a `cargo install`) is named but never changed.
 - Programs that are already running keep the old `PATH`: open a **new** terminal (or restart your editor) after you click.
 
-**From the installer.**
+**Not from the installer.** The setup `.exe` does not change your `PATH`, neither when you install nor when the application [updates itself](../updater.md) (the updater runs the setup `.exe` again): after installing, `agentlens` and `agentlens-mcp` are on your `PATH` only once you click **Install command line tools**. An update keeps an entry you added from the application, and an entry you removed stays removed.
 
-The setup `.exe` adds its install directory to your user `PATH`, so `agentlens` and `agentlens-mcp` work without any further step. It installs for your account only. A setup `.exe` built for a per-machine installation adds the directory to the machine `PATH` instead, but only when it runs elevated and the install directory is under `Program Files` (a directory that only administrators can write to); with any other directory it leaves the machine `PATH` untouched.
+**Upgrading from an earlier version:** versions before this change added the install directory to your `PATH` during setup. That entry stays when you update, and the application shows the command line tools as installed. **Remove command line tools** removes it if you do not want it.
 
 If you installed an earlier version with the `.msi`, uninstall it (Settings, Apps) before you run the setup `.exe`; the uninstall removes the `PATH` entry of the `.msi`. The `.msi` is no longer built, and the updater would otherwise install the setup `.exe` next to it.
 
-Programs that are already running keep the old `PATH`: open a **new** terminal (or restart your editor) before you use the commands.
+**Uninstall.** The uninstaller removes the entry of its install directory from your user `PATH` (a per-machine installation: from the machine `PATH`, when the uninstaller runs elevated and the install directory is under `Program Files`), whether the application or an earlier installer added it, and leaves every other entry as it is. Without that entry it leaves `PATH` unchanged. It also leaves `PATH` untouched, and says why in the details of the uninstallation, when:
 
-The uninstaller removes exactly that entry and leaves every other entry as it is. To remove it by hand (for example after deleting the files without the uninstaller):
+- your `PATH` is very long (the uninstaller cannot read a value of 1023 characters or more, and a write could cut off entries) or not a text value;
+- the install directory contains `;` or `%`, which `PATH` would split or expand.
+
+To remove the entry by hand in these cases (or after deleting the files without the uninstaller):
 
 - Open **Edit environment variables for your account** from the Start menu, select `Path` under **User variables**, click **Edit**, select the AgentLens install directory, click **Delete** and confirm with **OK**.
 - Or run this in PowerShell, replacing the directory with your install directory (it edits the user `PATH` only, and a new terminal sees the change):
@@ -89,16 +92,9 @@ $new = ($old -split ';' | Where-Object { $_ -and $_ -ne $dir }) -join ';'
 Set-ItemProperty 'HKCU:\Environment' -Name Path -Value $new -Type ExpandString
 ```
 
-The setup `.exe` leaves `PATH` untouched in these cases and says why in the details of the installation:
-
-- your existing `PATH` is very long (the installer cannot read a value of 1023 characters or more, and a write could cut off entries), or the new entry would not fit;
-- the install directory contains `;` or `%`, which `PATH` would split or expand.
-
-The installation still succeeds, but you must add the install directory by hand, with the dialog above (choose **New** instead of **Delete**). The uninstaller then has nothing to remove. When your `PATH` could not be read, the installer also shows a message with these steps unless it runs silently.
-
 ### Restore `PATH` on Windows
 
-Before the setup `.exe` changes your user `PATH`, it saves the old value in the registry under `HKEY_CURRENT_USER\Software\GravionLabs\AgentLens\PathBackup` (value `Path`; a per-machine installation uses `HKEY_LOCAL_MACHINE` for the same key). The uninstaller leaves the backup in place. To put the old value back, run this in PowerShell, then sign out and in again or open a new terminal:
+Before **Install command line tools** or **Remove command line tools** changes your user `PATH`, the application saves the old value in the registry under `HKEY_CURRENT_USER\Software\GravionLabs\AgentLens\PathBackup` (value `Path`). Earlier versions of the setup `.exe` saved it under the same key when they added the entry (a per-machine installation under `HKEY_LOCAL_MACHINE`). The uninstaller does not write or remove the backup. To put the old value back, run this in PowerShell, then sign out and in again or open a new terminal:
 
 ```powershell
 $old = (Get-Item 'HKCU:\Software\GravionLabs\AgentLens\PathBackup').GetValue('Path', '', 'DoNotExpandEnvironmentNames'); Set-ItemProperty 'HKCU:\Environment' -Name Path -Value $old -Type ExpandString

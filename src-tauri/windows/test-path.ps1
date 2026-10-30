@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Tests the NSIS installer against a synthetic user PATH (HKCU\Environment\Path).
+  Tests the NSIS installer and uninstaller against a synthetic user PATH (HKCU\Environment\Path).
 
 .DESCRIPTION
   For each case: set the user PATH, install silently, check, uninstall silently, check again.
@@ -8,34 +8,39 @@
   Windows only; also runnable by hand (it changes your user PATH temporarily and installs
   and uninstalls the application, so use a test machine).
 
+  The installer leaves PATH alone (ADR 0008); the uninstaller removes the install directory
+  when PATH has it (the application's *Install command line tools* or an earlier installer
+  added it) and leaves PATH unchanged otherwise.
+
   Cases:
     short    a few synthetic entries, REG_EXPAND_SZ
-    long     more than 1100 characters; the installer must leave PATH untouched
+    long     more than 1100 characters
     expand   entries with %USERPROFILE%, REG_EXPAND_SZ (must stay unexpanded)
     missing  no Path value at all
+    entry    synthetic entries with the install directory in the middle, REG_EXPAND_SZ
 
-  Checks after install: every old entry present in the same order, the install directory
-  added exactly once (long: PATH unchanged), value type unchanged, and, when the installer
-  wrote PATH, HKCU\Software\GravionLabs\AgentLens\PathBackup holds the old value.
-  After uninstall: the old value is back and the type is unchanged (missing: no entries).
+  After install: the value (bytes and type) is unchanged, or still missing, and no backup
+  under HKCU\Software\GravionLabs\AgentLens\PathBackup was written.
+  After uninstall: without the install directory the value is unchanged (missing: still
+  missing); with it, the install directory is gone and every other entry, their order and
+  the type are kept.
 
   Exit code: 0 when every case passed, otherwise the code of the first failure:
     10 installer failed      11 uninstaller failed     12 install directory not found
-    20 old entries lost or reordered after install     21 install directory not added exactly once
-    22 PATH changed although it must stay untouched    23 value type changed after install
-    24 backup missing or different                     30 old value not restored after uninstall
-    31 value type changed after uninstall              40 bad arguments
+    22 PATH changed by the installer                   24 backup written by the installer
+    30 PATH wrong after uninstall                      31 value type changed after uninstall
+    40 bad arguments
 
 .PARAMETER Installer
   Path of the NSIS setup .exe.
 .PARAMETER Case
-  short, long, expand, missing or all (default).
+  short, long, expand, missing, entry or all (default).
 .PARAMETER InstallDir
   Install directory of the per-user install (default: %LOCALAPPDATA%\AgentLens).
 #>
 param(
   [Parameter(Mandatory = $true)][string]$Installer,
-  [ValidateSet('short', 'long', 'expand', 'missing', 'all')][string]$Case = 'all',
+  [ValidateSet('short', 'long', 'expand', 'missing', 'entry', 'all')][string]$Case = 'all',
   [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'AgentLens')
 )
 $ErrorActionPreference = 'Stop'
@@ -86,10 +91,6 @@ function Get-Backup {
   } finally { $key.Close() }
 }
 
-function Split-Entries([string]$value) {
-  @($value -split ';' | Where-Object { $_ -ne '' })
-}
-
 function Invoke-Silent([string]$exe, [string[]]$arguments, [int]$code, [string]$what) {
   $p = Start-Process -FilePath $exe -ArgumentList $arguments -Wait -PassThru
   if ($p.ExitCode -ne 0) { throw [CaseFailure]::new($code, "$what exited with $($p.ExitCode)") }
@@ -113,29 +114,42 @@ function New-LongPath {
 }
 
 function Get-CaseSetup([string]$name) {
+  # State: the user PATH before install; Expected: after uninstall ($null: no value).
   switch ($name) {
     'short' {
-      @{ State = [pscustomobject]@{ Value = 'C:\Synthetic\One;C:\Synthetic\Two;C:\Synthetic\Three'; Kind = 'ExpandString' }
-         Untouched = $false }
+      $state = [pscustomobject]@{ Value = 'C:\Synthetic\One;C:\Synthetic\Two;C:\Synthetic\Three'; Kind = 'ExpandString' }
+      @{ State = $state; Expected = $state }
     }
     'long' {
-      @{ State = [pscustomobject]@{ Value = (New-LongPath); Kind = 'ExpandString' }
-         Untouched = $true }
+      $state = [pscustomobject]@{ Value = (New-LongPath); Kind = 'ExpandString' }
+      @{ State = $state; Expected = $state }
     }
     'expand' {
-      @{ State = [pscustomobject]@{
-           Value = '%USERPROFILE%\AppData\Local\Synthetic\bin;C:\Synthetic\Tools;%USERPROFILE%\.synthetic\bin'
-           Kind = 'ExpandString' }
-         Untouched = $false }
+      $state = [pscustomobject]@{
+        Value = '%USERPROFILE%\AppData\Local\Synthetic\bin;C:\Synthetic\Tools;%USERPROFILE%\.synthetic\bin'
+        Kind  = 'ExpandString' }
+      @{ State = $state; Expected = $state }
     }
-    'missing' { @{ State = $null; Untouched = $false } }
+    'missing' { @{ State = $null; Expected = $null } }
+    'entry' {
+      @{ State    = [pscustomobject]@{ Value = "C:\Synthetic\One;$InstallDir;%USERPROFILE%\.synthetic\bin"; Kind = 'ExpandString' }
+         Expected = [pscustomobject]@{ Value = 'C:\Synthetic\One;%USERPROFILE%\.synthetic\bin'; Kind = 'ExpandString' } }
+    }
   }
+}
+
+function Format-State($state) {
+  if ($null -eq $state) { '<no value>' } else { "$($state.Kind) '$($state.Value)'" }
+}
+
+function Test-Same($a, $b) {
+  if ($null -eq $a -or $null -eq $b) { return ($null -eq $a) -and ($null -eq $b) }
+  ($a.Value -ceq $b.Value) -and ($a.Kind -eq $b.Kind)
 }
 
 function Test-Case([string]$name) {
   $setup = Get-CaseSetup $name
   $old = $setup.State
-  $oldEntries = if ($null -eq $old) { @() } else { Split-Entries $old.Value }
 
   Set-UserPath $old
   $Hkcu.DeleteSubKeyTree($BackupSubKey, $false)
@@ -146,53 +160,24 @@ function Test-Case([string]$name) {
   }
 
   $after = Get-UserPath
-  if ($setup.Untouched) {
-    if ($null -eq $after -or $after.Value -cne $old.Value) {
-      $len = if ($null -eq $after) { 0 } else { $after.Value.Length }
-      throw [CaseFailure]::new(22, "PATH must stay untouched but changed ($($old.Value.Length) -> $len characters)")
-    }
-  } else {
-    if ($null -eq $after) { throw [CaseFailure]::new(21, 'PATH value is missing after install') }
-    $entries = Split-Entries $after.Value
-    $ours = @($entries | Where-Object { $_ -ieq $InstallDir })
-    if ($ours.Count -ne 1) {
-      throw [CaseFailure]::new(21, "install directory present $($ours.Count) times, expected once")
-    }
-    $others = @($entries | Where-Object { $_ -ine $InstallDir })
-    if (($others -join ';') -cne ($oldEntries -join ';')) {
-      throw [CaseFailure]::new(20, "old entries changed: '$($oldEntries -join ';')' -> '$($others -join ';')'")
-    }
-    # a missing value is created as REG_EXPAND_SZ by the installer
-    $expectedKind = if ($null -eq $old) { 'ExpandString' } else { $old.Kind }
-    if ($after.Kind -ne $expectedKind) {
-      throw [CaseFailure]::new(23, "value type changed: $expectedKind -> $($after.Kind)")
-    }
-    if ($null -ne $old) {
-      $backup = Get-Backup
-      if ($null -eq $backup -or $backup.Value -cne $old.Value -or $backup.Kind -ne 'ExpandString') {
-        throw [CaseFailure]::new(24, "backup under HKCU\$BackupSubKey missing or different")
-      }
-    }
+  if (-not (Test-Same $after $old)) {
+    throw [CaseFailure]::new(22, "PATH changed by the installer: $(Format-State $old) -> $(Format-State $after)")
+  }
+  if ($null -ne (Get-Backup)) {
+    throw [CaseFailure]::new(24, "the installer wrote a backup under HKCU\$BackupSubKey")
   }
 
   Invoke-Silent (Join-Path $InstallDir 'uninstall.exe') @('/S', "_?=$InstallDir") 11 'uninstaller'
 
   $restored = Get-UserPath
-  if ($null -eq $old) {
-    $left = if ($null -eq $restored) { @() } else { Split-Entries $restored.Value }
-    if ($left.Count -ne 0) { throw [CaseFailure]::new(30, "entries left after uninstall: '$($left -join ';')'") }
-  } else {
-    if ($null -eq $restored -or $restored.Value -cne $old.Value) {
-      $got = if ($null -eq $restored) { '<no value>' } else { $restored.Value }
-      throw [CaseFailure]::new(30, "old value not restored: '$got'")
-    }
-    if ($restored.Kind -ne $old.Kind) {
-      throw [CaseFailure]::new(31, "value type changed after uninstall: $($old.Kind) -> $($restored.Kind)")
-    }
+  $expected = $setup.Expected
+  if (-not (Test-Same $restored $expected)) {
+    $code = if ($null -ne $restored -and $null -ne $expected -and $restored.Value -ceq $expected.Value) { 31 } else { 30 }
+    throw [CaseFailure]::new($code, "PATH after uninstall: expected $(Format-State $expected), got $(Format-State $restored)")
   }
 }
 
-$names = if ($Case -eq 'all') { @('short', 'long', 'expand', 'missing') } else { @($Case) }
+$names = if ($Case -eq 'all') { @('short', 'long', 'expand', 'missing', 'entry') } else { @($Case) }
 $runnerPath = Get-UserPath
 $firstFailure = 0
 try {
