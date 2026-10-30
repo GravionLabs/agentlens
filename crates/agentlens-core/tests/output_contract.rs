@@ -24,7 +24,7 @@ use support::TempHome;
 fn setup() -> (TempHome, Context) {
     let home = TempHome::new();
     // A Claude Code session with context items, one in which skill folders are used, one with a typed
-    // skill command, and a Copilot CLI session with its store.
+    // skill command, one with a retry loop, and a Copilot CLI session with its store.
     home.copy_fixture(
         "claude_code/context.jsonl",
         ".claude/projects/-work-demo/context.jsonl",
@@ -36,6 +36,10 @@ fn setup() -> (TempHome, Context) {
     home.copy_fixture(
         "claude_code/typed_skill.jsonl",
         ".claude/projects/-work-demo/typed_skill.jsonl",
+    );
+    home.copy_fixture(
+        "claude_code/retry_loop.jsonl",
+        ".claude/projects/-work-demo/retry_loop.jsonl",
     );
     home.copy_fixture(
         "copilot_cli/with_store.jsonl",
