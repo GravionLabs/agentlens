@@ -18,6 +18,7 @@ const TITLES: Record<FindingKind, string> = {
   "costly-mcp-servers": "Costly MCP servers",
   "context-size": "Context size",
   "retry-loops": "Retry loops",
+  "model-mix": "Model mix",
 };
 
 /** An advice item with the sortable token count and the estimate flag next to the display text. */

@@ -132,6 +132,10 @@ For unused skills and costly descriptions the listing tokens that removing or sh
 
 Measured: every number behind the saving came from the client. Estimated: some were computed from file sizes or heuristics. Inferred: the saving rests on an assumption about how the work could have run instead, for example that it could have started in a fresh session.
 
+### Model mix
+
+A request is small with fewer than 500 output tokens and fewer than 50,000 tokens of input. Per client, the costliest model is the one with the highest list input price among those that ran, the cheaper one the next lower price. The saving is what the same tokens would have cost on the cheaper model (an estimate, inferred), and the finding appears only with at least 20 small requests and a saving of at least 5% of the period's cost.
+
 ## Efficiency
 
 ### Role

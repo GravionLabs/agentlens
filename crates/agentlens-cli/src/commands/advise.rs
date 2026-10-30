@@ -22,6 +22,7 @@ fn title(f: &Finding) -> String {
         FindingKind::CostlyMcpServers => format!("Costly MCP servers ({})", f.count),
         FindingKind::ContextSize => format!("Context size ({})", f.count),
         FindingKind::RetryLoops => format!("Retry loops ({})", f.count),
+        FindingKind::ModelMix => format!("Model mix ({})", f.count),
     }
 }
 

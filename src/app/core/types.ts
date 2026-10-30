@@ -115,7 +115,8 @@ export type FindingKind =
   | "large-context"
   | "costly-mcp-servers"
   | "context-size"
-  | "retry-loops";
+  | "retry-loops"
+  | "model-mix";
 
 export interface Reference {
   kind: "agent" | "command" | "skill";
@@ -504,6 +505,8 @@ export interface TimelinePoint {
   output_tokens: number;
   cost_usd: number | null;
   cost_estimated: boolean;
+  /** The request's model, else the session's. */
+  model?: string | null;
 }
 
 export type MarkerKind =
@@ -511,7 +514,8 @@ export type MarkerKind =
   | { type: "compaction" }
   | { type: "tool-error"; tool: string }
   | { type: "hook-failed"; hook: string }
-  | { type: "permission-prompt"; wait_ms: number | null };
+  | { type: "permission-prompt"; wait_ms: number | null }
+  | { type: "model-switch"; from: string; to: string };
 
 export interface TimelineMarker {
   request: number;

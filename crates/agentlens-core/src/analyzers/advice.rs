@@ -33,6 +33,15 @@ pub const CACHE_READ_WEIGHT: f64 = 0.1;
 pub const TOP: usize = 10;
 /// A skill needs this many requests after it for its average context size to mean something.
 pub const MIN_FOLLOW_ON_REQUESTS: u64 = 20;
+/// A request is small for the ModelMix finding when it wrote fewer output tokens than this ...
+pub const SMALL_OUTPUT_TOKENS: u64 = 500;
+/// ... and sent fewer input tokens (input, cache read and cache write) than this. Together they keep it
+/// below the requests of the Context size finding.
+pub const SMALL_CONTEXT_TOKENS: u64 = 50_000;
+/// The ModelMix finding needs at least this many small requests on the costliest model of a client.
+pub const MIN_MODEL_MIX_REQUESTS: u64 = 20;
+/// The ModelMix finding needs a saving of at least this share of the period's cost (0.05 is 5 %).
+pub const MIN_MODEL_MIX_SHARE: f64 = 0.05;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -55,6 +64,8 @@ pub enum FindingKind {
     ContextSize,
     /// The same failing tool call repeated: every retry sends the whole context again.
     RetryLoops,
+    /// Small requests on the costliest model that the next cheaper model, already in use, could have answered.
+    ModelMix,
 }
 
 impl FindingKind {
@@ -88,6 +99,9 @@ impl FindingKind {
             FindingKind::RetryLoops => {
                 "Three or more identical tool calls in a row whose first two failed. Each retry sends the whole context again, and the call fails for the same reason until the cause is fixed."
             }
+            FindingKind::ModelMix => {
+                "Short answers on a large model cost the same input as long ones. These requests were small (little output, a small context) and ran on the costliest model of the client, although a cheaper model was in use as well."
+            }
         }
     }
 
@@ -120,6 +134,9 @@ impl FindingKind {
             }
             FindingKind::RetryLoops => {
                 "Read the tool error and fix the cause, such as a missing file, a wrong path, a permission or a hook. When a hook failed inside the loop, check the hook configuration first."
+            }
+            FindingKind::ModelMix => {
+                "Pick the model per task (`/model` in Claude Code, the model picker of the other clients) and give subagents a cheaper model."
             }
         }
     }
@@ -503,6 +520,148 @@ pub fn retry_saving(sessions: &[SessionEvents], prices: &PriceTable) -> RetryLoo
     }
 }
 
+/// The small requests of the costliest model of one client, and what the next cheaper model would have cost.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ModelMixRow {
+    pub source: Option<Source>,
+    /// The model with the highest list input price that ran at this client.
+    pub model: String,
+    /// The next lower list price among the models that ran at this client.
+    pub cheaper: String,
+    /// All requests of `model`, main agent and subagents.
+    pub requests: u64,
+    /// Those with `output < SMALL_OUTPUT_TOKENS` and `total_input() < SMALL_CONTEXT_TOKENS`.
+    pub small_requests: u64,
+    /// Of the small requests, those a subagent made.
+    pub subagent_requests: u64,
+    /// The input of the small requests split by token class.
+    pub input_tokens: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
+    /// `false` if one of the small requests was estimated, not reported.
+    pub measured: bool,
+    /// The saving in USD: the cost on `model` minus the cost on `cheaper`, summed over the small requests.
+    pub usd: f64,
+}
+
+impl ModelMixRow {
+    pub fn tokens(&self) -> u64 {
+        self.input_tokens + self.cache_read + self.cache_write
+    }
+}
+
+/// The input of the ModelMix finding: one row per client with a pair of models.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ModelMixUse {
+    pub rows: Vec<ModelMixRow>,
+    /// What all requests of the period cost, for the share of the saving: the reported cost, else the
+    /// computed one; requests without a price are not in it.
+    pub period_usd: f64,
+    /// Small requests of models without a price (or without any model): they are on no pair, so they
+    /// are left out of the saving; counted here so that a note can say so.
+    pub unpriced_requests: u64,
+}
+
+/// The costliest entry (ties: the first by name) of `models`, optionally only below a price.
+fn priciest(models: &BTreeMap<String, f64>, below: Option<f64>) -> Option<(&String, f64)> {
+    let mut best: Option<(&String, f64)> = None;
+    for (m, &p) in models {
+        if below.is_some_and(|b| p >= b) {
+            continue;
+        }
+        if best.is_none_or(|(_, bp)| p > bp) {
+            best = Some((m, p));
+        }
+    }
+    best
+}
+
+/// The input of the ModelMix finding.
+///
+/// Per client, the costliest model is the priced model with the highest list input price among those that
+/// ran in the period, the cheaper one the next lower list price among the priced models that ran there; a
+/// client with one priced model has no pair. A request's model is `Usage.model`, else the session's. The
+/// saving of a small request is `PriceTable::compute(costliest) - PriceTable::compute(cheaper)` on its own
+/// tokens.
+pub fn model_mix_saving(sessions: &[SessionEvents], prices: &PriceTable) -> ModelMixUse {
+    let model_of =
+        |se: &SessionEvents, u: &Usage| u.model.clone().or_else(|| se.session.model.clone());
+    let list_price = |m: &str| prices.rates(m, 0).map(|r| r.input);
+    let mut out = ModelMixUse::default();
+    // Per client: the priced models that ran, with their list input price.
+    let mut ran: BTreeMap<Source, BTreeMap<String, f64>> = BTreeMap::new();
+    for se in sessions {
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            let mut usage = u.clone();
+            usage.model = model_of(se, u);
+            if let Some(m) = &usage.model
+                && let Some(p) = list_price(m)
+            {
+                ran.entry(se.session.source)
+                    .or_default()
+                    .insert(m.clone(), p);
+            }
+            if let Some(c) = prices.cost(&usage) {
+                out.period_usd += c.usd;
+            }
+        }
+    }
+    let mut pairs: BTreeMap<Source, (String, String)> = BTreeMap::new();
+    for (source, models) in &ran {
+        if let Some((top, price)) = priciest(models, None)
+            && let Some((cheaper, _)) = priciest(models, Some(price))
+        {
+            pairs.insert(*source, (top.clone(), cheaper.clone()));
+        }
+    }
+    let mut rows: BTreeMap<Source, ModelMixRow> = BTreeMap::new();
+    for se in sessions {
+        let source = se.session.source;
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            let small = u.output < SMALL_OUTPUT_TOKENS && u.total_input() < SMALL_CONTEXT_TOKENS;
+            let model = model_of(se, u);
+            if model.as_deref().and_then(list_price).is_none() {
+                out.unpriced_requests += u64::from(small);
+                continue;
+            }
+            let Some((top, cheaper)) = pairs.get(&source) else {
+                continue;
+            };
+            if model.as_deref() != Some(top.as_str()) {
+                continue;
+            }
+            let row = rows.entry(source).or_insert_with(|| ModelMixRow {
+                source: Some(source),
+                model: top.clone(),
+                cheaper: cheaper.clone(),
+                measured: true,
+                ..ModelMixRow::default()
+            });
+            row.requests += 1;
+            if !small {
+                continue;
+            }
+            row.small_requests += 1;
+            row.subagent_requests += u64::from(u.subagent);
+            row.measured &= u.measured;
+            row.input_tokens += u.input;
+            row.cache_read += u.cache_read;
+            row.cache_write += u.cache_write;
+            if let (Some(now), Some(then)) = (prices.compute(top, u), prices.compute(cheaper, u)) {
+                row.usd += now - then;
+            }
+        }
+    }
+    out.rows = rows.into_values().collect();
+    out
+}
+
 /// One skill in a finding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
@@ -641,6 +800,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         &[],
         &ContextSaving::default(),
         &RetryLoopUse::default(),
+        &ModelMixUse::default(),
         &Pricing::default(),
     )
 }
@@ -761,6 +921,7 @@ pub fn analyze_with(
     mcp: &[McpServerUse],
     context: &ContextSaving,
     retries: &RetryLoopUse,
+    model_mix: &ModelMixUse,
     pricing: &Pricing,
 ) -> AdviceReport {
     let installed: Vec<&SkillStats> = report.skills.iter().filter(|s| s.in_inventory).collect();
@@ -1388,10 +1549,83 @@ pub fn analyze_with(
         findings.push((f, split.weight()));
     }
 
+    // Small requests on the costliest model of a client, next to the cheaper model it also ran.
+    let mut mix: Vec<&ModelMixRow> = model_mix
+        .rows
+        .iter()
+        .filter(|r| r.small_requests >= MIN_MODEL_MIX_REQUESTS)
+        .collect();
+    let mix_usd: f64 = mix.iter().map(|r| r.usd).sum();
+    if !mix.is_empty() && mix_usd > 0.0 && mix_usd >= MIN_MODEL_MIX_SHARE * model_mix.period_usd {
+        mix.sort_by(|a, b| b.usd.total_cmp(&a.usd).then_with(|| a.model.cmp(&b.model)));
+        let pct = |part: u64, whole: u64| share(part, whole).unwrap_or(0.0) * 100.0;
+        let items: Vec<Item> = mix
+            .iter()
+            .take(TOP)
+            .map(|r| Item {
+                name: r.model.clone(),
+                tokens: Tokens {
+                    count: r.tokens(),
+                    measured: r.measured,
+                },
+                requests: r.small_requests,
+                detail: format!(
+                    "{} of {} requests small ({:.1}%), {:.1}% of them by subagents; ~${:.2} saved on {}",
+                    n(r.small_requests),
+                    n(r.requests),
+                    pct(r.small_requests, r.requests),
+                    pct(r.subagent_requests, r.small_requests),
+                    r.usd,
+                    r.cheaper
+                ),
+                referenced_by: Vec::new(),
+                session_id: None,
+            })
+            .collect();
+        let tokens: u64 = mix.iter().map(|r| r.tokens()).sum();
+        let measured = mix.iter().all(|r| r.measured);
+        let mut f = finding(
+            FindingKind::ModelMix,
+            mix.len(),
+            items,
+            Some(Tokens {
+                count: tokens,
+                measured,
+            }),
+        );
+        f.share_of_total_tokens = share(tokens, total_tokens.count);
+        f.impact = Impact {
+            saving: Tokens::estimated(0),
+            saving_usd: Some(mix_usd),
+            confidence: Confidence::Inferred,
+        };
+        f.notes.push(format!(
+            "A request is small with fewer than {} output tokens and fewer than {} tokens of input. The saving is what the same tokens would have cost on the next cheaper model that ran in the same client, {:.1}% of the period's cost (~${:.2}); it assumes that model could have answered them, so it is inferred. A model switch saves cost, not tokens.",
+            n(SMALL_OUTPUT_TOKENS),
+            n(SMALL_CONTEXT_TOKENS),
+            mix_usd / model_mix.period_usd * 100.0,
+            model_mix.period_usd
+        ));
+        if !measured {
+            f.notes
+                .push("Some requests are estimated, not reported by the client.".to_owned());
+        }
+        if model_mix.unpriced_requests > 0 {
+            f.notes.push(format!(
+                "{} small requests had no price for their model; they are not in the saving.",
+                n(model_mix.unpriced_requests)
+            ));
+        }
+        findings.push((f, 0.0));
+    }
+
     // Ranked by the USD saving, then by the weighted tokens, then in the order above; findings without
     // a saving last, in the order above (the sort is stable).
     findings.sort_by(|(a, wa), (b, wb)| {
-        let (sa, sb) = (a.impact.saving.count > 0, b.impact.saving.count > 0);
+        let has = |f: &Finding| {
+            f.impact.saving.count > 0 || f.impact.saving_usd.is_some_and(|usd| usd > 0.0)
+        };
+        let (sa, sb) = (has(a), has(b));
         sb.cmp(&sa).then_with(|| {
             if !(sa && sb) {
                 return std::cmp::Ordering::Equal;
@@ -1476,6 +1710,7 @@ mod tests {
             mcp,
             &ContextSaving::default(),
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
             &Pricing::default(),
         )
     }
@@ -2169,6 +2404,7 @@ mod tests {
             mcp,
             context,
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
             &pricing(),
         )
     }
@@ -2402,6 +2638,7 @@ mod tests {
             &[],
             &c,
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
             &Pricing::default(),
         );
         let f = find(&a, FindingKind::ContextSize);
@@ -2485,6 +2722,7 @@ mod tests {
             &[],
             &context,
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
             &Pricing::default(),
         );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
@@ -2505,6 +2743,7 @@ mod tests {
             &[],
             &write,
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
             &Pricing::default(),
         );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
@@ -2517,6 +2756,7 @@ mod tests {
                 ..ContextSaving::default()
             },
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
             &Pricing::default(),
         );
         assert_eq!(
@@ -2571,6 +2811,7 @@ mod tests {
             &[],
             &ContextSaving::default(),
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
             &p,
         );
         let f = find(&a, FindingKind::UnusedSkills);
@@ -2672,6 +2913,7 @@ mod tests {
             &[],
             &ContextSaving::default(),
             &retry_saving(sessions, &prices()),
+            &ModelMixUse::default(),
             pricing,
         )
     }
@@ -2907,5 +3149,126 @@ mod tests {
             find(&a, FindingKind::RetryLoops).total,
             Some(Tokens::estimated(200))
         );
+    }
+
+    /// $5 input / $0.5 cache read for `big`, $1 / $0.1 for `small`, `mid` in between.
+    fn mix_prices() -> PriceTable {
+        PriceTable::parse(
+            r#"{
+                "big": {"input": 5.0, "output": 25.0, "cache_write": 6.0, "cache_read": 0.5},
+                "mid": {"input": 3.0, "output": 15.0, "cache_write": 3.5, "cache_read": 0.3},
+                "small": {"input": 1.0, "output": 5.0, "cache_write": 1.25, "cache_read": 0.1}
+            }"#,
+        )
+        .unwrap()
+    }
+
+    fn mix_advice(sessions: &[SessionEvents]) -> AdviceReport {
+        let table = mix_prices();
+        analyze_with(
+            &report(vec![]),
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &RetryLoopUse::default(),
+            &model_mix_saving(sessions, &table),
+            &Pricing::from_sessions(sessions, &table),
+        )
+    }
+
+    /// `count` small requests of 1,000 input tokens on `model`, the first `subagents` of them by subagents.
+    fn small(model: &'static str, count: usize, subagents: usize) -> Vec<Req<'static>> {
+        (0..count)
+            .map(|i| (model, 1_000, 0, 0, i < subagents))
+            .collect()
+    }
+
+    #[test]
+    fn small_requests_on_the_costliest_model_are_priced_on_the_next_cheaper_one() {
+        let mut reqs = small("big", 20, 5);
+        reqs.push(("big", 60_000, 0, 0, false)); // large: not small
+        reqs.push(("small", 1_000, 0, 0, false));
+        reqs.push(("mid", 1_000, 0, 0, false)); // the next lower price is mid, not small
+        let a = mix_advice(&[requests("s", &reqs)]);
+        let f = find(&a, FindingKind::ModelMix);
+        // 20 requests × 1,000 input × ($5 - $3) per million = $0.04.
+        assert!(
+            close(f.impact.saving_usd, 0.04),
+            "{:?}",
+            f.impact.saving_usd
+        );
+        assert_eq!(f.impact.confidence, Confidence::Inferred);
+        assert_eq!(f.items[0].name, "big");
+        assert_eq!((f.items[0].requests, f.items[0].tokens.count), (20, 20_000));
+        let detail = &f.items[0].detail;
+        assert!(detail.contains("20 of 21 requests small"), "{detail}");
+        assert!(detail.contains("25.0% of them by subagents"), "{detail}");
+        assert!(detail.ends_with("saved on mid"), "{detail}");
+        assert_eq!(f.total, Some(Tokens::measured(20_000)));
+        assert!(f.notes.iter().any(|n| n.contains("inferred")));
+    }
+
+    #[test]
+    fn a_single_model_is_no_finding() {
+        let a = mix_advice(&[requests("s", &small("big", 40, 0))]);
+        assert!(find_none(&a, FindingKind::ModelMix));
+    }
+
+    #[test]
+    fn fewer_than_the_minimum_of_small_requests_is_no_finding() {
+        let mut reqs = small("big", 19, 0);
+        reqs.push(("mid", 1_000, 0, 0, false));
+        assert!(find_none(
+            &mix_advice(&[requests("s", &reqs)]),
+            FindingKind::ModelMix
+        ));
+        reqs.push(("big", 1_000, 0, 0, false));
+        assert!(!find_none(
+            &mix_advice(&[requests("s", &reqs)]),
+            FindingKind::ModelMix
+        ));
+    }
+
+    #[test]
+    fn a_saving_below_five_percent_of_the_cost_is_no_finding() {
+        // The saving is $0.04; one large request of 10M tokens costs $50.
+        let mut reqs = small("big", 20, 0);
+        reqs.push(("mid", 1_000, 0, 0, false));
+        reqs.push(("big", 10_000_000, 0, 0, false));
+        assert!(find_none(
+            &mix_advice(&[requests("s", &reqs)]),
+            FindingKind::ModelMix
+        ));
+    }
+
+    #[test]
+    fn requests_without_a_price_are_left_out_and_noted() {
+        let mut reqs = small("big", 20, 0);
+        reqs.push(("mid", 1_000, 0, 0, false));
+        reqs.extend(small("mystery", 3, 0));
+        let sessions = [requests("s", &reqs)];
+        let m = model_mix_saving(&sessions, &mix_prices());
+        assert_eq!((m.unpriced_requests, m.rows[0].small_requests), (3, 20));
+        let a = mix_advice(&sessions);
+        let f = find(&a, FindingKind::ModelMix);
+        assert!(close(f.impact.saving_usd, 0.04));
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("3 small requests had no price"))
+        );
+    }
+
+    #[test]
+    fn the_pair_is_chosen_per_client() {
+        use crate::model::Session;
+        let mut other = requests("o", &small("small", 30, 0));
+        other.session = Session::new("o", Source::CopilotCli);
+        // Claude Code has big and mid, Copilot CLI only small: one finding row, for Claude Code.
+        let mut reqs = small("big", 20, 0);
+        reqs.push(("mid", 1_000, 0, 0, false));
+        let m = model_mix_saving(&[requests("s", &reqs), other], &mix_prices());
+        assert_eq!(m.rows.len(), 1);
+        assert_eq!(m.rows[0].source, Some(Source::ClaudeCode));
     }
 }
