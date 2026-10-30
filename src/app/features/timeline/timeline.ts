@@ -25,6 +25,7 @@ const MARKER_LEGEND = [
   { label: "tool error", color: MARKER_COLORS["tool-error"] },
   { label: "hook failed", color: MARKER_COLORS["hook-failed"] },
   { label: "permission prompt", color: MARKER_COLORS["permission-prompt"] },
+  { label: "model switch", color: MARKER_COLORS["model-switch"] },
 ];
 
 @Component({
@@ -101,8 +102,8 @@ const MARKER_LEGEND = [
             <circle [attr.cx]="x(p.request)" [attr.cy]="y(p.context_tokens)" r="2.5">
               <title>
                 Request {{ p.request + 1 }}: {{ n(p.context_tokens) }} tokens in context,
-                {{ n(p.output_tokens) }} out @if (p.cost_usd !== null) { ,
-                {{ usd(p.cost_usd, p.cost_estimated) }} } @if (p.at) { , {{ p.at }}
+                {{ n(p.output_tokens) }} out @if (p.model) { , {{ p.model }} } @if (p.cost_usd !==
+                null) { , {{ usd(p.cost_usd, p.cost_estimated) }} } @if (p.at) { , {{ p.at }}
                 }
               </title>
             </circle>

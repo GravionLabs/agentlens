@@ -51,6 +51,9 @@ describe("timeline chart", () => {
       "permission prompt (1.5 s)",
     );
     expect(markerLabel({ type: "permission-prompt", wait_ms: null })).toBe("permission prompt");
+    expect(markerLabel({ type: "model-switch", from: "opus", to: "haiku" })).toBe(
+      "model switch: opus to haiku",
+    );
     expect(yTicks(4000)).toEqual([0, 2000, 4000]);
   });
 

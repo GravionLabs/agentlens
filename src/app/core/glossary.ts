@@ -295,6 +295,14 @@ export const GLOSSARY: GlossaryEntry[] = [
     long: "Each retry sends the whole context again and fails for the same reason until the cause is fixed. The Retry loops finding counts the input of the requests that issued the retries, not the first attempt. Calls without a recorded outcome are “unknown” and never counted as errors.",
   },
   {
+    id: "model-mix",
+    term: "Model mix",
+    group: "Cost",
+    short:
+      "Small requests that ran on the costliest model although a cheaper one was in use as well.",
+    long: "A request is small with fewer than 500 output tokens and fewer than 50,000 tokens of input. Per client, the costliest model is the one with the highest list input price among those that ran, the cheaper one the next lower price. The saving is what the same tokens would have cost on the cheaper model (an estimate, inferred), and the finding appears only with at least 20 small requests and a saving of at least 5% of the period's cost.",
+  },
+  {
     id: "permission-wait",
     term: "Permission wait",
     group: "Flow",

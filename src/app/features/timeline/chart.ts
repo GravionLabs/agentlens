@@ -60,6 +60,8 @@ export function markerLabel(kind: MarkerKind): string {
       return kind.wait_ms === null
         ? "permission prompt"
         : `permission prompt (${(kind.wait_ms / 1000).toFixed(1)} s)`;
+    case "model-switch":
+      return `model switch: ${kind.from} to ${kind.to}`;
   }
 }
 
@@ -69,6 +71,7 @@ export const MARKER_COLORS: Record<MarkerKind["type"], string> = {
   "tool-error": "var(--warn)",
   "hook-failed": "var(--c-carry)",
   "permission-prompt": "var(--muted)",
+  "model-switch": "var(--accent)",
 };
 
 /** Markers sit between two requests: the x of the gap before request `request`. */
