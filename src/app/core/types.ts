@@ -125,6 +125,8 @@ export interface Reference {
 export interface AdviceItem {
   /** Unused skills only: the agents, commands and skills whose files name it. */
   referenced_by?: Reference[];
+  /** Context size: `name` is a label (project folder and id start); this is the full session id. */
+  session_id?: string;
   name: string;
   tokens: Tokens;
   requests: number;

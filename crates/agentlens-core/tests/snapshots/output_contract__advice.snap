@@ -209,49 +209,54 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "share_of_total_tokens": 0.9179957577033306,
         "items": [
           {
-            "name": "cp-1",
+            "name": "demo · cp-1",
             "tokens": {
               "count": 99999,
               "measured": true
             },
             "requests": 1,
-            "detail": "99,999 tokens per request on average over 1 requests"
+            "detail": "99,999 tokens per request on average over 1 requests",
+            "session_id": "cp-1"
           },
           {
-            "name": "retry_loop",
+            "name": "demo · retry_lo",
             "tokens": {
               "count": 2432,
               "measured": true
             },
             "requests": 4,
-            "detail": "2,432 tokens per request on average over 4 requests"
+            "detail": "2,432 tokens per request on average over 4 requests",
+            "session_id": "retry_loop"
           },
           {
-            "name": "context",
+            "name": "demo · context",
             "tokens": {
               "count": 963,
               "measured": true
             },
             "requests": 3,
-            "detail": "963 tokens per request on average over 3 requests"
+            "detail": "963 tokens per request on average over 3 requests",
+            "session_id": "context"
           },
           {
-            "name": "skill_files",
+            "name": "demo · skill_fi",
             "tokens": {
               "count": 110,
               "measured": true
             },
             "requests": 6,
-            "detail": "110 tokens per request on average over 6 requests"
+            "detail": "110 tokens per request on average over 6 requests",
+            "session_id": "skill_files"
           },
           {
-            "name": "typed_skill",
+            "name": "demo · typed_sk",
             "tokens": {
               "count": 110,
               "measured": true
             },
             "requests": 1,
-            "detail": "110 tokens per request on average over 1 requests"
+            "detail": "110 tokens per request on average over 1 requests",
+            "session_id": "typed_skill"
           }
         ],
         "notes": [
