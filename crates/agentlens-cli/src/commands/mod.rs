@@ -10,6 +10,7 @@ mod mcp_setup;
 mod report;
 mod scan;
 mod skills;
+mod trend;
 mod unused;
 
 use agentlens_core::adapters::registry_with_otel;
@@ -23,6 +24,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Env::from_system().context("cannot determine the home directory (HOME or USERPROFILE)")?;
     let registry = registry_with_otel(cli.otel.clone());
     let filter = cli.filter()?;
+    let filters = cli.filters();
     let display = crate::output::Display {
         format: cli.format,
         rounded: cli.rounded,
@@ -52,6 +54,10 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Advise => advise::run(&registry, &env, &filter, &cli.source, est, display),
         Command::Compare { role } => {
             compare::run(&registry, &env, &filter, &cli.source, &role, est, display)
+        }
+        Command::Trend { against } => {
+            let ctx = agentlens_core::api::Context { env, registry };
+            trend::run(&ctx, &filters, against.as_deref(), display)
         }
         Command::Context { kind } => {
             context::run(&registry, &env, &filter, &cli.source, est, kind, display)

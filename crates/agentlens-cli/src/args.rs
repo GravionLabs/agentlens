@@ -95,6 +95,12 @@ pub enum Command {
         #[arg(long, value_name = "ROLE")]
         role: Vec<String>,
     },
+    /// Show the period next to the one before it, with the change of every figure
+    Trend {
+        /// The comparison window as SINCE..UNTIL (each in the forms of --since); default: the window of the same length right before the period
+        #[arg(long, value_name = "SINCE..UNTIL")]
+        against: Option<String>,
+    },
     /// Show cache hit rate and the share of work done by subagents
     Efficiency {
         /// Group the cache table by session, project or source

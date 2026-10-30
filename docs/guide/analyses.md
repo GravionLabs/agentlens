@@ -139,7 +139,15 @@ The clients side by side over the same sessions: sessions, requests, tokens, cac
 
 ## Trend
 
-The current period next to a comparison window, with the change of every figure. This is the analysis behind `api::trend` (the CLI command and the MCP tool follow).
+The current period next to a comparison window, with the change of every figure. `agentlens trend [--against SINCE..UNTIL]` prints it (the MCP tool `trend` returns the same data).
+
+```sh
+agentlens trend --since 7d                              # the last 7 days against the 7 before
+agentlens trend --since 2026-10-01 --against 2026-09-01..2026-09-15
+agentlens trend --format csv                            # one row per figure, two per skill
+```
+
+The table has the columns group, figure, before, after, change and change %; the skill rows come last. An estimate carries a tilde (`~`), a missing change is `n/a`, and a note line says when the values are per day. `SINCE` and `UNTIL` take the same forms as `--since`; a malformed `--against` or one that overlaps the period is a usage error. The global filters (`--since`, `--until`, `--source`, `--project`, `--session`) apply to both windows.
 
 - **Windows.** The current window is `[since, until)` of the filters; without `since` it is the last 30 days, without `until` it ends now. The comparison window is, by default, the window of the same length right before (`[since - length, since)`); it can be given explicitly. Overlapping windows are an error.
 - **Boundary rule.** A session belongs to the window in which it ends (its start if it has no end), the same rule as the period filter: a session that ends exactly at `since` is in the current window, one that ends exactly at `until` is in the next one.

@@ -38,6 +38,10 @@ A trend compares the current period with a comparison window and shows both valu
 
 Without a choice, the comparison window is the period of the same length right before the current one. If the two periods differ in length, counts are compared per day. The comparison window must not overlap the current period.
 
+### Previous period
+
+It is the default comparison window of a trend: for the last 7 days, the 7 days before them. A session belongs to the period in which it ends.
+
 ## Context
 
 ### Static context

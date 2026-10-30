@@ -353,6 +353,12 @@ fn windows_at(
     Ok((windows, current, compared, warnings, errors))
 }
 
+/// The comparison window from `SINCE..UNTIL` (see [`crate::since::parse_against`]), counted from now;
+/// `name` labels the errors (`against`, `--against`).
+pub fn parse_against(text: &str, name: &str) -> Result<(Timestamp, Timestamp), String> {
+    crate::since::parse_against(text, Timestamp::now(), name)
+}
+
 /// The period against the window before it (or `against`), with the deltas of the figures.
 pub fn trend(
     ctx: &Context,
