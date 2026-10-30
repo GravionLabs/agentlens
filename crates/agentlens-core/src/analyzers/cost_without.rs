@@ -228,9 +228,15 @@ pub fn analyze(
                     .iter()
                     .filter(|m| norm(&m.name) == server)
                     .collect();
-                for m in &found {
-                    mcp_shares(sessions, &server, &m.clients, estimator, &mut shares);
+                // One scan over the union of the clients: the scan ignores projects, so one call per
+                // installation would count the same request once per entry.
+                let mut clients: Vec<crate::model::Source> = Vec::new();
+                for c in found.iter().flat_map(|m| m.clients.iter()) {
+                    if !clients.contains(c) {
+                        clients.push(*c);
+                    }
                 }
+                mcp_shares(sessions, &server, &clients, estimator, &mut shares);
                 found.len() as u32
             }
         };
@@ -533,6 +539,43 @@ mod tests {
         assert_eq!((row.installations, row.requests), (2, 3));
         assert_eq!(row.tokens, Tokens::estimated(2 * 20 + 30));
         assert_eq!(row.detail, "2 installations, 3 requests");
+    }
+
+    #[test]
+    fn an_mcp_server_installed_twice_counts_each_request_once() {
+        let item = EventKind::ContextItem(ContextItem {
+            kind: ContextKind::ToolDefinition,
+            name: Some("mcp__docs__read".into()),
+            bytes: 400,
+            tokens: None,
+        });
+        let se = session("/a", vec![item, fresh(), fresh()]);
+        let mut cat = catalog(vec![], vec!["docs", "docs"]);
+        cat.mcp_servers[0].project = Some("/a".into());
+        cat.mcp_servers[1].project = Some("/b".into());
+        let r = run(&[se], &["mcp-server:docs"], vec![], cat);
+        let row = &r.rows[0];
+        assert_eq!((row.installations, row.requests), (2, 2));
+        assert_eq!(row.tokens, Tokens::estimated(200));
+    }
+
+    #[test]
+    fn an_agent_installed_in_two_projects_counts_each_request_once() {
+        let a = session("/a", vec![fresh(), fresh()]);
+        let b = session("/b", vec![fresh()]);
+        let mut x = agent("reviewer", 10);
+        x.project = Some("/a".into());
+        let mut y = agent("reviewer", 30);
+        y.project = Some("/b".into());
+        let r = run(
+            &[a, b],
+            &["agent:reviewer"],
+            vec![],
+            catalog(vec![x, y], vec![]),
+        );
+        let row = &r.rows[0];
+        assert_eq!((row.installations, row.requests), (2, 3));
+        assert_eq!(row.tokens, Tokens::estimated(2 * 10 + 30));
     }
 
     #[test]
