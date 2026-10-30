@@ -49,6 +49,15 @@ async fn skills(ctx: Shared<'_>, filters: Filters) -> Result<Answer<api::SkillsD
     blocking(&ctx, move |c| api::skills(c, &filters)).await
 }
 
+/// The period against the window of the same length right before it (never a chosen window).
+#[tauri::command]
+async fn trend(
+    ctx: Shared<'_>,
+    filters: Filters,
+) -> Result<Answer<agentlens_core::analyzers::trend::TrendReport>, String> {
+    blocking(&ctx, move |c| api::trend(c, &filters, None)).await
+}
+
 #[tauri::command]
 async fn context(
     ctx: Shared<'_>,
@@ -272,6 +281,7 @@ pub fn run() {
             flow,
             cost,
             efficiency,
+            trend,
             compare,
             sessions,
             timeline,

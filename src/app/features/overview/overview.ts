@@ -1,13 +1,17 @@
 import { PageHeader } from "../../ui/page-header";
-import { ChangeDetectionStrategy, Component, computed } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
+import { analysis, trendAnalysis } from "../../core/analysis";
+import { FiltersService } from "../../core/filters.service";
+import { trendNote } from "../../core/delta";
 import { number, sourceLabel } from "../../core/format";
 import type { SourceOverview } from "../../core/types";
+import { trendStat } from "../../ui/stat-cards";
+import { TrendCards } from "../../ui/trend-cards";
 import { Status } from "../../ui/status";
 
 @Component({
   selector: "app-overview",
-  imports: [PageHeader, Status],
+  imports: [PageHeader, Status, TrendCards],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -27,6 +31,14 @@ import { Status } from "../../ui/status";
         [warnings]="res.value()?.warnings ?? 0"
         [errors]="res.value()?.errors ?? []"
       />
+      @if (compare()) {
+        <app-trend-cards
+          [stats]="trendStats()"
+          [note]="note()"
+          [loading]="trend.isLoading()"
+          [error]="trend.error()"
+        />
+      }
       <div class="cards">
         @for (s of sources(); track s.source) {
           <article class="card" [class.missing]="!s.found">
@@ -102,6 +114,22 @@ import { Status } from "../../ui/status";
 export class Overview {
   protected readonly res = analysis<SourceOverview[]>("overview");
   protected readonly sources = computed(() => this.res.value()?.data ?? []);
+  protected readonly compare = inject(FiltersService).compare;
+  protected readonly trend = trendAnalysis();
+  protected readonly note = computed(() => {
+    const w = this.trend.value()?.data.windows;
+    return w ? trendNote(w) : "";
+  });
+  protected readonly trendStats = computed(() => {
+    const t = this.trend.value()?.data;
+    if (!t) return [];
+    const perDay = t.windows.normalized;
+    return [
+      trendStat("Sessions", t.volume.sessions, "count", { perDay }),
+      trendStat("Requests", t.volume.requests, "count", { perDay }),
+      trendStat("Tokens", t.volume.tokens, "tokens", { perDay }),
+    ];
+  });
   protected readonly n = number;
   protected readonly label = sourceLabel;
 }

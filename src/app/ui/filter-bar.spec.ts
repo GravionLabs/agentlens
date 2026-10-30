@@ -85,6 +85,19 @@ describe("FilterBar", () => {
     expect(filters.sources()).toEqual([]);
   });
 
+  it("has a switch for the previous period, off by default, remembered with the filters", async () => {
+    const { fixture, el, filters } = await render();
+    const toggle = el.querySelector<HTMLInputElement>("#filter-compare")!;
+    expect(el.querySelector('label[for="filter-compare"]')!.textContent).toContain(
+      "vs. previous period",
+    );
+    expect(toggle.checked).toBe(false);
+    toggle.click();
+    fixture.detectChanges();
+    expect(filters.compare()).toBe(true);
+    expect(JSON.parse(localStorage.getItem("agentlens.filters")!).compare).toBe(true);
+  });
+
   it("keeps the project text input wired to the service", async () => {
     const { el, filters } = await render();
     const input = el.querySelector<HTMLInputElement>("#filter-project")!;
