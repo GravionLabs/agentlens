@@ -14,6 +14,7 @@ use jiff::Timestamp;
 use serde_json::Value;
 
 use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
+use crate::commit::commit_issue;
 use crate::env::Env;
 use crate::model::{
     AgentInfo, ContextItem, ContextKind, Event, EventKind, Session, SessionEvents, SkillInvoked,
@@ -528,6 +529,11 @@ impl Parser<'_> {
             let tool_id = str_of(block, "id").map(str::to_owned);
             if let Some(id) = &tool_id {
                 self.tool_idx.insert(id.clone(), (idx, at));
+            }
+            if name == "Bash"
+                && let Some(issue) = str_of(input, "command").and_then(commit_issue)
+            {
+                self.push(at, EventKind::CommitIssue { issue });
             }
             for skill in skill_folders_touched(&name, input) {
                 self.push(at, EventKind::SkillFileUse(skill));

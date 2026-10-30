@@ -16,6 +16,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
 use crate::adapter::{Adapter, AdapterError, Detection, SessionFilter, SessionIter};
+use crate::commit::commit_issue;
 use crate::env::Env;
 use crate::model::{
     EventKind, Session, SessionEvents, SkillInvoked, SkillTrigger, Source, ToolCall, ToolStatus,
@@ -611,6 +612,11 @@ fn tool_part(part: &Value, se: &mut SessionEvents) {
         duration_ms,
     };
     se.push(at, EventKind::ToolCall(call));
+    if name == "bash"
+        && let Some(issue) = str_of(input, "command").and_then(commit_issue)
+    {
+        se.push(at, EventKind::CommitIssue { issue });
+    }
 
     if name == "skill"
         && let Some(skill) = str_of(input, "name")

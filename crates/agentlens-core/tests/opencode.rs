@@ -403,3 +403,24 @@ fn the_since_filter_applies_to_legacy_sessions() {
     };
     assert!(read(&home, &filter).is_empty());
 }
+
+#[test]
+fn a_commit_message_keeps_only_its_issue_number() {
+    let (home, _conn) = home_with_db(
+        r#"INSERT INTO part VALUES ('p99', 'm2', 'ses_root', 1780000008000, 1780000008000,
+        '{"type":"tool","tool":"bash","callID":"c9","state":{"status":"completed","input":{"command":"git commit -m \"feat: x (#502)\""},"output":"ok","time":{"start":1780000008000,"end":1780000008100}}}');"#,
+    );
+    let se = read(&home, &SessionFilter::default())
+        .into_iter()
+        .find(|s| s.session.id == "ses_root")
+        .unwrap();
+    let issues: Vec<u32> = se
+        .events
+        .iter()
+        .filter_map(|e| match e.kind {
+            EventKind::CommitIssue { issue } => Some(issue),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(issues, [502]);
+}

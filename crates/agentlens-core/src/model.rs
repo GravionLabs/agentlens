@@ -158,6 +158,11 @@ pub enum EventKind {
     Hook(Hook),
     /// The client asked the user for permission.
     PermissionPrompt(PermissionPrompt),
+    /// A tool call ran `git commit -m` with a message that refers to an issue (`Closes #12`,
+    /// `Refs #12`, `(#12)`). Only the number is kept, never the message.
+    CommitIssue {
+        issue: u32,
+    },
 }
 
 /// A hook run. Only the type and outcome are kept, never its input or command.

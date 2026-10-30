@@ -80,6 +80,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "started_at": "2026-10-02T09:00:00Z",
           "duration_ms": 30000,
           "issue": null,
+          "issue_source": null,
           "models": [
             "claude-test-1"
           ],
@@ -102,6 +103,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "started_at": "2026-07-15T04:00:00Z",
           "duration_ms": 10000,
           "issue": null,
+          "issue_source": null,
           "models": [
             "model-a"
           ],
@@ -124,6 +126,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "started_at": "2026-10-02T10:00:00Z",
           "duration_ms": 6000,
           "issue": null,
+          "issue_source": null,
           "models": [
             "claude-test-1"
           ],
@@ -146,6 +149,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "started_at": "2026-10-02T11:00:00Z",
           "duration_ms": 120000,
           "issue": null,
+          "issue_source": null,
           "models": [
             "claude-test-1"
           ],

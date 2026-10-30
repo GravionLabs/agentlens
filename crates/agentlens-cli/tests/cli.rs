@@ -826,6 +826,79 @@ fn cost_can_be_grouped_by_project_branch_and_issue() {
 }
 
 #[test]
+fn cost_by_issue_falls_back_to_the_commit_message_when_the_branch_has_none() {
+    let home = tempfile::tempdir().unwrap();
+    let projects = home.path().join(".claude/projects/-work-demo");
+    fs::create_dir_all(&projects).unwrap();
+    let text = fs::read_to_string(fixtures().join("context.jsonl")).unwrap();
+    let commit = |id: &str, branch: &str| {
+        format!(
+            r#"{{"sessionId":"{id}","cwd":"/work/demo","gitBranch":"{branch}","timestamp":"2026-10-02T09:00:40Z","type":"assistant","isSidechain":false,"requestId":"r9","message":{{"id":"m9","role":"assistant","model":"claude-test-1","content":[{{"type":"tool_use","id":"t9","name":"Bash","input":{{"command":"git add a.rs && git commit -m \"feat: x (#502)\""}}}}]}}}}"#
+        )
+    };
+    let on = |id: &str, branch: &str| {
+        let body = text
+            .replace("ctx1", id)
+            .replace("\"main\"", &format!("\"{branch}\""));
+        format!("{body}{}\n", commit(id, branch))
+    };
+    fs::write(projects.join("a.jsonl"), on("ctx1", "release/next")).unwrap();
+    fs::write(projects.join("b.jsonl"), on("ctx2", "feat/42-login")).unwrap();
+    let file = price_file(&home);
+    let by = |by: &str| {
+        json(
+            agentlens(&home)
+                .args(["cost", "--format", "json", "--by", by, "--prices"])
+                .arg(&file),
+        )
+    };
+    let issues = by("issue");
+    let mut rows: Vec<(String, String)> = issues["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                r["key"].as_str().unwrap().into(),
+                r["issue_source"].as_str().unwrap().into(),
+            )
+        })
+        .collect();
+    rows.sort();
+    assert_eq!(
+        rows,
+        [
+            ("#42".into(), "branch".into()),
+            ("#502".into(), "commit".into())
+        ],
+        "a branch match wins over a commit match"
+    );
+    let sessions = by("session");
+    let mut sessions: Vec<(String, String, String)> = sessions["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| {
+            (
+                s["session"].as_str().unwrap().into(),
+                s["issue"].as_str().unwrap().into(),
+                s["issue_source"].as_str().unwrap().into(),
+            )
+        })
+        .collect();
+    sessions.sort();
+    assert_eq!(
+        sessions,
+        [
+            ("a".into(), "#502".into(), "commit".into()),
+            ("b".into(), "#42".into(), "branch".into()),
+        ]
+    );
+    let models = by("model");
+    assert!(models["rows"][0].get("issue_source").is_none());
+}
+
+#[test]
 fn efficiency_reports_cache_hit_rate_and_subagent_share() {
     let home = home_with_context();
     let file = price_file(&home);

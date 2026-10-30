@@ -28,6 +28,10 @@ pub struct CostRow {
     pub unpriced_requests: u64,
     /// Premium requests (GitHub Copilot); a plan allowance, not money.
     pub premium_requests: f64,
+    /// How the issue of the row was found; only grouped by issue. With sessions of several
+    /// sources, the weakest of them (`commit` before `branch`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_source: Option<IssueSource>,
 }
 
 impl CostRow {
@@ -75,8 +79,10 @@ pub struct SessionCost {
     pub project: Option<PathBuf>,
     pub started_at: Option<Timestamp>,
     pub duration_ms: Option<u64>,
-    /// `#123` as `--by issue` resolves it from the branch.
+    /// `#123` as `--by issue` resolves it ([`session_issue`]).
     pub issue: Option<String>,
+    /// How `issue` was found.
+    pub issue_source: Option<IssueSource>,
     pub models: Vec<String>,
     pub requests: u64,
     /// Requests of the main agent (not made by subagents).
@@ -126,6 +132,28 @@ pub enum Grouping {
 pub const NO_PROJECT: &str = "(no project)";
 pub const NO_BRANCH: &str = "(no branch)";
 pub const UNASSIGNED: &str = "(unassigned)";
+
+/// Where the issue number of a session comes from, in the order they are tried.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IssueSource {
+    /// The branch name ([`issue_number`]).
+    Branch,
+    /// The message of a `git commit -m` the session ran ([`crate::commit::commit_issue`]).
+    Commit,
+}
+
+/// The issue a session worked on: from the branch name, else from the first commit message of
+/// the session that refers to an issue.
+pub fn session_issue(se: &SessionEvents) -> Option<(u32, IssueSource)> {
+    if let Some(n) = se.session.branch.as_deref().and_then(issue_number) {
+        return Some((n, IssueSource::Branch));
+    }
+    se.events.iter().find_map(|e| match e.kind {
+        EventKind::CommitIssue { issue } => Some((issue, IssueSource::Commit)),
+        _ => None,
+    })
+}
 
 /// The issue number a branch name refers to, if any.
 ///
@@ -180,11 +208,8 @@ fn group_key(se: &SessionEvents, group: Grouping) -> Option<String> {
         ),
         Grouping::Session => Some(se.session.id.clone()),
         Grouping::Issue => Some(
-            se.session
-                .branch
-                .as_deref()
-                .and_then(issue_number)
-                .map(|n| format!("#{n}"))
+            session_issue(se)
+                .map(|(n, _)| format!("#{n}"))
                 .unwrap_or_else(|| UNASSIGNED.into()),
         ),
     }
@@ -203,6 +228,10 @@ pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, group: Grouping)
     for se in sessions {
         let mut sc = (group == Grouping::Session).then(|| session_cost(se));
         let mut models: BTreeSet<String> = BTreeSet::new();
+        let key = group_key(se, group);
+        let issue_source = (group == Grouping::Issue)
+            .then(|| session_issue(se).map(|(_, source)| source))
+            .flatten();
         for e in &se.events {
             let EventKind::Usage(u) = &e.kind else {
                 continue;
@@ -212,10 +241,11 @@ pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, group: Grouping)
                 .clone()
                 .or_else(|| se.session.model.clone())
                 .unwrap_or_else(|| "unknown".into());
-            let key = group_key(se, group).unwrap_or_else(|| model.clone());
+            let key = key.clone().unwrap_or_else(|| model.clone());
             let row = rows
                 .entry(key.clone())
                 .or_insert_with(|| CostRow::new(&key));
+            row.issue_source = row.issue_source.max(issue_source);
             row.requests += 1;
             row.input += u.input;
             row.output += u.output;
@@ -295,6 +325,7 @@ pub fn analyze(sessions: &[SessionEvents], prices: &PriceTable, group: Grouping)
 
 fn session_cost(se: &SessionEvents) -> SessionCost {
     let s = &se.session;
+    let issue = session_issue(se);
     SessionCost {
         source: s.source,
         session: s.id.clone(),
@@ -304,11 +335,8 @@ fn session_cost(se: &SessionEvents) -> SessionCost {
             (Some(a), Some(b)) => u64::try_from(b.as_millisecond() - a.as_millisecond()).ok(),
             _ => None,
         },
-        issue: s
-            .branch
-            .as_deref()
-            .and_then(issue_number)
-            .map(|n| format!("#{n}")),
+        issue: issue.map(|(n, _)| format!("#{n}")),
+        issue_source: issue.map(|(_, source)| source),
         models: Vec::new(),
         requests: 0,
         main_requests: 0,
@@ -513,6 +541,48 @@ mod tests {
         ] {
             assert_eq!(issue_number(branch), want, "{branch}");
         }
+    }
+
+    #[test]
+    fn the_issue_comes_from_the_branch_then_the_first_commit() {
+        let commit = |issue| EventKind::CommitIssue { issue };
+        let mut branch_only = session(vec![]);
+        branch_only.session.branch = Some("feat/12-x".into());
+        assert_eq!(session_issue(&branch_only), Some((12, IssueSource::Branch)));
+        let mut commit_only = session(vec![commit(502), commit(503)]);
+        commit_only.session.branch = Some("release/next".into());
+        assert_eq!(
+            session_issue(&commit_only),
+            Some((502, IssueSource::Commit)),
+            "the first commit wins"
+        );
+        let mut both = session(vec![commit(502)]);
+        both.session.branch = Some("feat/12-x".into());
+        assert_eq!(session_issue(&both), Some((12, IssueSource::Branch)));
+        assert_eq!(session_issue(&session(vec![])), None);
+    }
+
+    #[test]
+    fn an_issue_row_names_its_weakest_source() {
+        let u = || usage(Some("claude-sonnet-5-5"), 1_000, 0, None);
+        let sessions = [
+            on("/a", Some("feat/12-x"), vec![u()]),
+            on(
+                "/a",
+                Some("release/next"),
+                vec![EventKind::CommitIssue { issue: 12 }, u()],
+            ),
+            on("/a", Some("feat/13-y"), vec![u()]),
+            on("/a", None, vec![u()]),
+        ];
+        let r = analyze(&sessions, &PriceTable::bundled(), Grouping::Issue);
+        let source = |key: &str| r.rows.iter().find(|r| r.key == key).unwrap().issue_source;
+        assert_eq!(source("#12"), Some(IssueSource::Commit));
+        assert_eq!(source("#13"), Some(IssueSource::Branch));
+        assert_eq!(source(UNASSIGNED), None);
+        assert_eq!(r.total.issue_source, None);
+        let by_branch = analyze(&sessions, &PriceTable::bundled(), Grouping::Branch);
+        assert!(by_branch.rows.iter().all(|r| r.issue_source.is_none()));
     }
 
     fn on(project: &str, branch: Option<&str>, kinds: Vec<EventKind>) -> SessionEvents {
