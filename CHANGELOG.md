@@ -5,6 +5,46 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.0] — 2026-10-30
+
+### Bug Fixes
+- **advice**: Fail soft on the price file and price unpriced context at the average (#445)
+- **adapters**: One summary warning for Claude Code subagents without a meta file (#468) (#471)
+- **adapters**: One summary warning for Claude Code subagents without a meta file (#468)
+- **adapters**: Summarize missing subagent meta files once per scan (#468)
+- **analyzers**: Efficiency roles per --section, runs without requests, order-independent run info (#402)
+- Allow many arguments in the two run functions that got --role (#415)
+- Windows: Installation ändert PATH bzw. PATH ist nach der Installation ungültig (#443) (#481)
+- NSIS hook leaves an unreadable user PATH untouched and backs up the old value (#457)
+- **app**: Windows setup leaves PATH alone, uninstall removes the entry (#463) (#484)
+
+
+### Documentation
+- Restore PATH on Windows from the backup (#459)
+- **adr**: ADR 0008 puts the CLI on the Windows PATH from the application (#482)
+
+
+### Features
+- Impact per advice finding, findings ranked by it (#445) (#452)
+- **advice**: Rank the findings by what they could save (#445)
+- **app**: Show rank and saving per advice finding (#445)
+- **core**: Resolve git worktree paths to their main repository (#423) (#453)
+- --session filter for one session in the CLI and the MCP server (#437) (#454)
+- --session filter for one session in the CLI and the MCP server (#437)
+- **analyzers**: Cost --by session with peak context and subagent share (#400) (#455)
+- Issue number from commit messages when the branch has none (#401) (#464)
+- **core**: Agent runs with parent, caller and depth in the model (#387) (#467)
+- **adapters**: Agent runs for Copilot CLI, OpenCode and OTel (#465) (#469)
+- **analyzers**: Efficiency --section roles: cost, requests and cache per agent type (#402) (#473)
+- **analyzers**: Efficiency roles table per skill, workflow phase and agent type (#402)
+- --role filter on cost, efficiency, flow and compare (#415) (#475)
+- --role filter for cost, efficiency, flow and compare (#415)
+- **app**: Custom period with last N hours or days and a date range (#337) (#477)
+- **analyzers**: Trend analysis of the period against the previous one (#339) (#478)
+- **cli**: Trend command and MCP tool (#340) (#479)
+- **core**: Install and remove command line tools edit the Windows user PATH (#462) (#483)
+
+
 ## [0.11.2] — 2026-10-29
 
 ### Documentation
