@@ -7,9 +7,20 @@
 ; The value is kept as REG_EXPAND_SZ; other entries are never changed.
 ;
 ; Tauri's NSIS build (stock NSIS 3.11 plus nsis_tauri_utils, no EnVar plugin, no
-; large-strings build) caps strings at 1024 characters, and ReadRegStr truncates
-; silently. Writing a truncated PATH back would destroy entries, so PATH is left
-; untouched when the old value is near the cap or the new one would exceed it.
+; large-strings build) caps strings at 1024 characters. ReadRegStr does not
+; truncate a longer value: RegQueryValueEx fails with ERROR_MORE_DATA, NSIS
+; returns an EMPTY string and sets the error flag (the same happens for a value
+; that is not a string). An empty read is therefore ambiguous: the value is
+; missing, or it exists and could not be read. The hook tells them apart with
+; EnumRegValue; a PATH it cannot read is left untouched, because writing
+; "<INSTDIR>" over it would drop every other entry. The same applies to the
+; uninstaller, which never writes a value it could not read.
+;
+; Before the installer writes PATH it saves the old value as REG_EXPAND_SZ to
+; <root>\Software\GravionLabs\AgentLens\PathBackup (value "Path"; HKCU for a
+; per-user install, HKLM for a per-machine one). The uninstaller leaves the
+; backup in place and does not overwrite it, so it keeps the value from before
+; the installation.
 ;
 ; Every case that leaves PATH untouched says why in the details log.
 
@@ -17,6 +28,7 @@
 !include "WinMessages.nsh" ; HWND_BROADCAST, WM_SETTINGCHANGE
 
 !define AGENTLENS_MACHINE_ENV "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+!define AGENTLENS_BACKUP_KEY "Software\GravionLabs\AgentLens\PathBackup"
 
 ; Defines ${un}AgentLensEditPath, once for the installer ("") and once for the
 ; uninstaller ("un."): NSIS only lets uninstaller sections call un. functions.
@@ -83,9 +95,44 @@ Function ${un}AgentLensEditPath
       DetailPrint "AgentLens: machine PATH not changed, the install directory is not under Program Files: $INSTDIR"
       Goto done
     ${EndIf}
+    ClearErrors
     ReadRegStr $0 HKLM "${AGENTLENS_MACHINE_ENV}" "Path"
   ${Else}
+    ClearErrors
     ReadRegStr $0 HKCU "Environment" "Path"
+  ${EndIf}
+
+  ; An empty read with the error flag set: missing value or unreadable value
+  ${If} ${Errors}
+    StrCpy $3 0 ; 1 = a value named Path exists
+    StrCpy $4 0 ; index of the value name
+    ${Do}
+      ClearErrors
+      ${If} $R9 == "HKLM"
+        EnumRegValue $5 HKLM "${AGENTLENS_MACHINE_ENV}" $4
+      ${Else}
+        EnumRegValue $5 HKCU "Environment" $4
+      ${EndIf}
+      ${If} ${Errors}
+        ${Break}
+      ${EndIf}
+      ${If} $5 == "Path"
+        StrCpy $3 1
+        ${Break}
+      ${EndIf}
+      IntOp $4 $4 + 1
+    ${Loop}
+    ClearErrors
+    ${If} $3 == 1
+      ${If} $R8 == "add"
+        ${IfNot} ${Silent}
+          MessageBox MB_OK|MB_ICONEXCLAMATION "AgentLens was installed, but its install directory was not added to PATH: your PATH could not be read completely (it is too long or not a text value) and was left unchanged.$\r$\n$\r$\nTo add it yourself open Settings, search for $\"Edit environment variables for your account$\", select Path, click Edit, click New and enter:$\r$\n$\r$\n$INSTDIR"
+        ${EndIf}
+      ${EndIf}
+      DetailPrint "AgentLens: PATH not changed, the value exists but could not be read (longer than 1023 characters or not a text value)"
+      Goto done
+    ${EndIf}
+    ; no value: the old value is empty
   ${EndIf}
 
   ; 1023 is the longest string NSIS holds; a value this long may be cut off
@@ -157,6 +204,20 @@ Function ${un}AgentLensEditPath
   ${EndIf}
 
   ${If} $3 == 2
+    ; keep the value from before the installation (not when there was none)
+    ${If} $R8 == "add"
+    ${AndIf} $0 != ""
+      ClearErrors
+      ${If} $R9 == "HKLM"
+        WriteRegExpandStr HKLM "${AGENTLENS_BACKUP_KEY}" "Path" $0
+      ${Else}
+        WriteRegExpandStr HKCU "${AGENTLENS_BACKUP_KEY}" "Path" $0
+      ${EndIf}
+      ${If} ${Errors}
+        DetailPrint "AgentLens: PATH not changed, the backup of the old value could not be written"
+        Goto done
+      ${EndIf}
+    ${EndIf}
     ${If} $R9 == "HKLM"
       WriteRegExpandStr HKLM "${AGENTLENS_MACHINE_ENV}" "Path" $2
     ${Else}

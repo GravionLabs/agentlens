@@ -1,7 +1,6 @@
-//! The Windows installers put the install directory on PATH: the NSIS hook file
-//! (`bundle.windows.nsis.installerHooks`) and the WiX fragment
-//! (`bundle.windows.wix.fragmentPaths`) are wired into the bundle configuration
-//! and keep the rules of the PATH edit.
+//! The Windows installer puts the install directory on PATH: the NSIS hook file
+//! (`bundle.windows.nsis.installerHooks`) is wired into the bundle configuration
+//! and keeps the rules of the PATH edit.
 //!
 //! When `makensis` is on PATH the hook file is compiled in every install mode of
 //! the Tauri template; set `AGENTLENS_REQUIRE_MAKENSIS=1` (CI does) to fail
@@ -33,18 +32,6 @@ fn hook_path() -> PathBuf {
 
 fn hook_text() -> String {
     std::fs::read_to_string(hook_path()).expect("hook file exists")
-}
-
-fn wix_path() -> PathBuf {
-    let config = config();
-    let fragment = config["bundle"]["windows"]["wix"]["fragmentPaths"][0]
-        .as_str()
-        .expect("a WiX fragment is configured");
-    manifest_dir().join(fragment)
-}
-
-fn wix_text() -> String {
-    std::fs::read_to_string(wix_path()).expect("WiX fragment exists")
 }
 
 // ---- helpers: NSIS source ----
@@ -407,80 +394,103 @@ fn existing_bundle_settings_are_kept() {
     assert_eq!(bundle["active"], true);
 }
 
-// ---- WiX ----
-
 #[test]
-fn wix_fragment_is_included_and_its_component_referenced() {
-    let config = config();
-    let wix = &config["bundle"]["windows"]["wix"];
-    assert_eq!(
-        wix["fragmentPaths"],
-        serde_json::json!(["windows/path.wxs"])
+fn unreadable_path_is_told_from_a_missing_one_and_left_untouched() {
+    let body = edit_function();
+    let statements = statements(&body);
+    let clear = position(
+        &statements,
+        |s| s == "ClearErrors",
+        "ClearErrors before the first read",
     );
-    assert_eq!(
-        wix["componentRefs"],
-        serde_json::json!(["AgentLensUserPath"])
+    let read = position(
+        &statements,
+        |s| s.starts_with("ReadRegStr $0 HKCU"),
+        "user read",
     );
-    let text = wix_text();
-    let doc = roxmltree::Document::parse(&text).expect("fragment is valid XML");
-    let component = doc
-        .descendants()
-        .find(|n| n.has_tag_name("Component") && n.attribute("Id") == Some("AgentLensUserPath"))
-        .expect("referenced component exists");
-    let parent = component.parent_element().expect("component has a parent");
-    assert!(parent.has_tag_name("DirectoryRef"));
-    assert_eq!(parent.attribute("Id"), Some("INSTALLDIR"));
-}
-
-#[test]
-fn wix_fragment_sets_the_user_path_and_removes_it_on_uninstall() {
-    let text = wix_text();
-    let doc = roxmltree::Document::parse(&text).expect("fragment is valid XML");
-    let component = doc
-        .descendants()
-        .find(|n| n.has_tag_name("Component"))
-        .expect("component");
-    let environment = component
-        .children()
-        .find(|n| n.has_tag_name("Environment"))
-        .expect("Environment element in the component");
-    for (name, value) in [
-        ("Name", "PATH"),
-        ("Value", "[INSTALLDIR]"),
-        ("Action", "set"),
-        ("Part", "last"),
-        ("System", "no"),
-        ("Permanent", "no"),
-    ] {
-        assert_eq!(
-            environment.attribute(name),
-            Some(value),
-            "Environment/@{name}"
-        );
-    }
-
-    // a per-user component needs an HKCU key path
-    let key = component
-        .children()
-        .find(|n| n.has_tag_name("RegistryValue"))
-        .expect("RegistryValue in the component");
-    assert_eq!(key.attribute("Root"), Some("HKCU"));
-    assert_eq!(key.attribute("KeyPath"), Some("yes"));
-}
-
-#[test]
-fn wix_fragment_has_a_fixed_guid() {
-    let text = wix_text();
-    let doc = roxmltree::Document::parse(&text).expect("fragment is valid XML");
-    let guid = doc
-        .descendants()
-        .find(|n| n.has_tag_name("Component"))
-        .and_then(|n| n.attribute("Guid"))
-        .expect("component has a Guid");
-    let groups: Vec<usize> = guid.split('-').map(str::len).collect();
-    assert_eq!(groups, [8, 4, 4, 4, 12], "{guid}");
+    let errors = position(&statements, |s| s == "${If} ${Errors}", "error check");
+    let enumerate = position(
+        &statements,
+        |s| s.starts_with("EnumRegValue $5 HKCU"),
+        "value enumeration",
+    );
+    let exists = position(&statements, |s| s == "${If} $3 == 1", "exists branch");
+    let guard = position(&statements, |s| s == "${If} $7 >= 1023", "old guard");
+    assert!(clear < read && read < errors && errors < enumerate);
+    assert!(enumerate < exists && exists < guard);
+    // the machine PATH is enumerated as well
     assert!(
-        guid.chars().all(|c| c.is_ascii_hexdigit() || c == '-'),
-        "{guid}"
+        statements
+            .iter()
+            .any(|s| s.starts_with("EnumRegValue $5 HKLM"))
     );
+    // an existing but unreadable value ends in a skip with a reason
+    let skip = statements[exists..]
+        .iter()
+        .position(|s| *s == "Goto done")
+        .expect("skip")
+        + exists;
+    assert!(statements[skip - 1].contains("could not be read"));
+}
+
+#[test]
+fn unreadable_path_shows_manual_instructions_unless_silent() {
+    let body = edit_function();
+    let statements = statements(&body);
+    let silent = position(&statements, |s| s == "${IfNot} ${Silent}", "silent check");
+    let message = statements[silent + 1];
+    assert!(message.starts_with("MessageBox MB_OK"), "{message}");
+    assert!(message.contains("Edit environment variables for your account"));
+    assert!(message.contains("$INSTDIR"));
+}
+
+#[test]
+fn old_value_is_backed_up_before_the_write_and_never_by_the_uninstaller() {
+    let body = edit_function();
+    let statements = statements(&body);
+    let backup = position(
+        &statements,
+        |s| s == "WriteRegExpandStr HKCU \"${AGENTLENS_BACKUP_KEY}\" \"Path\" $0",
+        "user backup",
+    );
+    let machine_backup = position(
+        &statements,
+        |s| s == "WriteRegExpandStr HKLM \"${AGENTLENS_BACKUP_KEY}\" \"Path\" $0",
+        "machine backup",
+    );
+    let write = position(
+        &statements,
+        |s| s == "WriteRegExpandStr HKCU \"Environment\" \"Path\" $2",
+        "user write",
+    );
+    assert!(backup < write && machine_backup < write);
+    // only the installer ("add") makes a backup
+    let guard = statements[..backup]
+        .iter()
+        .rposition(|s| *s == "${If} $R8 == \"add\"")
+        .expect("backup is guarded by the add mode");
+    assert_eq!(statements[guard + 1], "${AndIf} $0 != \"\"");
+    assert!(
+        hook_text().contains(
+            "!define AGENTLENS_BACKUP_KEY \"Software\\GravionLabs\\AgentLens\\PathBackup\""
+        )
+    );
+}
+
+#[test]
+fn header_describes_the_empty_read_not_a_truncation() {
+    let text = hook_text();
+    assert!(!text.contains("truncates"), "outdated header comment");
+    assert!(text.contains("EMPTY string"));
+}
+
+#[test]
+fn only_the_nsis_installer_is_bundled() {
+    let config = config();
+    assert_eq!(
+        config["bundle"]["targets"],
+        serde_json::json!(["nsis", "deb", "rpm", "appimage", "app", "dmg"])
+    );
+    assert!(config["bundle"]["windows"].get("wix").is_none());
+    assert!(!manifest_dir().join("windows/path.wxs").exists());
 }

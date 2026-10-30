@@ -14,7 +14,7 @@ The [desktop application](application.md) comes as an installer. Their names car
 | ---------------------- | ---------------------------------- |
 | Linux x86_64           | `.deb`, `.rpm` or AppImage         |
 | macOS Apple silicon    | `.dmg`                             |
-| Windows x86_64         | `.msi` or setup `.exe`             |
+| Windows x86_64         | setup `.exe`                       |
 
 The installers are not signed yet, so the systems warn on first start: on macOS open the app with a right click and choose Open (or allow it in System Settings, Privacy and Security), on Windows choose More info and Run anyway in SmartScreen, and make an AppImage executable (`chmod +x`) before running it. Once installed, the application [updates itself](../updater.md) when you click **Check for updates**.
 
@@ -39,11 +39,11 @@ Unpack the archive and put `agentlens` and `agentlens-mcp` (the [MCP server](mcp
 
 | Installer                       | Where `agentlens` and `agentlens-mcp` are                                       |
 | ------------------------------- | ------------------------------------------------------------------------------- |
-| Windows `.msi` or setup `.exe`  | the install directory of the application                                        |
+| Windows setup `.exe`            | the install directory of the application                                        |
 | Linux `.deb` or `.rpm`          | `/usr/bin`, which is on your `PATH` already                                     |
 | macOS `.dmg` and Linux AppImage | inside the application; the action *Install command line tools* makes them available (see below) |
 
-The Windows installers add their install directory to your `PATH` (next section). The Linux and macOS installers do not.
+The Windows installer adds its install directory to your `PATH` (next section). The Linux and macOS installers do not.
 
 ### Install command line tools (macOS and AppImage)
 
@@ -60,10 +60,9 @@ The action is not offered for the `.deb` and `.rpm` packages, which install into
 
 ### Windows: the `PATH` entry
 
-Both Windows installers (setup `.exe` and `.msi`) add their install directory to your user `PATH`, so `agentlens` and `agentlens-mcp` work without any further step:
+The setup `.exe` adds its install directory to your user `PATH`, so `agentlens` and `agentlens-mcp` work without any further step. It installs for your account only. A setup `.exe` built for a per-machine installation adds the directory to the machine `PATH` instead, but only when it runs elevated and the install directory is under `Program Files` (a directory that only administrators can write to); with any other directory it leaves the machine `PATH` untouched.
 
-- **Setup `.exe`:** it installs for your account only and adds the directory to your user `PATH`. A setup `.exe` built for a per-machine installation adds it to the machine `PATH` instead, but only when it runs elevated and the install directory is under `Program Files` (a directory that only administrators can write to); with any other directory it leaves the machine `PATH` untouched.
-- **`.msi`:** it installs for all users into `Program Files`, but adds the directory to the user `PATH` of the account that runs the installation only. Other users of the machine find the programs in the install directory and run them by their full path or add the directory to their own `PATH`. The entry is removed when that same account uninstalls the application.
+If you installed an earlier version with the `.msi`, uninstall it (Settings, Apps) before you run the setup `.exe`; the uninstall removes the `PATH` entry of the `.msi`. The `.msi` is no longer built, and the updater would otherwise install the setup `.exe` next to it.
 
 Programs that are already running keep the old `PATH`: open a **new** terminal (or restart your editor) before you use the commands.
 
@@ -82,10 +81,28 @@ Set-ItemProperty 'HKCU:\Environment' -Name Path -Value $new -Type ExpandString
 
 The setup `.exe` leaves `PATH` untouched in these cases and says why in the details of the installation:
 
-- your existing `PATH` is very long (1023 characters or more), because the installer cannot read and write such a value safely without cutting off entries, or the new entry would not fit;
+- your existing `PATH` is very long (the installer cannot read a value of 1023 characters or more, and a write could cut off entries), or the new entry would not fit;
 - the install directory contains `;` or `%`, which `PATH` would split or expand.
 
-The installation still succeeds, but you must add the install directory by hand, with the dialog above (choose **New** instead of **Delete**). The uninstaller then has nothing to remove.
+The installation still succeeds, but you must add the install directory by hand, with the dialog above (choose **New** instead of **Delete**). The uninstaller then has nothing to remove. When your `PATH` could not be read, the installer also shows a message with these steps unless it runs silently.
+
+### Restore `PATH` on Windows
+
+Before the setup `.exe` changes your user `PATH`, it saves the old value in the registry under `HKEY_CURRENT_USER\Software\GravionLabs\AgentLens\PathBackup` (value `Path`; a per-machine installation uses `HKEY_LOCAL_MACHINE` for the same key). The uninstaller leaves the backup in place. To put the old value back, run this in PowerShell, then sign out and in again or open a new terminal:
+
+```powershell
+$old = (Get-Item 'HKCU:\Software\GravionLabs\AgentLens\PathBackup').GetValue('Path', '', 'DoNotExpandEnvironmentNames'); Set-ItemProperty 'HKCU:\Environment' -Name Path -Value $old -Type ExpandString
+```
+
+`ExpandString` keeps entries such as `%USERPROFILE%\...` unexpanded, as Windows stores them. To only add the install directory by hand, open **Edit environment variables for your account**, select `Path`, click **Edit**, click **New** and enter the install directory.
+
+**If an earlier version cut your `PATH` short:** before this fix, the installer replaced a `PATH` of 1023 characters or more with the install directory alone, and no backup exists. Rebuild the list in **Edit environment variables for your account**: select `Path` (or click **New** if it is gone) and add the entries your tools need. Windows itself puts this one there on every account:
+
+```text
+%USERPROFILE%\AppData\Local\Microsoft\WindowsApps
+```
+
+Add the folders of the other programs you use (for example Git, Node.js or Python) again too, or reinstall them, which restores their entries. The system `PATH` was never changed by this.
 
 ## From source
 
