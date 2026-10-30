@@ -119,6 +119,12 @@ describe("app", () => {
     expect(bar.querySelector('app-status-bar button[aria-label="Larger"]')).not.toBeNull();
   });
 
+  it("renders the filter bar once, in the topbar slot", () => {
+    const { el } = render();
+    expect(el.querySelectorAll("app-filter-bar")).toHaveLength(1);
+    expect(el.querySelector("helix-topbar .layout-topbar-slot > app-filter-bar")).not.toBeNull();
+  });
+
   it("shows the progress bar only while loading", () => {
     const { fixture, el } = render();
     expect(el.querySelector('[role="progressbar"]')).toBeNull();
