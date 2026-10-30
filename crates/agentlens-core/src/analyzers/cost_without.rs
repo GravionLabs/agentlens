@@ -107,23 +107,20 @@ fn input_price(prices: &PriceTable, se: &SessionEvents, u: &crate::model::Usage)
     Some(per_million / 1_000_000.0 / total as f64)
 }
 
-fn main_request_shares(
+/// The (session, event) positions of the main-agent requests of the sessions the filter accepts.
+fn main_requests(
     sessions: &[SessionEvents],
     applies: impl Fn(&SessionEvents) -> bool,
-    tokens: u64,
-    shares: &mut Vec<RequestShare>,
-) {
+) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
     for (si, se) in sessions.iter().enumerate().filter(|(_, se)| applies(se)) {
         for (k, e) in se.events.iter().enumerate() {
             if matches!(&e.kind, EventKind::Usage(u) if !u.subagent) {
-                shares.push(RequestShare {
-                    session: si,
-                    event: Some(k),
-                    tokens,
-                });
+                out.push((si, k));
             }
         }
     }
+    out
 }
 
 /// The tokens an MCP server adds to the main-agent requests after the first appearance of each of its
@@ -187,59 +184,72 @@ pub fn analyze(
     let mut warnings = Vec::new();
     for spec in items {
         let mut shares: Vec<RequestShare> = Vec::new();
-        let installations: u32 = match spec.kind {
-            UnusedKind::Skill => {
-                let installed = skill_report
-                    .skills
-                    .iter()
-                    .any(|s| s.in_inventory && s.name == spec.name);
-                if installed {
-                    shares = skill_shares.get(&spec.name).cloned().unwrap_or_default();
-                }
-                if installed {
-                    inventory.find(&spec.name).len() as u32
-                } else {
-                    0
-                }
-            }
-            UnusedKind::Agent => {
-                let found: Vec<_> = catalog
-                    .agents
-                    .iter()
-                    .filter(|a| a.name == spec.name)
-                    .collect();
-                for a in &found {
-                    main_request_shares(
-                        sessions,
-                        |se| {
-                            a.clients.contains(&se.session.source)
-                                && (a.project.is_none() || a.project == se.session.project_dir)
-                        },
-                        a.listing_tokens.count,
-                        &mut shares,
-                    );
-                }
-                found.len() as u32
-            }
-            UnusedKind::McpServer => {
-                let server = norm(&spec.name);
-                let found: Vec<_> = catalog
-                    .mcp_servers
-                    .iter()
-                    .filter(|m| norm(&m.name) == server)
-                    .collect();
-                // One scan over the union of the clients: the scan ignores projects, so one call per
-                // installation would count the same request once per entry.
-                let mut clients: Vec<crate::model::Source> = Vec::new();
-                for c in found.iter().flat_map(|m| m.clients.iter()) {
-                    if !clients.contains(c) {
-                        clients.push(*c);
+        let installations: u32 =
+            match spec.kind {
+                UnusedKind::Skill => {
+                    let installed = skill_report
+                        .skills
+                        .iter()
+                        .any(|s| s.in_inventory && s.name == spec.name);
+                    if installed {
+                        shares = skill_shares.get(&spec.name).cloned().unwrap_or_default();
+                    }
+                    if installed {
+                        inventory.find(&spec.name).len() as u32
+                    } else {
+                        0
                     }
                 }
-                mcp_shares(sessions, &server, &clients, estimator, &mut shares);
-                found.len() as u32
-            }
-        };
+                UnusedKind::Agent => {
+                    let found: Vec<_> = catalog
+                        .agents
+                        .iter()
+                        .filter(|a| a.name == spec.name)
+                        .collect();
+                    // Each request pays once: a project entry shadows a user-level one of the same name,
+                    // and among entries of one level the largest listing counts.
+                    let mut per_request: BTreeMap<(usize, usize), (bool, u64)> = BTreeMap::new();
+                    for a in &found {
+                        let project_level = a.project.is_some();
+                        let tokens = a.listing_tokens.count;
+                        for key in main_requests(sessions, |se| {
+                            a.clients.contains(&se.session.source)
+                                && (a.project.is_none() || a.project == se.session.project_dir)
+                        }) {
+                            let slot = per_request.entry(key).or_insert((project_level, tokens));
+                            if (project_level, tokens) > *slot {
+                                *slot = (project_level, tokens);
+                            }
+                        }
+                    }
+                    shares.extend(per_request.into_iter().map(
+                        |((session, event), (_, tokens))| RequestShare {
+                            session,
+                            event: Some(event),
+                            tokens,
+                        },
+                    ));
+                    found.len() as u32
+                }
+                UnusedKind::McpServer => {
+                    let server = norm(&spec.name);
+                    let found: Vec<_> = catalog
+                        .mcp_servers
+                        .iter()
+                        .filter(|m| norm(&m.name) == server)
+                        .collect();
+                    // One scan over the union of the clients: the scan ignores projects, so one call per
+                    // installation would count the same request once per entry.
+                    let mut clients: Vec<crate::model::Source> = Vec::new();
+                    for c in found.iter().flat_map(|m| m.clients.iter()) {
+                        if !clients.contains(c) {
+                            clients.push(*c);
+                        }
+                    }
+                    mcp_shares(sessions, &server, &clients, estimator, &mut shares);
+                    found.len() as u32
+                }
+            };
         if installations == 0 {
             warnings.push(format!(
                 "nothing installed matches `{}:{}`",
@@ -463,6 +473,23 @@ mod tests {
         assert_eq!(r.total.tokens, Tokens::estimated(30));
         close(r.total.cost_usd, 0.00006);
         assert!(r.warnings.is_empty());
+    }
+
+    #[test]
+    fn a_user_and_a_project_agent_of_one_name_count_each_request_once() {
+        let se = session("/p", vec![fresh(), fresh()]);
+        let mut project = agent("reviewer", 40);
+        project.project = Some("/p".into());
+        let r = run(
+            &[se],
+            &["agent:reviewer"],
+            vec![],
+            catalog(vec![agent("reviewer", 10), project], vec![]),
+        );
+        let row = &r.rows[0];
+        // two installations, two requests, the project entry's 40 tokens each
+        assert_eq!((row.installations, row.requests), (2, 2));
+        assert_eq!(row.tokens, Tokens::estimated(80));
     }
 
     #[test]
