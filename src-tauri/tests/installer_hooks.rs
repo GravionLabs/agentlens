@@ -483,3 +483,14 @@ fn header_describes_the_empty_read_not_a_truncation() {
     assert!(!text.contains("truncates"), "outdated header comment");
     assert!(text.contains("EMPTY string"));
 }
+
+#[test]
+fn only_the_nsis_installer_is_bundled() {
+    let config = config();
+    assert_eq!(
+        config["bundle"]["targets"],
+        serde_json::json!(["nsis", "deb", "rpm", "appimage", "app", "dmg"])
+    );
+    assert!(config["bundle"]["windows"].get("wix").is_none());
+    assert!(!manifest_dir().join("windows/path.wxs").exists());
+}
