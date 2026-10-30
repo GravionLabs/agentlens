@@ -1,5 +1,5 @@
 use agentlens_core::adapter::SessionFilter;
-use agentlens_core::api::{DEFAULT_UNUSED_DAYS, Filters};
+use agentlens_core::api::{DEFAULT_PERIOD_DAYS, Filters};
 use agentlens_core::model::Source;
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -134,7 +134,7 @@ pub enum Command {
     /// List installed skills, agents and MCP servers that were not used
     Unused {
         /// Length of the period to look at (ignored if --since is given; counted back from --until if set)
-        #[arg(long, value_name = "DAYS", default_value_t = DEFAULT_UNUSED_DAYS)]
+        #[arg(long, value_name = "DAYS", default_value_t = DEFAULT_PERIOD_DAYS)]
         days: u32,
         /// Also list items that were used
         #[arg(long)]

@@ -217,6 +217,55 @@ export interface UnusedReport {
   items: UnusedItem[];
 }
 
+export interface TrendWindow {
+  since: string;
+  until: string;
+  sessions: number;
+}
+
+export interface TrendWindows {
+  current: TrendWindow;
+  /** The comparison window. */
+  against: TrendWindow;
+  /** The windows differ in length: counts are per-day values. */
+  normalized: boolean;
+}
+
+/** A figure in the comparison window (`before`) and the current one (`after`). */
+export interface Delta {
+  before: number | null;
+  after: number | null;
+  /** `null` when either window has no sessions. */
+  change: number | null;
+  /** In percent of `before`; `null` when `before` is 0. */
+  change_pct: number | null;
+  /** `false` when either value was estimated. */
+  measured: boolean;
+}
+
+export interface SkillTrend {
+  name: string;
+  status: "new" | "gone" | "both";
+  loads: Delta;
+  overhead_tokens: Delta;
+}
+
+export interface TrendReport {
+  windows: TrendWindows;
+  volume: {
+    sessions: Delta;
+    requests: Delta;
+    subagent_requests: Delta;
+    tokens: Delta;
+    context_tokens: Delta;
+    large_context_requests: Delta;
+  };
+  cost: { measured_usd: Delta; estimated_usd: Delta; unpriced_requests: Delta };
+  efficiency: { cache_hit_rate: Delta; subagent_share: Delta };
+  errors: { tool_calls: Delta; failed_calls: Delta; retry_loops: Delta };
+  skills: SkillTrend[];
+}
+
 export interface SessionGrowth {
   source: SourceId;
   session: string;

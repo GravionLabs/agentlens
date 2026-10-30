@@ -251,6 +251,25 @@ fn json_samples_for_the_frontend_are_up_to_date() {
             .unwrap(),
         ),
         (
+            "trend",
+            serde_json::to_string_pretty(
+                &api::trend(
+                    &ctx,
+                    &Filters {
+                        since: Some("2026-10-01".into()),
+                        until: Some("2026-10-15".into()),
+                        ..Filters::default()
+                    },
+                    Some((
+                        "2026-07-01T00:00:00Z".parse().unwrap(),
+                        "2026-07-31T00:00:00Z".parse().unwrap(),
+                    )),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
+        ),
+        (
             "cli_tools",
             serde_json::to_string_pretty(&cli_tools_sample()).unwrap(),
         ),

@@ -30,6 +30,14 @@ A source is one supported client: Claude Code, OpenCode, Copilot CLI or VS Code 
 
 Subagents work in their own context. Their requests are counted separately from the main agent's, which is why context size only covers main-agent requests.
 
+### Trend
+
+A trend compares the current period with a comparison window and shows both values and the change between them. A change is “n/a” when either window has no sessions, and the percentage is “n/a” when the earlier value is 0. A change of an estimated value is an estimate.
+
+### Comparison window
+
+Without a choice, the comparison window is the period of the same length right before the current one. If the two periods differ in length, counts are compared per day. The comparison window must not overlap the current period.
+
 ## Context
 
 ### Static context

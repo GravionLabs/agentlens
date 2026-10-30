@@ -266,6 +266,21 @@ export const GLOSSARY: GlossaryEntry[] = [
     long: "After a compaction, content that was carried along (such as loaded skills) is gone from the context.",
   },
   {
+    id: "trend",
+    term: "Trend",
+    group: "Basics",
+    short: "The figures of a period next to those of the comparison window, with their change.",
+    long: "A trend compares the current period with a comparison window and shows both values and the change between them. A change is “n/a” when either window has no sessions, and the percentage is “n/a” when the earlier value is 0. A change of an estimated value is an estimate.",
+  },
+  {
+    id: "comparison-window",
+    term: "Comparison window",
+    group: "Basics",
+    short:
+      "The period a trend compares against, by default the one of the same length right before.",
+    long: "Without a choice, the comparison window is the period of the same length right before the current one. If the two periods differ in length, counts are compared per day. The comparison window must not overlap the current period.",
+  },
+  {
     id: "retry-loop",
     term: "Retry loop",
     group: "Flow",
