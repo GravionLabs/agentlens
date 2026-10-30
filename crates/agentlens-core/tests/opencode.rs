@@ -424,3 +424,119 @@ fn a_commit_message_keeps_only_its_issue_number() {
         .collect();
     assert_eq!(issues, [502]);
 }
+
+fn runs(se: &SessionEvents) -> Vec<&EventKind> {
+    se.events
+        .iter()
+        .map(|e| &e.kind)
+        .filter(|k| matches!(k, EventKind::AgentRun { .. }))
+        .collect()
+}
+
+#[test]
+fn a_session_with_a_parent_is_a_run_called_by_the_main_session() {
+    let se = root();
+    let r = runs(&se);
+    assert_eq!(r.len(), 1, "the root is not a run");
+    let EventKind::AgentRun {
+        agent_id,
+        parent_agent_id,
+        agent_type,
+        model,
+        depth,
+        started_at,
+        ended_at,
+        ..
+    } = r[0]
+    else {
+        unreachable!()
+    };
+    assert_eq!(agent_id, "ses_sub");
+    assert_eq!(*parent_agent_id, None);
+    assert_eq!(*depth, Some(1));
+    assert_eq!(*agent_type, None, "no user message names an agent");
+    assert_eq!(model.as_deref(), Some("model-b"));
+    assert_eq!(started_at.as_millisecond(), 1780000030000);
+    assert_eq!(ended_at.unwrap().as_millisecond(), 1780000040000);
+}
+
+#[test]
+fn the_requests_of_a_subagent_session_carry_the_run_id() {
+    let se = root();
+    let u = usages(&se);
+    let sub: Vec<_> = u.iter().filter(|u| u.subagent).collect();
+    assert_eq!(
+        sub[0].agent.as_ref().and_then(|a| a.agent_id.as_deref()),
+        Some("ses_sub")
+    );
+    assert!(u.iter().filter(|u| !u.subagent).all(|u| u.agent.is_none()));
+}
+
+#[test]
+fn nested_sessions_follow_the_parent_chain() {
+    let (home, _conn) = home_with_db(
+        "INSERT INTO session VALUES
+           ('ses_deep', 'p1', 'ses_sub', '/work/demo', 'Deep', NULL, 1780000032000, 1780000036000);
+         INSERT INTO message VALUES
+           ('d0', 'ses_deep', 1780000032000, 1780000032000, '{\"role\":\"user\",\"agent\":\"explore\",\"time\":{\"created\":1780000032000}}'),
+           ('d1', 'ses_deep', 1780000033000, 1780000036000, '{\"role\":\"assistant\",\"modelID\":\"model-b\",\"cost\":0.001,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}');",
+    );
+    let se = read(&home, &SessionFilter::default())
+        .into_iter()
+        .find(|s| s.session.id == "ses_root")
+        .unwrap();
+    let deep = runs(&se)
+        .into_iter()
+        .find_map(|k| match k {
+            EventKind::AgentRun {
+                agent_id,
+                parent_agent_id,
+                agent_type,
+                depth,
+                ..
+            } if agent_id == "ses_deep" => {
+                Some((parent_agent_id.clone(), agent_type.clone(), *depth))
+            }
+            _ => None,
+        })
+        .expect("the nested run");
+    assert_eq!(
+        deep,
+        (
+            Some("ses_sub".to_owned()),
+            Some("explore".to_owned()),
+            Some(2)
+        )
+    );
+    let sub = runs(&se)
+        .into_iter()
+        .filter(|k| matches!(k, EventKind::AgentRun { depth: Some(1), .. }))
+        .count();
+    assert_eq!(sub, 1);
+    let deep_usage = usages(&se)
+        .into_iter()
+        .find(|u| u.input == 10)
+        .expect("the request of the nested session");
+    assert_eq!(
+        deep_usage
+            .agent
+            .as_ref()
+            .and_then(|a| a.agent_id.as_deref()),
+        Some("ses_deep")
+    );
+}
+
+#[test]
+fn a_parent_cycle_gives_no_run_and_no_guess() {
+    let (home, _conn) = home_with_db(
+        "INSERT INTO session VALUES
+           ('cyc_a', 'p1', 'cyc_b', '/work/c', 'A', NULL, 1780000050000, 1780000051000),
+           ('cyc_b', 'p1', 'cyc_a', '/work/c', 'B', NULL, 1780000050000, 1780000051000);",
+    );
+    // The cycle has no root: its sessions are read as roots, never as runs with an invented depth.
+    let all = read(&home, &SessionFilter::default());
+    for id in ["cyc_a", "cyc_b"] {
+        let se = all.iter().find(|s| s.session.id == id).unwrap();
+        assert!(runs(se).is_empty());
+    }
+}

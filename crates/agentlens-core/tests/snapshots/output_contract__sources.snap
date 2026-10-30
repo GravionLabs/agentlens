@@ -35,7 +35,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       ],
       "note": null,
       "sessions": 1,
-      "events": 12,
+      "events": 13,
       "warnings": 2,
       "errors": []
     },
