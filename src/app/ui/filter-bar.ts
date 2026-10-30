@@ -37,6 +37,7 @@ import { SOURCES, type SourceId } from "../core/types";
               fluid
               id="filter-last"
               type="number"
+              placeholder="Last"
               min="1"
               step="1"
               [attr.aria-invalid]="lastError() ? 'true' : null"
@@ -60,6 +61,7 @@ import { SOURCES, type SourceId } from "../core/types";
           <hx-date-time-range-picker
             inputId="filter-window"
             ariaLabel="Date range"
+            placeholder="Date range"
             showTime
             [presets]="rangePresets"
             [invalid]="!!rangeError()"
