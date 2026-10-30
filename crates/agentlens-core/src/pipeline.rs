@@ -118,6 +118,7 @@ pub fn advice_run(
     let context_saving = advice::context_saving(&sessions, prices);
     let retries = advice::retry_saving(&sessions, prices);
     let model_mix = advice::model_mix_saving(&sessions, prices);
+    let hygiene = advice::hygiene_saving(&sessions, prices);
     let pricing = advice::Pricing::from_sessions(&sessions, prices);
     AdviceRun {
         report: advice::analyze_with(
@@ -127,6 +128,7 @@ pub fn advice_run(
             &context_saving,
             &retries,
             &model_mix,
+            &hygiene,
             &pricing,
         ),
         warnings: run.warnings + catalog.warnings.len() as u64 + instructions.warnings.len() as u64,

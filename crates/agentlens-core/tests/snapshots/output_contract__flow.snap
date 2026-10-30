@@ -8,6 +8,20 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
     "growth": {
       "sessions": [
         {
+          "source": "claude-code",
+          "session": "near_limit",
+          "project": "/work/demo",
+          "model": "claude-test-1",
+          "requests": 3,
+          "first_tokens": 10000,
+          "last_tokens": 190000,
+          "peak_tokens": 190000,
+          "compactions": [],
+          "window": 200000,
+          "window_basis": "documented",
+          "near_limit": true
+        },
+        {
           "source": "copilot-cli",
           "session": "cp-1",
           "project": "/work/demo",
@@ -19,6 +33,40 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "compactions": [],
           "window": null,
           "window_basis": null,
+          "near_limit": false
+        },
+        {
+          "source": "claude-code",
+          "session": "clear_at_start",
+          "project": "/work/demo",
+          "model": "claude-test-1",
+          "requests": 6,
+          "first_tokens": 1000,
+          "last_tokens": 4000,
+          "peak_tokens": 6000,
+          "compactions": [
+            5000,
+            6000
+          ],
+          "window": 200000,
+          "window_basis": "documented",
+          "near_limit": false
+        },
+        {
+          "source": "claude-code",
+          "session": "two_compactions",
+          "project": "/work/demo",
+          "model": "claude-test-1",
+          "requests": 6,
+          "first_tokens": 1000,
+          "last_tokens": 4000,
+          "peak_tokens": 6000,
+          "compactions": [
+            5000,
+            6000
+          ],
+          "window": 200000,
+          "window_basis": "documented",
           "near_limit": false
         },
         {
@@ -171,7 +219,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         }
       ],
       "unavailable": {
-        "claude-code": 4
+        "claude-code": 7
       }
     }
   },

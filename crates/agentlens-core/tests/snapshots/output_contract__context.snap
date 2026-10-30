@@ -5,7 +5,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
 {
   "schema_version": 2,
   "data": {
-    "sessions": 5,
+    "sessions": 8,
     "rows": [
       {
         "source": "claude-code",
@@ -128,14 +128,14 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       }
     ],
     "unavailable": {
-      "claude-code": 3,
+      "claude-code": 6,
       "copilot-cli": 1
     },
     "first_request": {
       "claude-code": {
-        "sessions": 4,
-        "total_tokens": 2830,
-        "max_tokens": 1600
+        "sessions": 7,
+        "total_tokens": 14830,
+        "max_tokens": 10000
       },
       "copilot-cli": {
         "sessions": 1,

@@ -795,6 +795,10 @@ impl Parser<'_> {
         if let Some(command) = command_name(trimmed) {
             if !subagent {
                 self.push(at, EventKind::UserTurn);
+                // A `/clear` opens a new transcript: the event sits at its start.
+                if command == "clear" {
+                    self.push(at, EventKind::Clear);
+                }
             }
             if !BUILTIN_COMMANDS.contains(&command) {
                 let i = self.push(

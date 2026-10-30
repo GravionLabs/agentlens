@@ -37,6 +37,7 @@ describe("findings", () => {
     expect(findingTitle("listed-but-loaded-by-hand")).toBe("Listed but loaded by hand");
     expect(findingTitle("costly-mcp-servers")).toBe("Costly MCP servers");
     expect(findingTitle("context-size")).toBe("Context size");
+    expect(findingTitle("context-hygiene")).toBe("Context hygiene");
   });
 
   it("say what the sum is, and mark an estimate", () => {
@@ -206,6 +207,28 @@ describe("Advice table on helix", () => {
     expect(head(tables[1])).toBe("Session");
     const cell = tables[1].querySelector("tbody span[title]")!;
     expect(cell.textContent).toContain("shop · cad3c7a2");
+    expect(cell.getAttribute("title")).toBe("cad3c7a2-f626-4332-b1af-29291ebd5c7b");
+  });
+
+  it("heads the context hygiene table Session too", async () => {
+    payload.findings.push(
+      finding({
+        kind: "context-hygiene",
+        items: [
+          {
+            name: "shop · cad3c7a2",
+            session_id: "cad3c7a2-f626-4332-b1af-29291ebd5c7b",
+            tokens: { count: 5, measured: true },
+            requests: 2,
+            detail: "2 requests, peak 6,000 tokens, 2 compactions, ~1 clear, not near the limit",
+          },
+        ],
+      }),
+    );
+    const { el } = await render();
+    const tables = [...el.querySelectorAll("hx-data-table")];
+    expect(tables[1].querySelector("th")!.textContent!.trim()).toBe("Session");
+    const cell = tables[1].querySelector("tbody span[title]")!;
     expect(cell.getAttribute("title")).toBe("cad3c7a2-f626-4332-b1af-29291ebd5c7b");
   });
 

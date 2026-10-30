@@ -8,21 +8,21 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
     "sources": [
       {
         "source": "claude-code",
-        "sessions": 4,
-        "requests": 14,
-        "input_tokens": 13390,
-        "output_tokens": 130,
-        "cache_hit_rate": 0.806572068707991,
+        "sessions": 7,
+        "requests": 29,
+        "input_tokens": 352390,
+        "output_tokens": 880,
+        "cache_hit_rate": 0.8649507647776611,
         "tool_calls": 9,
         "tool_errors": 2,
         "tool_error_rate": 0.6666666666666666,
         "skill_invocations": 1,
         "skill_overhead_tokens": {
-          "count": 388,
+          "count": 718,
           "measured": false
         },
-        "total_duration_ms": 163000,
-        "mean_session_ms": 40750
+        "total_duration_ms": 198000,
+        "mean_session_ms": 28285
       },
       {
         "source": "copilot-cli",
