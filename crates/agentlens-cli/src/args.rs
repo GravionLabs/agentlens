@@ -130,6 +130,9 @@ pub enum Command {
         /// Recompute the usage with the prices of this model (id prefix) and compare
         #[arg(long, value_name = "MODEL")]
         what_if: Option<String>,
+        /// Estimate the tokens and cost that removing this item would save (repeatable): skill:NAME, agent:NAME or mcp-server:NAME
+        #[arg(long, value_name = "KIND:NAME")]
+        without: Vec<String>,
         /// Rows of the session table with --by session (0 shows all); JSON and CSV always contain everything
         #[arg(long, default_value_t = 25)]
         top: usize,

@@ -71,7 +71,7 @@ pub fn mcp_server(tool: &str) -> Option<&str> {
     rest.split("__").next().filter(|s| !s.is_empty())
 }
 
-fn owner(kind: ContextKind, name: Option<&str>) -> String {
+pub(crate) fn owner(kind: ContextKind, name: Option<&str>) -> String {
     match kind {
         ContextKind::ToolListing | ContextKind::ToolDefinition => match name {
             // Clients that report only a total for all tool definitions.

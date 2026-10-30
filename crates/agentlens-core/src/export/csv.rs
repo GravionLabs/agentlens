@@ -11,6 +11,7 @@ use crate::analyzers::advice::AdviceReport;
 use crate::analyzers::compare::SourceStats;
 use crate::analyzers::context::ContextRow;
 use crate::analyzers::cost::{CostRow, SessionCost, WhatIfReport};
+use crate::analyzers::cost_without::WithoutReport;
 use crate::analyzers::efficiency::{CacheRow, RoleRow};
 use crate::analyzers::flow::{HookStats, SessionGrowth, ToolErrors};
 use crate::analyzers::skills::SkillStats;
@@ -352,6 +353,38 @@ pub fn what_if(w: &WhatIfReport) -> Result<String, CsvError> {
                 format!("{:.6}", x.actual_usd),
                 format!("{:.6}", x.what_if_usd),
                 x.excluded_requests.to_string(),
+            ]
+        })
+        .collect();
+    write(&header, rows)
+}
+
+/// `cost --without`: the estimated tokens and cost per removed item.
+pub fn without(w: &WithoutReport) -> Result<String, CsvError> {
+    let header = [
+        "item",
+        "kind",
+        "installations",
+        "requests",
+        "estimated_tokens",
+        "estimated_usd",
+        "unpriced_requests",
+    ];
+    let rows = w
+        .rows
+        .iter()
+        .map(|x| {
+            vec![
+                x.item.clone(),
+                serde_json::to_value(x.kind)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_owned))
+                    .unwrap_or_default(),
+                x.installations.to_string(),
+                x.requests.to_string(),
+                x.tokens.count.to_string(),
+                format!("{:.6}", x.cost_usd),
+                x.unpriced_requests.to_string(),
             ]
         })
         .collect();
