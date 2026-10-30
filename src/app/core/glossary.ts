@@ -263,7 +263,14 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: "Compaction",
     group: "Flow",
     short: "The client summarizes the conversation to free up the context window.",
-    long: "After a compaction, content that was carried along (such as loaded skills) is gone from the context.",
+    long: "After a compaction, content that was carried along (such as loaded skills) is gone from the context. A session compacted two or more times, or one that came near the limit without a compaction, carried its context on after the task was done: the Context hygiene finding lists it, with the average context right before a compaction next to the context at the start.",
+  },
+  {
+    id: "clear",
+    term: "Clear",
+    group: "Flow",
+    short: "The user empties the context and starts afresh (/clear in Claude Code).",
+    long: "Claude Code records a /clear and starts a new transcript for it, so the clear is counted as measured at the start of the new session. The other clients record none: there a session counts as a fresh start, estimated, when it began at most 60 seconds after another session of the same client, project and branch ended. Sessions of an unattended queue run on different branches and are not counted.",
   },
   {
     id: "trend",

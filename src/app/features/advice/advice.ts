@@ -19,6 +19,7 @@ const TITLES: Record<FindingKind, string> = {
   "context-size": "Context size",
   "retry-loops": "Retry loops",
   "model-mix": "Model mix",
+  "context-hygiene": "Context hygiene",
 };
 
 /** An advice item with the sortable token count and the estimate flag next to the display text. */
@@ -203,7 +204,7 @@ export class Advice {
   protected readonly views = (items: AdviceItem[]): ItemView[] => items.map(itemView);
 
   protected readonly columnsFor = (kind: FindingKind): HxColumn[] =>
-    kind === "context-size" ? this.sessionColumns : this.skillColumns;
+    kind === "context-size" || kind === "context-hygiene" ? this.sessionColumns : this.skillColumns;
 
   private readonly sessionColumns: HxColumn[] = this.makeColumns("Session");
   private readonly skillColumns: HxColumn[] = this.makeColumns("Skill");

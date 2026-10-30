@@ -116,7 +116,8 @@ export type FindingKind =
   | "costly-mcp-servers"
   | "context-size"
   | "retry-loops"
-  | "model-mix";
+  | "model-mix"
+  | "context-hygiene";
 
 export interface Reference {
   kind: "agent" | "command" | "skill";
