@@ -163,6 +163,24 @@ pub enum EventKind {
     CommitIssue {
         issue: u32,
     },
+    /// One run of an agent (a subagent, a forked skill or a workflow run) and what ties it to its
+    /// caller. `parent_agent_id: None` with `depth: Some(1)` means the main session called it;
+    /// `depth: None` means the caller is unknown (never a guess).
+    AgentRun {
+        agent_id: String,
+        parent_agent_id: Option<String>,
+        /// The `tool_use` of the caller that started the run.
+        tool_use_id: Option<String>,
+        /// For example `general-purpose`, `workflow-subagent` or `workflow`.
+        agent_type: Option<String>,
+        /// The skill of a forked skill.
+        name: Option<String>,
+        description: Option<String>,
+        model: Option<String>,
+        depth: Option<u32>,
+        started_at: Timestamp,
+        ended_at: Option<Timestamp>,
+    },
 }
 
 /// A hook run. Only the type and outcome are kept, never its input or command.
@@ -300,6 +318,9 @@ pub struct Usage {
 /// What a client says about a subagent (Claude Code `.meta.json`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentInfo {
+    /// The run this request belongs to (see [`EventKind::AgentRun`]).
+    #[serde(default)]
+    pub agent_id: Option<String>,
     /// For example `workflow-subagent`.
     pub agent_type: Option<String>,
     /// The label the agent was started with, for example `implement #12`.

@@ -5,7 +5,7 @@
 //! The format is not documented; the parser only relies on a handful of fields
 //! and skips everything it does not understand.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -191,16 +191,55 @@ fn subagent_files(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// Reads `agent-<id>.meta.json` next to a subagent transcript, if any.
-fn read_agent_meta(path: &Path) -> Option<AgentInfo> {
-    let text = fs::read_to_string(path.with_extension("meta.json")).ok()?;
-    let v: Value = serde_json::from_str(&text).ok()?;
-    let info = AgentInfo {
-        agent_type: str_of(&v, "agentType").map(str::to_owned),
-        description: str_of(&v, "description").map(str::to_owned),
-        workflow_phase: str_of(&v, "workflowPhase").map(str::to_owned),
-    };
-    (info != AgentInfo::default()).then_some(info)
+/// The keys of `agent-<id>.meta.json` that are read; nothing else (never `worktreePath` or prompts).
+#[derive(Default)]
+struct AgentMeta {
+    agent_type: Option<String>,
+    name: Option<String>,
+    description: Option<String>,
+    model: Option<String>,
+    parent_agent_id: Option<String>,
+    spawn_depth: Option<u32>,
+    tool_use_id: Option<String>,
+    workflow_phase: Option<String>,
+}
+
+/// Reads `agent-<id>.meta.json` next to a subagent transcript.
+fn read_agent_meta(path: &Path) -> Result<AgentMeta, String> {
+    let file = path.with_extension("meta.json");
+    let text =
+        fs::read_to_string(&file).map_err(|e| format!("no readable agent meta file: {e}"))?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| format!("invalid agent meta: {e}"))?;
+    let own = |key| str_of(&v, key).map(str::to_owned);
+    Ok(AgentMeta {
+        agent_type: own("agentType"),
+        name: own("name"),
+        description: own("description"),
+        model: own("model"),
+        parent_agent_id: own("parentAgentId"),
+        spawn_depth: v
+            .get("spawnDepth")
+            .and_then(Value::as_u64)
+            .and_then(|d| u32::try_from(d).ok()),
+        tool_use_id: own("toolUseId"),
+        workflow_phase: own("workflowPhase"),
+    })
+}
+
+/// A subagent transcript sits in a run folder `subagents/workflows/<run>/`; returns the run id.
+fn workflow_run_of(path: &Path) -> Option<String> {
+    let dir = path.parent()?;
+    (dir.parent()?.file_name()? == "workflows")
+        .then(|| dir.file_name().map(|n| n.to_string_lossy().into_owned()))?
+}
+
+fn agent_id_of(path: &Path) -> String {
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    stem.strip_prefix("agent-")
+        .map_or(stem.clone(), str::to_owned)
 }
 
 fn jsonl_files(dir: &Path) -> Vec<PathBuf> {
@@ -263,10 +302,15 @@ struct Meta {
     model: Option<String>,
     first: Option<Timestamp>,
     last: Option<Timestamp>,
+    /// Time range of the transcript being read (reset for each subagent transcript).
+    file_first: Option<Timestamp>,
+    file_last: Option<Timestamp>,
 }
 
 impl Meta {
     fn seen_at(&mut self, ts: Timestamp) {
+        self.file_first = Some(self.file_first.map_or(ts, |f| f.min(ts)));
+        self.file_last = Some(self.file_last.map_or(ts, |l| l.max(ts)));
         self.first = Some(self.first.map_or(ts, |f| f.min(ts)));
         self.last = Some(self.last.map_or(ts, |l| l.max(ts)));
     }
@@ -281,13 +325,93 @@ pub fn parse_session(path: &Path, subagents: &[PathBuf]) -> Result<SessionEvents
     let mut warnings = Vec::new();
     let mut meta = Meta::default();
     let mut events = Vec::new();
-    parse_file(path, false, &mut events, &mut warnings, &mut meta)?;
+    parse_file(path, None, &mut events, &mut warnings, &mut meta)?;
+    // Workflow run id -> (earliest start, latest end) over its subagents.
+    let mut workflows: BTreeMap<String, (Timestamp, Timestamp)> = BTreeMap::new();
     for sub in subagents {
+        let agent_id = agent_id_of(sub);
+        let run = workflow_run_of(sub);
+        let file = sub
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let raw = match read_agent_meta(sub) {
+            Ok(m) => Some(m),
+            Err(e) => {
+                warnings.push(Warning::new(e).at(file.clone()));
+                None
+            }
+        };
+        let m = raw.as_ref();
+        let (parent_agent_id, depth) = if let Some(run) = &run {
+            (Some(run.clone()), Some(2))
+        } else if let Some(m) = m {
+            match (&m.parent_agent_id, m.spawn_depth) {
+                (None, None) => (None, Some(1)),
+                (parent, depth) => (parent.clone(), depth),
+            }
+        } else {
+            (None, None)
+        };
+        let info = AgentInfo {
+            agent_id: Some(agent_id.clone()),
+            agent_type: m.and_then(|m| m.agent_type.clone()),
+            description: m.and_then(|m| m.description.clone()),
+            workflow_phase: m.and_then(|m| m.workflow_phase.clone()),
+        };
         let mut sub_events = Vec::new();
-        match parse_file(sub, true, &mut sub_events, &mut warnings, &mut meta) {
-            Ok(()) => events.append(&mut sub_events),
+        meta.file_first = None;
+        meta.file_last = None;
+        match parse_file(sub, Some(info), &mut sub_events, &mut warnings, &mut meta) {
+            Ok(()) => {
+                if let (Some(first), Some(last)) = (meta.file_first, meta.file_last) {
+                    if let Some(run) = run {
+                        let w = workflows.entry(run).or_insert((first, last));
+                        w.0 = w.0.min(first);
+                        w.1 = w.1.max(last);
+                    }
+                    sub_events.push(Event {
+                        at: Some(first),
+                        kind: EventKind::AgentRun {
+                            agent_id,
+                            parent_agent_id,
+                            tool_use_id: m.and_then(|m| m.tool_use_id.clone()),
+                            agent_type: m.and_then(|m| m.agent_type.clone()),
+                            name: m.and_then(|m| m.name.clone()),
+                            description: m.and_then(|m| m.description.clone()),
+                            model: m.and_then(|m| m.model.clone()),
+                            depth,
+                            started_at: first,
+                            ended_at: Some(last),
+                        },
+                    });
+                } else {
+                    warnings.push(
+                        Warning::new("subagent transcript without timestamps; run skipped")
+                            .at(file),
+                    );
+                }
+                events.append(&mut sub_events);
+            }
             Err(e) => warnings.push(Warning::new(e.to_string())),
         }
+    }
+    for (run, (first, last)) in workflows {
+        events.push(Event {
+            at: Some(first),
+            kind: EventKind::AgentRun {
+                agent_id: run,
+                parent_agent_id: None,
+                tool_use_id: None,
+                agent_type: Some("workflow".to_owned()),
+                name: None,
+                description: None,
+                model: None,
+                depth: Some(1),
+                started_at: first,
+                ended_at: Some(last),
+            },
+        });
     }
     // Interleave subagent events by time, but only if that is well defined.
     if !subagents.is_empty() && events.iter().all(|e| e.at.is_some()) {
@@ -325,7 +449,7 @@ struct Parser<'a> {
 
 fn parse_file(
     path: &Path,
-    subagent: bool,
+    agent: Option<AgentInfo>,
     events: &mut Vec<Event>,
     warnings: &mut Vec<Warning>,
     meta: &mut Meta,
@@ -336,12 +460,8 @@ fn parse_file(
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default(),
-        force_subagent: subagent,
-        agent: if subagent {
-            read_agent_meta(path)
-        } else {
-            None
-        },
+        force_subagent: agent.is_some(),
+        agent,
         events,
         warnings,
         meta,
