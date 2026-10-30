@@ -45,7 +45,23 @@ fn handle(ctx: &Context, command: &str, args: &Value) -> Result<String, String> 
                 .get("whatIf")
                 .and_then(Value::as_str)
                 .map(str::to_owned);
-            json(api::cost(ctx, &filters, &text("by"), what_if.as_deref()))
+            let without: Vec<String> = args
+                .get("without")
+                .and_then(Value::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default();
+            json(api::cost(
+                ctx,
+                &filters,
+                &text("by"),
+                what_if.as_deref(),
+                &without,
+            ))
         }
         "efficiency" => json(api::efficiency(ctx, &filters, &text("by"))),
         "compare" => json(api::compare(ctx, &filters)),

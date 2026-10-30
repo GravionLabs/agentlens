@@ -12,7 +12,7 @@
 | `context`              | static context: tool listings, MCP instructions, instruction files, agent and skill listings     |
 | `unused`               | installed skills, agents and MCP servers nobody used, and what they cost while idle               |
 | `flow`                 | context growth and compactions, tool errors and retry loops, hooks and permission waits           |
-| `cost`                 | USD per model, project, branch, issue or session, measured and estimated apart; `what_if` compares a model |
+| `cost`                 | USD per model, project, branch, issue or session, measured and estimated apart; `what_if` compares a model, `without` (`skill:NAME`, `agent:NAME`, `mcp-server:NAME`) estimates what removing items saves |
 | `efficiency`           | prompt cache hit rate and the subagents' share                                                    |
 | `compare`              | the agents side by side over the same sessions                                                    |
 | `trend`                | what changed: the period next to a comparison window (`against`, `"SINCE..UNTIL"`; default the window right before), with the change of every figure |

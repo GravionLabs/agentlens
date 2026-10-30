@@ -85,9 +85,16 @@ async fn cost(
     filters: Filters,
     by: String,
     what_if: Option<String>,
+    without: Option<Vec<String>>,
 ) -> Result<Answer<api::CostData>, String> {
     blocking(&ctx, move |c| {
-        api::cost(c, &filters, &by, what_if.as_deref())
+        api::cost(
+            c,
+            &filters,
+            &by,
+            what_if.as_deref(),
+            &without.unwrap_or_default(),
+        )
     })
     .await
 }

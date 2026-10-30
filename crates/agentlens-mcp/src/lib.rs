@@ -95,6 +95,10 @@ pub struct CostQuery {
     pub by: Option<String>,
     /// A model id prefix: what the usage would have cost with that model.
     pub what_if: Option<String>,
+    /// Items to take out, as `skill:NAME`, `agent:NAME` or `mcp-server:NAME`: the estimated tokens and
+    /// cost their listing adds to the requests (`without` in the result). Empty: none.
+    #[serde(default)]
+    pub without: Vec<String>,
     /// Only sessions that started a run of one of these roles: the keys of the `roles` table of the
     /// efficiency tool (forked skill name, else workflow phase, else agent type). Empty: all sessions.
     pub role: Option<Vec<String>>,
@@ -248,7 +252,8 @@ impl AgentLensServer {
         let f = q.query.filters_with_roles(&q.role);
         let by = q.by.unwrap_or_else(|| "model".into());
         let what_if = q.what_if;
-        self.run(move |c| api::cost(c, &f, &by, what_if.as_deref()))
+        let without = q.without;
+        self.run(move |c| api::cost(c, &f, &by, what_if.as_deref(), &without))
             .await
     }
 

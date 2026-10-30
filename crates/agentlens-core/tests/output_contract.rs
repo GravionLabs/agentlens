@@ -113,17 +113,39 @@ fn the_json_of_every_analysis_keeps_its_shape() {
     snap("flow", text(&home, &api::flow(&ctx, &all()).unwrap()));
     snap(
         "cost",
-        text(&home, &api::cost(&ctx, &all(), "model", None).unwrap()),
+        text(&home, &api::cost(&ctx, &all(), "model", None, &[]).unwrap()),
     );
     snap(
         "cost_by_session",
-        text(&home, &api::cost(&ctx, &all(), "session", None).unwrap()),
+        text(
+            &home,
+            &api::cost(&ctx, &all(), "session", None, &[]).unwrap(),
+        ),
     );
     snap(
         "cost_what_if",
         text(
             &home,
-            &api::cost(&ctx, &all(), "project", Some("claude-haiku-4-5")).unwrap(),
+            &api::cost(&ctx, &all(), "project", Some("claude-haiku-4-5"), &[]).unwrap(),
+        ),
+    );
+    snap(
+        "cost_without",
+        text(
+            &home,
+            &api::cost(
+                &ctx,
+                &all(),
+                "model",
+                Some("claude-haiku-4-5"),
+                &[
+                    "skill:demo".to_owned(),
+                    "agent:reviewer".to_owned(),
+                    "mcp-server:claude.ai Claude Docs".to_owned(),
+                    "skill:no-such-skill".to_owned(),
+                ],
+            )
+            .unwrap(),
         ),
     );
     snap(

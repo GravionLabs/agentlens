@@ -2,6 +2,7 @@ use std::path::Path;
 
 use agentlens_core::adapter::{Registry, SessionFilter};
 use agentlens_core::analyzers::cost::{CostRow, Grouping, SessionCost, WhatIfReport};
+use agentlens_core::analyzers::cost_without::{self, WithoutReport};
 use agentlens_core::env::Env;
 use agentlens_core::export;
 use agentlens_core::model::Source;
@@ -39,6 +40,7 @@ pub struct Params<'a> {
     pub price_file: Option<&'a Path>,
     pub by: CostBy,
     pub what_if: Option<&'a str>,
+    pub without: &'a [String],
     pub top: usize,
 }
 
@@ -63,6 +65,53 @@ fn what_if_table(w: &WhatIfReport) -> Vec<Vec<String>> {
             ]
         })
         .collect()
+}
+
+const WITHOUT_HEADER: [&str; 6] = [
+    "item",
+    "kind",
+    "installations",
+    "requests",
+    "tokens",
+    "cost",
+];
+
+fn without_table(w: &WithoutReport, display: output::Display) -> Vec<Vec<String>> {
+    let kind = |k| match k {
+        agentlens_core::analyzers::unused::UnusedKind::Skill => "skill",
+        agentlens_core::analyzers::unused::UnusedKind::Agent => "agent",
+        agentlens_core::analyzers::unused::UnusedKind::McpServer => "mcp-server",
+    };
+    let cost = |amount: f64, unpriced: u64| {
+        if unpriced > 0 {
+            format!("~{} (+{unpriced} unpriced)", usd(amount))
+        } else {
+            format!("~{}", usd(amount))
+        }
+    };
+    let mut rows: Vec<Vec<String>> = w
+        .rows
+        .iter()
+        .map(|x| {
+            vec![
+                x.item.clone(),
+                kind(x.kind).into(),
+                output::number(u64::from(x.installations)),
+                output::number(x.requests),
+                format!("~{}", display.count(x.tokens.count)),
+                cost(x.cost_usd, x.unpriced_requests),
+            ]
+        })
+        .collect();
+    rows.push(vec![
+        "total".into(),
+        String::new(),
+        String::new(),
+        output::number(w.total.requests),
+        format!("~{}", display.count(w.total.tokens.count)),
+        cost(w.total.cost_usd, w.total.unpriced_requests),
+    ]);
+    rows
 }
 
 const WHAT_IF_HEADER: [&str; 7] = [
@@ -187,6 +236,25 @@ fn session_table(
     }
 }
 
+fn print_without(without: &Option<WithoutReport>, display: output::Display) {
+    let Some(w) = without else {
+        return;
+    };
+    println!("\nWhat would removing these items save?");
+    if !w.rows.is_empty() {
+        println!(
+            "{}",
+            output::table(&WITHOUT_HEADER, without_table(w, display), 1)
+        );
+    }
+    for n in &w.notes {
+        println!("{n}");
+    }
+    for warning in &w.warnings {
+        eprintln!("warning: {warning}");
+    }
+}
+
 pub fn run(
     registry: &Registry,
     env: &Env,
@@ -200,6 +268,7 @@ pub fn run(
         price_file,
         by,
         what_if,
+        without,
         top,
     } = params;
     let (group, label) = match by {
@@ -215,7 +284,10 @@ pub fn run(
     {
         bail!("no price for the what-if model `{model}`; add it to a price file (--prices FILE)");
     }
-    let run = cost_run(registry, env, filter, only, roles, &table, group, what_if);
+    let without = cost_without::parse_items(without).map_err(|e| anyhow!(e))?;
+    let run = cost_run(
+        registry, env, filter, only, roles, &table, group, what_if, &without,
+    );
     let r = &run.report;
 
     match display.format {
@@ -224,7 +296,14 @@ pub fn run(
             if let (Some(w), Some(obj)) = (&run.what_if, v.as_object_mut()) {
                 obj.insert("what_if".into(), serde_json::to_value(w)?);
             }
+            if let (Some(w), Some(obj)) = (&run.without, v.as_object_mut()) {
+                obj.insert("without".into(), serde_json::to_value(w)?);
+            }
             println!("{}", serde_json::to_string_pretty(&v)?);
+        }
+        Format::Csv if run.without.is_some() => {
+            let w = run.without.as_ref().expect("checked");
+            print!("{}", export::csv::without(w)?);
         }
         Format::Csv if run.what_if.is_some() => {
             let w = run.what_if.as_ref().expect("checked");
@@ -240,6 +319,7 @@ pub fn run(
                 println!("\nWhat if everything ran on {}?", w.target);
                 println!("{}", output::table(&WHAT_IF_HEADER, what_if_table(w), 1));
             }
+            print_without(&run.without, display);
         }
         Format::Table => {
             let total = r.total.total_usd();
@@ -314,6 +394,7 @@ pub fn run(
                     w.target
                 );
             }
+            print_without(&run.without, display);
             if r.total.premium_requests > 0.0 {
                 println!(
                     "Premium requests are a plan allowance, not money, and are not part of the cost."

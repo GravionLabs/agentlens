@@ -356,6 +356,32 @@ export interface WhatIfRow {
   excluded_requests: number;
 }
 
+export interface WithoutRow {
+  item: string;
+  kind: "skill" | "agent" | "mcp-server";
+  installations: number;
+  requests: number;
+  /** Always an estimate. */
+  tokens: Tokens;
+  cost_usd: number;
+  /** Requests that carried tokens of the item but have no price. */
+  unpriced_requests: number;
+  detail: string;
+}
+
+export interface WithoutReport {
+  rows: WithoutRow[];
+  total: {
+    requests: number;
+    tokens: Tokens;
+    cost_usd: number;
+    unpriced_requests: number;
+  };
+  notes: string[];
+  /** Items that matched nothing installed. */
+  warnings: string[];
+}
+
 export interface SessionCost {
   source: SourceId;
   session: string;
@@ -387,6 +413,8 @@ export interface CostData {
     sessions?: SessionCost[];
   };
   what_if: { target: string; rows: WhatIfRow[]; total: WhatIfRow } | null;
+  /** Set when `without` named items. */
+  without: WithoutReport | null;
 }
 
 export interface CacheRow {

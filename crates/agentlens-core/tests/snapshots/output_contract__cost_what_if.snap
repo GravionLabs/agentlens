@@ -62,7 +62,8 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "what_if_usd": 0.0,
         "excluded_requests": 15
       }
-    }
+    },
+    "without": null
   },
   "warnings": 2,
   "errors": []

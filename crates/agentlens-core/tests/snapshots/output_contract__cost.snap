@@ -49,7 +49,8 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "model-a": 1
       }
     },
-    "what_if": null
+    "what_if": null,
+    "without": null
   },
   "warnings": 2,
   "errors": []

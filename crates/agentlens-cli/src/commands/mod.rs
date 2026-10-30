@@ -66,6 +66,7 @@ pub fn run(cli: Cli) -> Result<()> {
             by,
             prices,
             what_if,
+            without,
             top,
             role,
         } => cost::run(
@@ -78,6 +79,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 price_file: prices.as_deref(),
                 by,
                 what_if: what_if.as_deref(),
+                without: &without,
                 top,
             },
             display,

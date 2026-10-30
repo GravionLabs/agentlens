@@ -1092,6 +1092,93 @@ fn cost_what_if_needs_a_priced_model() {
         .stderr(predicate::str::contains("no price for the what-if model"));
 }
 
+#[test]
+fn cost_without_estimates_what_a_listing_adds_and_csv_takes_its_table() {
+    let home = home();
+    let file = price_file(&home);
+    let v = json(
+        agentlens(&home)
+            .args([
+                "cost",
+                "--format",
+                "json",
+                "--without",
+                "skill:demo",
+                "--without",
+                "skill:nope",
+                "--what-if",
+                "claude-test",
+                "--prices",
+            ])
+            .arg(&file),
+    );
+    let row = &v["without"]["rows"][0];
+    assert_eq!(row["item"], "demo");
+    assert_eq!(row["kind"], "skill");
+    assert_eq!(row["tokens"]["count"], 60);
+    assert_eq!(row["tokens"]["measured"], false);
+    assert_eq!(row["requests"], 4);
+    assert_eq!(row["unpriced_requests"], 1);
+    assert!(row["cost_usd"].as_f64().unwrap() > 0.0);
+    assert_eq!(v["without"]["total"]["tokens"]["count"], 60);
+    assert_eq!(v["without"]["warnings"].as_array().unwrap().len(), 1);
+    assert!(
+        v["without"]["notes"].to_string().contains("not removed"),
+        "the note names the limits"
+    );
+    assert_eq!(v["what_if"]["target"], "claude-test", "both reports");
+
+    agentlens(&home)
+        .args([
+            "cost",
+            "--without",
+            "skill:demo",
+            "--without",
+            "skill:nope",
+            "--prices",
+        ])
+        .arg(&file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "What would removing these items save?",
+        ))
+        .stdout(predicate::str::contains("~60"))
+        .stderr(predicate::str::contains(
+            "nothing installed matches `skill:nope`",
+        ));
+    let csv = agentlens(&home)
+        .args([
+            "cost",
+            "--format",
+            "csv",
+            "--without",
+            "skill:demo",
+            "--what-if",
+            "claude-test",
+            "--prices",
+        ])
+        .arg(&file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(String::from_utf8(csv).unwrap().starts_with(
+        "item,kind,installations,requests,estimated_tokens,estimated_usd,unpriced_requests\ndemo,skill,1,4,60,"
+    ));
+}
+
+#[test]
+fn cost_without_needs_kind_and_name() {
+    let home = home();
+    agentlens(&home)
+        .args(["cost", "--without", "demo"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("KIND:NAME"));
+}
+
 fn home_with_two_clients() -> TempDir {
     let home = home_with_context();
     let dir = home.path().join(".copilot/session-state/cp-1");
