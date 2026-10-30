@@ -43,6 +43,7 @@ interface Stored {
   to?: string;
   sources?: SourceId[];
   project?: string;
+  roles?: string[];
 }
 
 function load(): Stored | null {
@@ -101,6 +102,8 @@ export class FiltersService {
   /** Empty means all sources. */
   readonly sources = signal<SourceId[]>(this.stored?.sources ?? []);
   readonly project = signal(this.stored?.project ?? "");
+  /** Empty means all roles. */
+  readonly roles = signal<string[]>(this.stored?.roles ?? []);
 
   /** Raised by the refresh button so every analysis runs again. */
   readonly generation = signal(0);
@@ -139,6 +142,7 @@ export class FiltersService {
       until,
       sources: this.sources(),
       project: this.project().trim() || null,
+      roles: this.roles(),
     };
   });
 
@@ -180,6 +184,11 @@ export class FiltersService {
     this.persist();
   }
 
+  setRoles(value: string[]): void {
+    this.roles.set(value);
+    this.persist();
+  }
+
   private persist(): void {
     const last = this.last();
     const range = this.range();
@@ -189,6 +198,7 @@ export class FiltersService {
       ...(range ? { from: range.from, to: range.to } : {}),
       sources: this.sources(),
       project: this.project(),
+      roles: this.roles(),
     };
     try {
       localStorage.setItem(KEY, JSON.stringify(value));

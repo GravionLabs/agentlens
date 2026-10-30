@@ -13,11 +13,21 @@ describe("filters", () => {
       until: null,
       sources: ["opencode"],
       project: "/work/demo",
+      roles: [],
     });
+    f.setRoles(["explore"]);
+    expect(f.payload().roles).toEqual(["explore"]);
+    f.setRoles([]);
     f.toggleSource("opencode");
     f.setSince("");
     f.setProject("");
-    expect(f.payload()).toEqual({ since: null, until: null, sources: [], project: null });
+    expect(f.payload()).toEqual({
+      since: null,
+      until: null,
+      sources: [],
+      project: null,
+      roles: [],
+    });
   });
 });
 
