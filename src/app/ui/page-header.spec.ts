@@ -2,8 +2,9 @@
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
+import { FiltersService } from "../core/filters.service";
 import { Ipc } from "../core/ipc";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PageHeader } from "./page-header";
 
 beforeAll(() => {
@@ -32,6 +33,7 @@ function create(exportView?: string) {
 }
 
 describe("PageHeader", () => {
+  beforeEach(() => localStorage.clear());
   it("shows title as h2 and the summary", () => {
     const el = create().nativeElement as HTMLElement;
     expect(el.querySelector("h2")?.textContent?.trim()).toBe("Skills");
@@ -63,5 +65,16 @@ describe("PageHeader", () => {
   it("offers the export menu only for an export view", () => {
     const el = create("skills").nativeElement as HTMLElement;
     expect(el.querySelector("app-export-menu")).not.toBeNull();
+  });
+
+  it("shows the active window", () => {
+    const fixture = create();
+    const filters = TestBed.inject(FiltersService);
+    const text = () =>
+      fixture.nativeElement.querySelector('[data-testid="window"]').textContent.trim();
+    expect(text()).toBe("last 30 days");
+    filters.setLast(6, "h");
+    fixture.detectChanges();
+    expect(text()).toBe("last 6 hours");
   });
 });

@@ -26,6 +26,15 @@ The [analyses](analyses.md) page explains what each one means.
 
 The filter bar in the toolbar above the open view sets the period, the sources and the project for every view. The application keeps the sessions it has read for a few minutes so that switching views is quick; **Refresh** in the top bar forgets them and reads the files again. On a narrow window the top bar folds Refresh into its menu.
 
+### Period
+
+The **Period** select offers the last 24 hours, 7, 30 and 90 days, all time and **Custom…**. Custom opens two inputs:
+
+- **Last N**: a whole number greater than zero and a unit (hours or days). The window is counted from now and is recomputed every time you refresh and every time the application starts.
+- **Date range**: a start and an end with a time, from a calendar; its presets fill in the same windows as the select. The two instants stay as they are after a restart.
+
+Input that cannot be used (zero or negative N, an end before the start) is explained under the inputs and is not applied; the last valid period stays active. The header of every page names the active window, for example "last 6 hours" or "Oct 1 – Oct 8". The filter bar remembers the choice between runs.
+
 ## Tables
 
 Tables are sortable by their column headers. Where a table has a filter (for example the group of the cache efficiency table or the skill and kind columns), it is a filter row under the headers, one field per filterable column, instead of a single search box. Filtering by source is left to the filter bar above the view. Long tables have a paginator; its rows-per-page list ends with **Show all**.
