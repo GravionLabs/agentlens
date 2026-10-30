@@ -22,7 +22,8 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "context_tokens": 1010,
         "output_tokens": 5,
         "cost_usd": null,
-        "cost_estimated": false
+        "cost_estimated": false,
+        "model": "claude-test-1"
       },
       {
         "request": 1,
@@ -30,7 +31,8 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "context_tokens": 1060,
         "output_tokens": 5,
         "cost_usd": null,
-        "cost_estimated": false
+        "cost_estimated": false,
+        "model": "claude-test-1"
       },
       {
         "request": 2,
@@ -38,7 +40,8 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "context_tokens": 820,
         "output_tokens": 5,
         "cost_usd": null,
-        "cost_estimated": false
+        "cost_estimated": false,
+        "model": "claude-test-1"
       }
     ],
     "markers": [

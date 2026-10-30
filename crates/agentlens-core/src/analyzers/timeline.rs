@@ -38,16 +38,33 @@ pub struct Point {
     pub cost_usd: Option<f64>,
     /// `true` if the cost was computed from the price table.
     pub cost_estimated: bool,
+    /// The model of the request, else the session's; `None` if neither is known.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum MarkerKind {
-    Skill { name: String, trigger: SkillTrigger },
+    Skill {
+        name: String,
+        trigger: SkillTrigger,
+    },
     Compaction,
-    ToolError { tool: String },
-    HookFailed { hook: String },
-    PermissionPrompt { wait_ms: Option<u64> },
+    ToolError {
+        tool: String,
+    },
+    HookFailed {
+        hook: String,
+    },
+    PermissionPrompt {
+        wait_ms: Option<u64>,
+    },
+    /// Two consecutive main-agent requests ran on different models.
+    ModelSwitch {
+        from: String,
+        to: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -105,6 +122,7 @@ pub fn list(sessions: &[SessionEvents]) -> Vec<SessionSummary> {
 pub fn timeline(se: &SessionEvents, prices: &PriceTable) -> Timeline {
     let mut points = Vec::new();
     let mut markers = Vec::new();
+    let mut last_model: Option<String> = None;
     for e in &se.events {
         let request = points.len() as u64;
         match &e.kind {
@@ -114,6 +132,21 @@ pub fn timeline(se: &SessionEvents, prices: &PriceTable) -> Timeline {
                     usage.model = se.session.model.clone();
                 }
                 let cost = prices.cost(&usage);
+                if let (Some(from), Some(to)) = (&last_model, &usage.model)
+                    && from != to
+                {
+                    markers.push(Marker {
+                        request,
+                        at: e.at,
+                        kind: MarkerKind::ModelSwitch {
+                            from: from.clone(),
+                            to: to.clone(),
+                        },
+                    });
+                }
+                if usage.model.is_some() {
+                    last_model = usage.model.clone();
+                }
                 points.push(Point {
                     request,
                     at: e.at,
@@ -121,6 +154,7 @@ pub fn timeline(se: &SessionEvents, prices: &PriceTable) -> Timeline {
                     output_tokens: u.output,
                     cost_usd: cost.map(|c| c.usd),
                     cost_estimated: cost.is_some_and(|c| !c.measured),
+                    model: usage.model.clone(),
                 });
             }
             EventKind::SkillInvoked(s) => markers.push(Marker {
@@ -319,6 +353,79 @@ mod tests {
             t.session.requests, n as u64,
             "the summary counts every request"
         );
+    }
+
+    #[test]
+    fn points_carry_the_model_and_a_switch_gets_a_marker_before_thinning() {
+        let on = |model: Option<&str>, subagent: bool| {
+            EventKind::Usage(Usage {
+                model: model.map(Into::into),
+                input: 10,
+                subagent,
+                ..Usage::default()
+            })
+        };
+        let mut se = session(
+            "m",
+            vec![
+                (None, on(Some("model-a"), false)),
+                (None, on(Some("model-b"), true)), // a subagent: no point, no switch
+                (None, on(Some("model-a"), false)),
+                (None, on(Some("model-b"), false)),
+                (None, on(None, false)), // the session's model is unknown: no switch
+                (None, on(Some("model-b"), false)),
+            ],
+        );
+        let t = timeline(&se, &PriceTable::bundled());
+        assert_eq!(
+            t.points
+                .iter()
+                .map(|p| p.model.as_deref())
+                .collect::<Vec<_>>(),
+            [
+                Some("model-a"),
+                Some("model-a"),
+                Some("model-b"),
+                None,
+                Some("model-b")
+            ]
+        );
+        let switches: Vec<_> = t
+            .markers
+            .iter()
+            .map(|m| (m.request, m.kind.clone()))
+            .collect();
+        assert_eq!(
+            switches,
+            [(
+                2,
+                MarkerKind::ModelSwitch {
+                    from: "model-a".into(),
+                    to: "model-b".into()
+                }
+            )]
+        );
+        // The session's model fills in a request without one.
+        se.session.model = Some("model-c".into());
+        let t = timeline(&se, &PriceTable::bundled());
+        assert_eq!(t.points[3].model.as_deref(), Some("model-c"));
+        assert_eq!(
+            t.markers
+                .iter()
+                .filter(|m| matches!(m.kind, MarkerKind::ModelSwitch { .. }))
+                .count(),
+            3
+        );
+        // Thinning drops points, never the markers.
+        let mut events = Vec::new();
+        for i in 0..MAX_POINTS * 3 {
+            let m = if i < MAX_POINTS { "model-a" } else { "model-b" };
+            events.push((None, on(Some(m), false)));
+        }
+        let t = timeline(&session("big", events), &PriceTable::bundled());
+        assert!(t.thinned_from.is_some());
+        assert_eq!(t.markers.len(), 1);
+        assert_eq!(t.markers[0].request, MAX_POINTS as u64);
     }
 
     #[test]
