@@ -5,19 +5,56 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
 {
   "schema_version": 2,
   "data": {
-    "sessions": 4,
+    "sessions": 5,
     "installed_skills": 3,
     "baseline_total": {
-      "count": 242,
+      "count": 330,
       "measured": false
     },
     "total_tokens": {
-      "count": 113708,
+      "count": 123518,
       "measured": true
     },
     "findings": [
       {
         "rank": 1,
+        "kind": "retry-loops",
+        "explanation": "Three or more identical tool calls in a row whose first two failed. Each retry sends the whole context again, and the call fails for the same reason until the cause is fixed.",
+        "action": "Read the tool error and fix the cause, such as a missing file, a wrong path, a permission or a hook. When a hook failed inside the loop, check the hook configuration first.",
+        "count": 1,
+        "total": {
+          "count": 5020,
+          "measured": true
+        },
+        "share_of_baseline": null,
+        "share_of_total_tokens": 0.040641849770883594,
+        "items": [
+          {
+            "name": "Bash",
+            "tokens": {
+              "count": 5020,
+              "measured": true
+            },
+            "requests": 2,
+            "detail": "1 loop in 1 session, 3 calls; most often on `cargo`"
+          }
+        ],
+        "notes": [
+          "The saving is the input of the requests that issued the retries (not the first attempt); it assumes that fixing the cause avoids them, so it is inferred.",
+          "The requests of a loop can also be in the Context size saving; the savings are not additive. Calls without an input summary cannot be compared and never form a loop.",
+          "2 of the retry requests had no price for their model; their tokens are in the saving, not in the USD."
+        ],
+        "impact": {
+          "saving": {
+            "count": 5020,
+            "measured": false
+          },
+          "saving_usd": null,
+          "confidence": "inferred"
+        }
+      },
+      {
+        "rank": 2,
         "kind": "costly-mcp-servers",
         "explanation": "MCP servers put their instructions, tool listing and tool definitions into every request, whether or not a tool is called. Ranked by the static context per tool call; a server that is called a lot is listed as such, the point is the ratio.",
         "action": "Enable the server only in the projects that need it, or switch it off when it is not in use.",
@@ -27,7 +64,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "measured": false
         },
         "share_of_baseline": null,
-        "share_of_total_tokens": 0.0031923875189080802,
+        "share_of_total_tokens": 0.0029388429216794312,
         "items": [
           {
             "name": "srv",
@@ -54,26 +91,26 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         }
       },
       {
-        "rank": 2,
+        "rank": 3,
         "kind": "unused-skills",
         "explanation": "Installed skills that were neither loaded nor used through their files in the period. Their name and description are in the context of every request anyway.",
         "action": "Remove the skill from the global folder or install it only in the projects that use it. If the client supports it, mark a skill that should only run on request as not automatically invoked in its front matter.",
         "count": 1,
         "total": {
-          "count": 66,
+          "count": 90,
           "measured": false
         },
         "share_of_baseline": 0.2727272727272727,
-        "share_of_total_tokens": 0.0005804340943469237,
+        "share_of_total_tokens": 0.0007286387409122557,
         "items": [
           {
             "name": "idle",
             "tokens": {
-              "count": 66,
+              "count": 90,
               "measured": false
             },
-            "requests": 11,
-            "detail": "66 tokens in 11 requests"
+            "requests": 15,
+            "detail": "90 tokens in 15 requests"
           }
         ],
         "notes": [
@@ -83,43 +120,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         ],
         "impact": {
           "saving": {
-            "count": 66,
-            "measured": false
-          },
-          "saving_usd": null,
-          "confidence": "estimated"
-        }
-      },
-      {
-        "rank": 3,
-        "kind": "listed-but-loaded-by-hand",
-        "explanation": "Installed skills that were never loaded but whose files were read or run, for example a stack skill that another skill opens on instruction. Their name and description are in the context of every request, although the model never picks them from the listing.",
-        "action": "Put such a skill below the skill that opens it (as a file in its folder) instead of listing it on its own, or mark it as not automatically invoked in its front matter if the client supports it.",
-        "count": 1,
-        "total": {
-          "count": 66,
-          "measured": false
-        },
-        "share_of_baseline": 0.2727272727272727,
-        "share_of_total_tokens": 0.0005804340943469237,
-        "items": [
-          {
-            "name": "demo",
-            "tokens": {
-              "count": 66,
-              "measured": false
-            },
-            "requests": 11,
-            "detail": "6 tokens per request, 66 in total; files used 2 times"
-          }
-        ],
-        "notes": [
-          "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API.",
-          "That the files were read on instruction of another skill is inferred: a file use does not prove who asked for it, and a skill that is also useful on its own can stay listed."
-        ],
-        "impact": {
-          "saving": {
-            "count": 66,
+            "count": 90,
             "measured": false
           },
           "saving_usd": null,
@@ -128,6 +129,42 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       },
       {
         "rank": 4,
+        "kind": "listed-but-loaded-by-hand",
+        "explanation": "Installed skills that were never loaded but whose files were read or run, for example a stack skill that another skill opens on instruction. Their name and description are in the context of every request, although the model never picks them from the listing.",
+        "action": "Put such a skill below the skill that opens it (as a file in its folder) instead of listing it on its own, or mark it as not automatically invoked in its front matter if the client supports it.",
+        "count": 1,
+        "total": {
+          "count": 90,
+          "measured": false
+        },
+        "share_of_baseline": 0.2727272727272727,
+        "share_of_total_tokens": 0.0007286387409122557,
+        "items": [
+          {
+            "name": "demo",
+            "tokens": {
+              "count": 90,
+              "measured": false
+            },
+            "requests": 15,
+            "detail": "6 tokens per request, 90 in total; files used 2 times"
+          }
+        ],
+        "notes": [
+          "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API.",
+          "That the files were read on instruction of another skill is inferred: a file use does not prove who asked for it, and a skill that is also useful on its own can stay listed."
+        ],
+        "impact": {
+          "saving": {
+            "count": 90,
+            "measured": false
+          },
+          "saving_usd": null,
+          "confidence": "estimated"
+        }
+      },
+      {
+        "rank": 5,
         "kind": "used-but-not-installed",
         "explanation": "Skills that were loaded in the period but are not installed now: renamed, removed, or built into the client or a plugin. References to them can be cleaned up.",
         "action": "Check instruction files and prompts that still refer to the skill.",
@@ -159,17 +196,17 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         }
       },
       {
-        "rank": 5,
+        "rank": 6,
         "kind": "context-size",
         "explanation": "Every request sends the whole context again, so its size drives the cost far more than the skills do. This is how large the context of a request was on average, how many requests ran on a large context, and which sessions had the largest.",
         "action": "Start new work in a fresh session, clear the context between tasks, and delegate exploration and review to subagents, whose context stays separate.",
-        "count": 4,
+        "count": 5,
         "total": {
-          "count": 103659,
+          "count": 113389,
           "measured": true
         },
         "share_of_baseline": null,
-        "share_of_total_tokens": 0.9116245119076933,
+        "share_of_total_tokens": 0.9179957577033306,
         "items": [
           {
             "name": "cp-1",
@@ -179,6 +216,15 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
             },
             "requests": 1,
             "detail": "99,999 tokens per request on average over 1 requests"
+          },
+          {
+            "name": "retry_loop",
+            "tokens": {
+              "count": 2432,
+              "measured": true
+            },
+            "requests": 4,
+            "detail": "2,432 tokens per request on average over 4 requests"
           },
           {
             "name": "context",
@@ -209,7 +255,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           }
         ],
         "notes": [
-          "The average request carried 9,423 tokens of context. 0.0% of the 11 requests had at least 200,000 tokens; subagents made 0.0% of the requests.",
+          "The average request carried 7,559 tokens of context. 0.0% of the 15 requests had at least 200,000 tokens; subagents made 0.0% of the requests.",
           "`total` is the input size of all requests added up (most of it served from the cache); the listed sessions are those with the largest average context.",
           "The saving assumes that the work on requests of at least 200,000 tokens could have run in a fresh session, at the size of the session's first request; it is inferred."
         ],

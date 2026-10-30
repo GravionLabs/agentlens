@@ -21,6 +21,7 @@ fn title(f: &Finding) -> String {
         FindingKind::LargeContext => format!("Work on a large context ({})", f.count),
         FindingKind::CostlyMcpServers => format!("Costly MCP servers ({})", f.count),
         FindingKind::ContextSize => format!("Context size ({})", f.count),
+        FindingKind::RetryLoops => format!("Retry loops ({})", f.count),
     }
 }
 

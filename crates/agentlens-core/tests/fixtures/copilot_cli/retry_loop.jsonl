@@ -1,0 +1,13 @@
+{"type":"session.start","data":{"sessionId":"cp-loop","version":1,"context":{"cwd":"/work/demo"}},"id":"e1","timestamp":"2026-10-03T09:00:00.000Z","parentId":null}
+{"type":"user.message","data":{"content":"synthetic prompt"},"id":"e2","timestamp":"2026-10-03T09:00:01.000Z","parentId":null}
+{"type":"session.usage_record","data":{"usage":{"model":"model-c","inputTokens":50,"outputTokens":10,"cacheReadTokens":800,"cacheWriteTokens":0,"initiator":"agent"}},"id":"e4","timestamp":"2026-10-03T09:00:02.000Z","parentId":null}
+{"type":"tool.execution_start","data":{"toolCallId":"c1","toolName":"bash","arguments":{"command":"npm run lint"}},"id":"e5","timestamp":"2026-10-03T09:00:02.100Z","parentId":null}
+{"type":"tool.execution_complete","data":{"toolCallId":"c1","success":false,"result":{"content":"failed"}},"id":"e6","timestamp":"2026-10-03T09:00:02.600Z","parentId":null}
+{"type":"session.usage_record","data":{"usage":{"model":"model-c","inputTokens":10,"outputTokens":10,"cacheReadTokens":1500,"cacheWriteTokens":0,"initiator":"agent"}},"id":"e7","timestamp":"2026-10-03T09:00:05.000Z","parentId":null}
+{"type":"tool.execution_start","data":{"toolCallId":"c2","toolName":"bash","arguments":{"command":"npm run lint"}},"id":"e8","timestamp":"2026-10-03T09:00:05.100Z","parentId":null}
+{"type":"hook.start","data":{"hookInvocationId":"h1","hookType":"preToolUse"},"id":"e9","timestamp":"2026-10-03T09:00:05.200Z","parentId":null}
+{"type":"hook.end","data":{"hookInvocationId":"h1","success":false},"id":"e10","timestamp":"2026-10-03T09:00:05.300Z","parentId":null}
+{"type":"tool.execution_complete","data":{"toolCallId":"c2","success":false,"result":{"content":"failed"}},"id":"e11","timestamp":"2026-10-03T09:00:05.600Z","parentId":null}
+{"type":"session.usage_record","data":{"usage":{"model":"model-c","inputTokens":10,"outputTokens":10,"cacheReadTokens":2500,"cacheWriteTokens":0,"initiator":"agent"}},"id":"e12","timestamp":"2026-10-03T09:00:08.000Z","parentId":null}
+{"type":"tool.execution_start","data":{"toolCallId":"c3","toolName":"bash","arguments":{"command":"npm run lint"}},"id":"e13","timestamp":"2026-10-03T09:00:08.100Z","parentId":null}
+{"type":"tool.execution_complete","data":{"toolCallId":"c3","success":false,"result":{"content":"failed"}},"id":"e14","timestamp":"2026-10-03T09:00:08.600Z","parentId":null}

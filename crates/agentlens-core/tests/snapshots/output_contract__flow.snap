@@ -23,6 +23,20 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         },
         {
           "source": "claude-code",
+          "session": "retry_loop",
+          "project": "/work/demo",
+          "model": "claude-test-1",
+          "requests": 4,
+          "first_tokens": 1600,
+          "last_tokens": 3110,
+          "peak_tokens": 3110,
+          "compactions": [],
+          "window": 200000,
+          "window_basis": "documented",
+          "near_limit": false
+        },
+        {
+          "source": "claude-code",
           "session": "context",
           "project": "/work/demo",
           "model": "claude-test-1",
@@ -70,19 +84,19 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
     "errors": {
       "tools": [
         {
+          "source": "claude-code",
+          "tool": "Bash",
+          "calls": 6,
+          "errors": 2,
+          "unknown": 3,
+          "loops": 1
+        },
+        {
           "source": "copilot-cli",
           "tool": "bash",
           "calls": 1,
           "errors": 1,
           "unknown": 0,
-          "loops": 0
-        },
-        {
-          "source": "claude-code",
-          "tool": "Bash",
-          "calls": 3,
-          "errors": 0,
-          "unknown": 3,
           "loops": 0
         },
         {
@@ -118,7 +132,16 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "loops": 0
         }
       ],
-      "loops": []
+      "loops": [
+        {
+          "source": "claude-code",
+          "session": "retry_loop",
+          "tool": "Bash",
+          "input": "cargo",
+          "calls": 3,
+          "errors": 2
+        }
+      ]
     },
     "hooks": {
       "hooks": [
@@ -148,7 +171,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         }
       ],
       "unavailable": {
-        "claude-code": 3
+        "claude-code": 4
       }
     }
   },

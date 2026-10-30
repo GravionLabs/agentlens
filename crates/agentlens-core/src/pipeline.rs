@@ -115,9 +115,17 @@ pub fn advice_run(
     let context_report = context::analyze(&sessions, &instructions.files, estimator);
     let mcp = advice::mcp_servers(&context_report, &sessions);
     let context_saving = advice::context_saving(&sessions, prices);
+    let retries = advice::retry_saving(&sessions, prices);
     let pricing = advice::Pricing::from_sessions(&sessions, prices);
     AdviceRun {
-        report: advice::analyze_with(&run.report, &references, &mcp, &context_saving, &pricing),
+        report: advice::analyze_with(
+            &run.report,
+            &references,
+            &mcp,
+            &context_saving,
+            &retries,
+            &pricing,
+        ),
         warnings: run.warnings + catalog.warnings.len() as u64 + instructions.warnings.len() as u64,
         errors: run.errors,
     }

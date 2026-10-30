@@ -325,7 +325,7 @@ impl AgentLensServer {
         let since = args.since.as_deref().unwrap_or("30d");
         let text = format!(
             "Analyze how my coding agents use skills and what that costs in tokens, with the agentlens tools, and propose concrete changes. Look at the last {since} (pass it as `since`).\n\n\
-1. Call `advice` first. Its findings are computed from the numbers, not guessed, and come ranked by what each could have saved in the period (`rank`, `impact.saving`, `impact.saving_usd`, an estimate from the price table): explain them in plain language in that order.\n\
+1. Call `advice` first. Its findings are computed from the numbers, not guessed, and come ranked by what each could have saved in the period (`rank`, `impact.saving`, `impact.saving_usd`, an estimate from the price table): explain them in plain language in that order. The advice covers working habits too (a large context, retry loops after failing tool calls), not only skills.\n\
 2. If a field is unclear (load, carry, baseline, follow-on, file uses, overhead), read the resource {GLOSSARY_URI} instead of guessing.\n\
 3. Look closer at anything surprising with the other tools: `skills` for one skill, `unused` for agents and MCP servers, `context` for instruction files and tool definitions, `sessions` and `timeline` for a long session, `trend` for what changed against the period before (cost, tokens, cache hit rate, skill overhead).\n\n\
 Rules for the conclusions:\n\
