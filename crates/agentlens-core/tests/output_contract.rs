@@ -121,6 +121,23 @@ fn the_json_of_every_analysis_keeps_its_shape() {
     snap("skills", text(&home, &api::skills(&ctx, &all()).unwrap()));
     snap("advice", text(&home, &api::advice(&ctx, &all()).unwrap()));
     snap("tips", text(&home, &api::tips(&ctx, &all(), 5).unwrap()));
+    snap(
+        "tips_check",
+        text(
+            &home,
+            // Fixed windows (2026-10-01..03 and 2026-10-03..05), so that nothing depends on today's date.
+            &api::tips_check(
+                &ctx,
+                &Filters {
+                    until: Some("2026-10-05".into()),
+                    ..Filters::default()
+                },
+                "2026-10-03",
+                5,
+            )
+            .unwrap(),
+        ),
+    );
     snap("context", text(&home, &api::context(&ctx, &all()).unwrap()));
     snap("unused", text(&home, &api::unused(&ctx, &all()).unwrap()));
     snap("flow", text(&home, &api::flow(&ctx, &all()).unwrap()));

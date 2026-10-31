@@ -15,7 +15,7 @@ use crate::analyzers::cost_without::WithoutReport;
 use crate::analyzers::efficiency::{CacheRow, RoleRow};
 use crate::analyzers::flow::{HookStats, SessionGrowth, ToolErrors};
 use crate::analyzers::skills::SkillStats;
-use crate::analyzers::tips::TipsReport;
+use crate::analyzers::tips::{TipCheck, TipsReport};
 use crate::analyzers::trend::TrendReport;
 use crate::analyzers::unused::{UnusedItem, UnusedKind};
 use crate::model::ContextKind;
@@ -647,6 +647,44 @@ pub fn tips(report: &TipsReport) -> Result<String, CsvError> {
                 usd.clone(),
                 id(serde_json::to_value(t.confidence)),
                 step,
+            ]);
+        }
+    }
+    write(&header, rows)
+}
+
+/// `tips --changed-at`: one row per target of each checked tip, with the tip's rank, kind and verdict
+/// on every row, the saving per 1,000 requests before and after the date and its change in percent
+/// (empty where a value is missing).
+pub fn tips_check(report: &TipCheck) -> Result<String, CsvError> {
+    let header = [
+        "rank",
+        "kind",
+        "verdict",
+        "target",
+        "status",
+        "before_per_1k",
+        "after_per_1k",
+        "change_pct",
+    ];
+    let id = |v: serde_json::Result<serde_json::Value>| {
+        v.ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default()
+    };
+    let number = |v: Option<f64>| v.map(|v| format!("{v:.6}")).unwrap_or_default();
+    let mut rows = Vec::new();
+    for c in &report.checks {
+        for target in &c.targets {
+            rows.push(vec![
+                c.tip.rank.to_string(),
+                id(serde_json::to_value(c.tip.kind)),
+                id(serde_json::to_value(c.verdict)),
+                target.name.clone(),
+                id(serde_json::to_value(target.status)),
+                number(c.before_per_1k),
+                number(c.after_per_1k),
+                number(c.change_pct),
             ]);
         }
     }

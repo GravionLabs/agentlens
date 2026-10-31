@@ -220,6 +220,37 @@ export interface TipsReport {
   below_threshold: number;
 }
 
+export type Verdict = "improved" | "unchanged" | "worse" | "too-little-data";
+
+/** resolved: gone after the date; open: still there; unknown: not listed, but the items are cut. */
+export type TargetStatus = "resolved" | "open" | "unknown";
+
+export interface TargetCheck {
+  name: string;
+  status: TargetStatus;
+}
+
+export interface TipCheckEntry {
+  /** The tip as it was before the date. */
+  tip: Tip;
+  /** The saving per 1,000 requests: in ~USD where both windows are priced, else in weighted tokens. */
+  before_per_1k: number | null;
+  after_per_1k: number | null;
+  before_per_day: number | null;
+  after_per_day: number | null;
+  change_pct: number | null;
+  verdict: Verdict;
+  targets: TargetCheck[];
+}
+
+/** `tips` with `changed_at`: `windows.current` is after the date, `windows.against` before it. */
+export interface TipCheck {
+  windows: TrendWindows;
+  checks: TipCheckEntry[];
+  /** Tips after the date whose finding was no tip before; no verdict. */
+  new: Tip[];
+}
+
 export interface SkillsData {
   report: SkillReport;
   installed_skills: number;

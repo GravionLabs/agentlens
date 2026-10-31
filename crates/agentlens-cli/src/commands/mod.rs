@@ -53,9 +53,9 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Scan => scan::run(&registry, &env, &filter, &cli.source, display),
         Command::Skills => skills::run(&registry, &env, &filter, &cli.source, est, display),
         Command::Advise => advise::run(&registry, &env, &filter, &cli.source, est, display),
-        Command::Tips { limit } => {
+        Command::Tips { limit, changed_at } => {
             let ctx = agentlens_core::api::Context { env, registry };
-            tips::run(&ctx, &filters, limit, display)
+            tips::run(&ctx, &filters, limit, changed_at.as_deref(), display)
         }
         Command::Compare { role } => {
             compare::run(&registry, &env, &filter, &cli.source, &role, est, display)

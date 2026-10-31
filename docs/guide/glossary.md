@@ -136,6 +136,10 @@ Every advice finding has an impact: its saving in tokens, the saving in USD (alw
 
 A tip is a view over a finding of the advice: its headline, saving, share of the period's cost and confidence, the general action, and up to three targets (the first items of the finding). Only findings that save at least 0.5% of the period's cost (without any price: of the tokens weighted by class) are tips; the others are counted in below_threshold. Where a client documents the syntax, a target carries a step with the file and the change (Claude Code: disable-model-invocation in the front matter of a skill, the project scope .mcp.json for an MCP server). Tips are computed, never written by a model.
 
+### Verdict
+
+agentlens tips --changed-at DATE compares the tips of the window before the date with the same findings in the window after it, as the saving per 1,000 requests (so a busier window does not count as worse). Improved: the value dropped by at least 20%, a finding gone after the date included. Worse: it rose by at least 20%. Unchanged: anything between. Too little data: a window has fewer than 50 requests. The per-day values are shown but do not decide. Each target of the tip is resolved (gone from the finding after the date), open (still there) or unknown (not listed, but the finding's items are cut). Tips that appear only after the date are listed as new, without a verdict.
+
 ### Saving
 
 For unused skills and costly descriptions the listing tokens that removing or shortening would have saved; for large skill bodies the body above 2,000 tokens times the requests that carried it; for MCP servers their context where none of their tools was called; for the context size the input above each session's first request on requests of at least 200,000 tokens. Findings that know their requests price each with its own model, the others with the period's average price per token class.

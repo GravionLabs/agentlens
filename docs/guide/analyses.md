@@ -105,6 +105,21 @@ The few [advice](#advice) findings that pay most, said in one line each. A tip i
 
 `--format json` prints the report (`period_cost_usd`, `threshold`, `tips`, `below_threshold`), `--format csv` one row per target (`rank`, `kind`, `target`, `saving_tokens`, `saving_usd`, `confidence`, `step`). The [MCP server](mcp-server.md) has a `tips` tool and a `tips` prompt.
 
+### Did a change pay off
+
+```sh
+agentlens tips --changed-at 2026-10-01
+```
+
+Name the date of a change and AgentLens compares the tips from before it with the same findings after it. Nothing is stored: the windows come from the date.
+
+- **Windows.** The window after is `[changed_at, until)` (`--until`, default now); the window before has the same length right before the date. The sessions are read once and split by the rule of the [trend](#trend): a session belongs to the window in which it ends. `--since` is ignored with a warning, since the date defines the windows; `--source` and `--project` apply to both. `--changed-at` takes the forms of `--since`. A date in the future, or fewer than 1 day between the date and `until`, is an error.
+- **What is checked.** The tips of the window before (same threshold and `--limit`), each against the finding of the same kind after the date; a finding that is gone has a saving of 0. Findings that are tips only after the date are listed as `new`, without a verdict.
+- **Verdict.** It compares the saving per 1,000 requests (in USD, or in tokens weighted by class where a window has no price), so a busier window with the same saving per request is `unchanged`. `improved` if the value dropped by at least `CHECK_CHANGE` (20 %), `worse` if it rose by at least 20 %, else `unchanged`; a finding that is gone after the date with enough data is `improved`. With fewer than `MIN_CHECK_REQUESTS` (50) requests in either window the verdict is `too-little-data`. The values per day are shown next to it but do not decide.
+- **Targets.** Each of the (up to three) targets of a tip is `resolved` if its name is not among the items of the finding after the date, `open` if it is, and `unknown` if it is not listed but the items of the finding are cut (it may be beyond the top). The summary reads "2 of 3 resolved".
+
+`--format json` prints `windows` (`current` is after the date, `against` before it), `checks` (the `tip`, `before_per_1k`, `after_per_1k`, `before_per_day`, `after_per_day`, `change_pct`, `verdict` and `targets`) and `new`; `--format csv` has one row per target (`rank`, `kind`, `verdict`, `target`, `status`, `before_per_1k`, `after_per_1k`, `change_pct`).
+
 ## Context
 
 ```sh
