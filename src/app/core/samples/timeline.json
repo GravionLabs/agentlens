@@ -17,8 +17,8 @@
         "at": "2026-10-02T09:00:05Z",
         "context_tokens": 1010,
         "output_tokens": 5,
-        "cost_usd": null,
-        "cost_estimated": false,
+        "cost_usd": 0.003855,
+        "cost_estimated": true,
         "model": "claude-test-1"
       },
       {
@@ -26,8 +26,8 @@
         "at": "2026-10-02T09:00:10Z",
         "context_tokens": 1060,
         "output_tokens": 5,
-        "cost_usd": null,
-        "cost_estimated": false,
+        "cost_usd": 0.0005925,
+        "cost_estimated": true,
         "model": "claude-test-1"
       },
       {
@@ -35,8 +35,8 @@
         "at": "2026-10-02T09:00:30Z",
         "context_tokens": 820,
         "output_tokens": 5,
-        "cost_usd": null,
-        "cost_estimated": false,
+        "cost_usd": 0.003135,
+        "cost_estimated": true,
         "model": "claude-test-1"
       }
     ],

@@ -42,6 +42,14 @@ fn setup() -> (TempDir, Context) {
         env: Env::for_home(dir.path()),
         registry: default_registry(),
     };
+    // A price for the fixture's model, so the period has a cost and the tips pass the threshold.
+    let prices = agentlens_core::prices::user_file(&ctx.env);
+    fs::create_dir_all(prices.parent().unwrap()).unwrap();
+    fs::write(
+        prices,
+        r#"{"claude-test-1":{"input":3,"output":15,"cache_read":0.3,"cache_write":3.75}}"#,
+    )
+    .unwrap();
     (dir, ctx)
 }
 

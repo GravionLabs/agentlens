@@ -38,14 +38,15 @@
         "notes": [
           "The sizes are estimates where the client did not report them.",
           "Only servers whose context the client reports are listed (Claude Code today). A server that is called a lot can be worth its context; the tokens per call show the ratio.",
-          "The saving is the context of each server in the clients and projects where none of its tools was called."
+          "The saving is the context of each server in the clients and projects where none of its tools was called.",
+          "The USD saving uses the average price per token class of the period; 1 request without a price is left out of it."
         ],
         "impact": {
           "saving": {
             "count": 363,
             "measured": false
           },
-          "saving_usd": null,
+          "saving_usd": 0.00010889999999999999,
           "confidence": "estimated"
         }
       },
@@ -75,14 +76,15 @@
         "notes": [
           "Description sizes are estimates (characters / 4); `--exact` counts them with the Anthropic API.",
           "A skill that is only needed now and then, or by a tool outside the sessions that were read, can still be worth keeping.",
-          "The client reported skill listings of ~200 tokens per session on average (1 sessions); the 1 installed skills AgentLens found cost 6 tokens per request. The listing also holds skills AgentLens has no file for (built into the client, supplied by plugins or the account); the files may also have changed since the session. So the two do not add up. Use the context view for what the client sent."
+          "The client reported skill listings of ~200 tokens per session on average (1 sessions); the 1 installed skills AgentLens found cost 6 tokens per request. The listing also holds skills AgentLens has no file for (built into the client, supplied by plugins or the account); the files may also have changed since the session. So the two do not add up. Use the context view for what the client sent.",
+          "The USD saving uses the average price per token class of the period; 1 request without a price is left out of it."
         ],
         "impact": {
           "saving": {
             "count": 24,
             "measured": false
           },
-          "saving_usd": null,
+          "saving_usd": 7.2e-6,
           "confidence": "estimated"
         }
       },
@@ -162,7 +164,7 @@
             "count": 0,
             "measured": false
           },
-          "saving_usd": null,
+          "saving_usd": 0.0,
           "confidence": "inferred"
         }
       }
