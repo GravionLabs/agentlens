@@ -132,7 +132,8 @@ export type FindingKind =
   | "model-mix"
   | "delegation"
   | "context-hygiene"
-  | "cache-expiry";
+  | "cache-expiry"
+  | "skill-quality";
 
 export interface Reference {
   kind: "agent" | "command" | "skill";

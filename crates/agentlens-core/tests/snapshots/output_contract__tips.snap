@@ -82,7 +82,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "more": 0
       }
     ],
-    "below_threshold": 3
+    "below_threshold": 4
   },
   "warnings": 2,
   "errors": []

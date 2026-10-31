@@ -106,6 +106,10 @@ Only available from clients that report it (OpenTelemetry). Measured.
 
 An assumption: everything that happens until something else takes over is attributed to the skill. Use it as a rough guide, not as a measurement.
 
+### Skill quality
+
+The Skill quality finding lists skills whose signals pass a minimum: loaded again into the same context (a repeat load), loaded by the model without any work after it (a misfire: at least 2 and 20% of its model loads), only ever started by the user as /name (at least 3 times, never by the model), followed by failing calls (at least 5, at twice the rate of the rest of its sessions), followed by a retry loop, or followed by a compaction (at least 2 and 25% of its loads). Only loads by the main agent count. These are signals, not proof. The saving covers repeat loads, misfires and the listing of a skill only the user starts; the other signals have none. It can overlap with Costly descriptions and Large skill bodies, so the savings are not additive.
+
 ## Cost
 
 ### Subagent share

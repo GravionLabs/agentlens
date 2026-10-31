@@ -16,13 +16,13 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "tool_calls": 9,
         "tool_errors": 2,
         "tool_error_rate": 0.6666666666666666,
-        "skill_invocations": 1,
+        "skill_invocations": 2,
         "skill_overhead_tokens": {
-          "count": 784,
+          "count": 805,
           "measured": false
         },
-        "total_duration_ms": 2118000,
-        "mean_session_ms": 264750
+        "total_duration_ms": 2178000,
+        "mean_session_ms": 272250
       },
       {
         "source": "copilot-cli",

@@ -353,6 +353,14 @@ export const GLOSSARY: GlossaryEntry[] = [
     long: "The provider keeps a prompt cache entry only for a while after its last use (the TTL). After a longer pause the whole context is written to the cache again at the write price instead of being read at the read price. The Cache expiry finding counts main-agent requests of Anthropic models that came later than the session's TTL after the previous main-agent request and wrote more tokens than they read; the saving is an inferred lower bound. It overlaps with Context size, so the two savings are not additive.",
   },
   {
+    id: "skill-quality",
+    term: "Skill quality",
+    group: "Skills",
+    short:
+      "Signs in the order of events that a skill misfires, is loaded twice or leads into failing work.",
+    long: "The Skill quality finding lists skills whose signals pass a minimum: loaded again into the same context (a repeat load), loaded by the model without any work after it (a misfire: at least 2 and 20% of its model loads), only ever started by the user as /name (at least 3 times, never by the model), followed by failing calls (at least 5, at twice the rate of the rest of its sessions), followed by a retry loop, or followed by a compaction (at least 2 and 25% of its loads). Only loads by the main agent count. These are signals, not proof. The saving covers repeat loads, misfires and the listing of a skill only the user starts; the other signals have none. It can overlap with Costly descriptions and Large skill bodies, so the savings are not additive.",
+  },
+  {
     id: "ttl",
     term: "TTL",
     group: "Cost",

@@ -68,27 +68,27 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
             "copilot-cli",
             "vscode-copilot"
           ],
-          "invocations": 1,
+          "invocations": 2,
           "file_uses": 0,
           "sessions": 1,
           "projects": [
             "/work/demo"
           ],
           "first_used": "2026-10-02T11:00:00Z",
-          "last_used": "2026-10-02T11:00:00Z",
+          "last_used": "2026-10-02T11:03:00Z",
           "triggers": {
             "model": 0,
-            "user": 1,
+            "user": 2,
             "nested": 0
           },
           "by_source": {
-            "claude-code": 1
+            "claude-code": 2
           },
           "uses_by_day": {
-            "2026-10-02": 1
+            "2026-10-02": 2
           },
           "load": {
-            "count": 80,
+            "count": 101,
             "measured": false
           },
           "unknown_loads": 0,
@@ -123,7 +123,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
             }
           },
           "quality": {
-            "repeat_loads": 0,
+            "repeat_loads": 1,
             "misfires": 0,
             "compactions_soon": 0,
             "follow_on_calls": 0,

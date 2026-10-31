@@ -322,7 +322,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "session": "typed_skill",
           "project": "/work/demo",
           "started_at": "2026-10-02T11:00:00Z",
-          "duration_ms": 120000,
+          "duration_ms": 180000,
           "issue": null,
           "issue_source": null,
           "models": [
