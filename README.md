@@ -31,7 +31,7 @@ Download the archive for your platform (and the installer of the application) fr
 
 ## Agent skills
 
-Run `apm install` before working in the repository to install the stack skills declared in `apm.yml`. The skill folders (`.claude/skills`, `.agents/skills`) are git-ignored, so a fresh clone has none. This needs [apm](https://github.com/microsoft/apm).
+The stack skills are committed (`.claude/skills`, `.agents/skills`, `skills-lock.json`), so a fresh clone has them. Update them with `npx skills update`; `/skills-install` adds groups.
 
 ## Usage
 

@@ -15,16 +15,11 @@
 site/.vitepress/dist
 site/.vitepress/cache
 
-# APM (apm install)
-/.claude/skills/
-/.agents/skills/
-
-
-# APM dependencies
-apm_modules/
-
 # git worktrees of the deliver workflow
 /.worktrees/
 
 # agent runtime files (bus database, installed skills)
-/.agents/
+/.agents/*
+!.agents/skills/
+!.agents/config.json
+!.agents/lessons/

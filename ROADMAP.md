@@ -1,19 +1,19 @@
 # Roadmap
 
-Order of work and release assignment for the open issues. Written 2026-10-29 after the move to apm-hub 3 and `release/next` (Feature #424) and dromos decision 004 (dromos archived; issues are delivered through the `deliver` workflow of [apm-hub](https://github.com/GravionLabs/apm-hub), session state and gates move to [keryx](https://github.com/GravionLabs/keryx)). Last release `v0.11.0` (2026-10-28). Each release has a GitHub milestone named after its version; work runs on `release/next` and the release PR into `main` is the human review point.
+Order of work and release assignment for the open issues. Written 2026-10-29 after the move to GravionLabs/skills 3 and `release/next` (Feature #424) and dromos decision 004 (dromos archived; issues are delivered through the `deliver` workflow of [GravionLabs/skills](https://github.com/GravionLabs/skills), session state and gates move to [keryx](https://github.com/GravionLabs/keryx)). Last release `v0.11.0` (2026-10-28). Each release has a GitHub milestone named after its version; work runs on `release/next` and the release PR into `main` is the human review point.
 
 ## Where we are
 
 | Epic | Open Features | Release |
 | --- | --- | --- |
-| #255 1.0 readiness | #424 work flow on apm-hub 3 and `release/next`; #416 verified on real use | 0.12; 1.0 |
+| #255 1.0 readiness | #424 work flow on GravionLabs/skills 3 and `release/next`; #416 verified on real use | 0.12; 1.0 |
 | #2 Analyses | #399 runs: cost per session; #332 period comparison; #333 what-if; #334 working habits | 0.12 (#436, #423) and 0.13; 0.13; 0.14 |
 | #3 Interfaces | #331 period with an end and a custom range; #404 Raycast extension | 0.13; 0.15 |
 | #294 Flows | #385 flow analysis in the core; #386 flow view | 0.13 (#387, #402, #415) and 0.16 |
 
 ## 0.12 — Work flow and workflow subagents
 
-The first release from `release/next`, kept small on 2026-10-29: the work flow and the two PBIs that apm-hub `deliver` and `retro` wait for. Periods and trends moved to 0.13.
+The first release from `release/next`, kept small on 2026-10-29: the work flow and the two PBIs that skills `deliver` and `retro` wait for. Periods and trends moved to 0.13.
 
 | Order | Issue | Title | Depends on |
 | --- | --- | --- | --- |
@@ -71,7 +71,7 @@ Feature #404 closes with the release.
 
 ## 0.16 — Flows
 
-Behind what-if and Raycast since 2026-10-28: the orchestrator subagent trees that motivated it ended with apm-hub 3.0.
+Behind what-if and Raycast since 2026-10-28: the orchestrator subagent trees that motivated it ended with skills 3.0.
 
 | Order | Issue | Title | Depends on |
 | --- | --- | --- | --- |
@@ -93,7 +93,7 @@ Feature #416, the criteria of Epic #255: #417 release checklist for the untested
 | 2026-10-28 | work flow (#424) | integrate on `release/next`; the minor bump comes from the `chore: release minor` commit of `github-release` |
 | 2026-10-28 | dromos (#425) | the dromos runner setup is removed instead of tried; the dromos link of #399 (#421, #422) is dropped |
 | 2026-10-28 | Flows | 0.16, behind what-if (0.14) and Raycast (0.15) |
-| 2026-10-29 | #436 | moved into 0.12, because apm-hub 3.4.0 (#832) and the `deliver` trial need the cost of workflow subagents |
+| 2026-10-29 | #436 | moved into 0.12, because skills 3.4.0 (#832) and the `deliver` trial need the cost of workflow subagents |
 | 2026-10-29 | 0.12 scope | 0.12 ships the work flow, #436 and #423 only; periods and trends (#383, #337, #339 to #341) move to 0.13; #353 is narrowed to the version check of the release |
 | 2026-10-29 | keryx (#437) | keryx#19 reads the cost of one session through a new `--session` filter, not by filtering `cost --by session` itself |
 
@@ -101,15 +101,15 @@ Feature #416, the criteria of Epic #255: #417 release checklist for the untested
 
 | Repository | Direction | Status |
 | --- | --- | --- |
-| apm-hub#826 `deliver` | issues of this repository are delivered through it; #423 and #436 make its runs visible | merged on apm-hub `release/next`, ships with 3.3.0 |
-| apm-hub#829 | trial of `/deliver` on one small agentlens PBI; findings become issues here | apm-hub 3.3.0 |
-| apm-hub#832 `retro` | reads cost, requests and the role share from agentlens; the role share needs #436 and #402 | apm-hub 3.4.0 |
+| skills#826 `deliver` | issues of this repository are delivered through it; #423 and #436 make its runs visible | merged on GravionLabs/skills `release/next`, ships with 3.3.0 |
+| skills#829 | trial of `/deliver` on one small agentlens PBI; findings become issues here | skills 3.3.0 |
+| skills#832 `retro` | reads cost, requests and the role share from agentlens; the role share needs #436 and #402 | skills 3.4.0 |
 | keryx#19 | the herdr pane shows the session cost through `agentlens cost --session <id> --format json` (#437) | keryx 0.2.0; moves if 0.13 is late |
-| apm-hub `packages/ng` | `apm.yml` requires `>=3.0.0` (#425) | — |
+| skills `ng` group | `skills-lock.json` pins it (#425) | — |
 
 ## Risks
 
 - 0.13 holds eleven PBIs, most of them `needs-refinement`. Refine each one with `planner` before it starts; the periods and trends can become their own release.
-- #436 follows a transcript layout that Claude Code does not document (`subagents/workflows/<runId>/`, found in the apm-hub spike #823); a Claude Code update can move it again.
+- #436 follows a transcript layout that Claude Code does not document (`subagents/workflows/<runId>/`, found in the skills spike #823); a Claude Code update can move it again.
 - #437 is called by keryx once a minute per pane. If a single-session call needs a full scan of all transcripts, keryx#19 is too slow; #437 measures this.
 - Three decisions are open (#405, #390, #419); each blocks its release.
