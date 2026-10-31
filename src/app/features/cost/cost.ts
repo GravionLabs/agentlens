@@ -4,8 +4,9 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@a
 import { analysis, trendAnalysis } from "../../core/analysis";
 import { trendNote } from "../../core/delta";
 import { FiltersService } from "../../core/filters.service";
+import { WithoutService } from "../../core/without.service";
 import { exactTokens, number, pathLabel, tokens, usd } from "../../core/format";
-import type { CostData, CostRow, WhatIfRow } from "../../core/types";
+import type { CostData, CostRow, WhatIfRow, WithoutReport } from "../../core/types";
 import { trendStat } from "../../ui/stat-cards";
 import { Status } from "../../ui/status";
 import { TrendCards } from "../../ui/trend-cards";
@@ -48,6 +49,44 @@ export function whatIfView(r: WhatIfRow): WhatIfView {
   return { ...r, diff: r.what_if_usd - r.actual_usd };
 }
 
+/** A row of the without table; the total row has an empty kind. */
+export interface WithoutView {
+  item: string;
+  kind: string;
+  installations: number | null;
+  requests: number;
+  tokens: number;
+  cost: number;
+  /** `n/a` when no request of the row has a price. */
+  costText: string;
+}
+
+/** The rows of a without report followed by its total, with the cost as text (`n/a` unpriced). */
+export function withoutViews(w: WithoutReport): WithoutView[] {
+  const text = (usdValue: number, requests: number, unpriced: number) =>
+    requests > 0 && unpriced >= requests ? "n/a" : usd(usdValue, true);
+  return [
+    ...w.rows.map((r) => ({
+      item: r.item,
+      kind: r.kind,
+      installations: r.installations,
+      requests: r.requests,
+      tokens: r.tokens.count,
+      cost: r.cost_usd,
+      costText: text(r.cost_usd, r.requests, r.unpriced_requests),
+    })),
+    {
+      item: "Total",
+      kind: "",
+      installations: null,
+      requests: w.total.requests,
+      tokens: w.total.tokens.count,
+      cost: w.total.cost_usd,
+      costText: text(w.total.cost_usd, w.total.requests, w.total.unpriced_requests),
+    },
+  ];
+}
+
 /** `+$1.20` or `-$0.40`. */
 export function signedUsd(d: number): string {
   return `${d < 0 ? "-" : "+"}${usd(Math.abs(d))}`;
@@ -81,7 +120,7 @@ export function money(r: CostRow): string {
       <app-page-header
         exportView="cost"
         [exportFormats]="['json', 'csv']"
-        [exportOptions]="{ by: by(), whatIf: whatIf() || null }"
+        [exportOptions]="{ by: by(), whatIf: whatIf() || null, without: without.items() }"
         title="Cost"
         summary="What the usage costs, grouped by model, project, branch or issue."
       >
@@ -114,6 +153,22 @@ export function money(r: CostRow): string {
           <button type="button" (click)="clearWhatIf()">Clear</button>
         }
       </form>
+      @if (without.items().length > 0) {
+        <ul class="chips" aria-label="What if removed">
+          @for (item of without.items(); track item) {
+            <li class="chip">
+              {{ item }}
+              <button
+                type="button"
+                [attr.aria-label]="'Remove ' + item"
+                (click)="without.remove(item)"
+              >
+                ×
+              </button>
+            </li>
+          }
+        </ul>
+      }
       <app-status
         [loading]="res.isLoading()"
         [error]="res.error()"
@@ -185,6 +240,32 @@ export function money(r: CostRow): string {
           price and are left out of both sides.
         </p>
       }
+      @if (res.value()?.data?.without; as w) {
+        <h3>What if removed</h3>
+        <hx-data-table
+          [value]="withoutRows()"
+          [columns]="withoutColumns"
+          emptyMessage="Nothing matched."
+          ariaLabel="What if removed"
+        >
+          <ng-template hxCell="installations" let-value="value">{{
+            value === null ? "" : n(value)
+          }}</ng-template>
+          <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+          <ng-template hxCell="tokens" let-row>
+            <span class="est" [attr.title]="tip(row.tokens)">{{ tokens(row.tokens, true) }}</span>
+          </ng-template>
+          <ng-template hxCell="cost" let-row>
+            <span [class.est]="row.costText !== 'n/a'">{{ row.costText }}</span>
+          </ng-template>
+        </hx-data-table>
+        @for (note of w.notes; track note) {
+          <p class="muted">{{ note }}</p>
+        }
+        @for (warning of w.warnings; track warning) {
+          <p class="warning">{{ warning }}</p>
+        }
+      }
     </section>
   `,
   styles: `
@@ -228,6 +309,32 @@ export function money(r: CostRow): string {
       color: var(--text);
       border: 1px solid var(--line);
     }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      list-style: none;
+      margin: 8px 0;
+      padding: 0;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 4px 2px 10px;
+    }
+    .chip button {
+      background: transparent;
+      color: var(--muted);
+      border: 0;
+      padding: 0 6px;
+    }
+    .warning {
+      color: var(--warn);
+    }
     .total {
       margin: 10px 0;
     }
@@ -241,6 +348,7 @@ export class Cost {
   protected readonly whatIf = signal("");
   protected readonly draft = signal("");
   protected readonly groups = GROUPS;
+  protected readonly without = inject(WithoutService);
   protected readonly money = money;
   protected readonly n = number;
   protected readonly tokens = tokens;
@@ -249,6 +357,7 @@ export class Cost {
   protected readonly res = analysis<CostData>("cost", () => ({
     by: this.by(),
     whatIf: this.whatIf() || null,
+    without: this.without.items(),
   }));
 
   protected readonly compare = inject(FiltersService).compare;
@@ -280,6 +389,11 @@ export class Cost {
     return w ? [...w.rows, w.total].map(whatIfView) : [];
   });
 
+  protected readonly withoutRows = computed(() => {
+    const w = this.res.value()?.data.without;
+    return w ? withoutViews(w) : [];
+  });
+
   protected readonly views = computed(() => this.rows().map(costView));
 
   protected readonly columns = computed<HxColumn[]>(() => [
@@ -299,6 +413,15 @@ export class Cost {
 
   protected readonly usd = usd;
   protected readonly signedUsd = signedUsd;
+
+  protected readonly withoutColumns: HxColumn[] = [
+    { field: "item", header: "Item" },
+    { field: "kind", header: "Kind" },
+    { field: "installations", header: "Installations", align: "right" },
+    { field: "requests", header: "Requests", align: "right" },
+    { field: "tokens", header: "Tokens", align: "right" },
+    { field: "cost", header: "Cost", align: "right" },
+  ];
 
   protected readonly whatIfColumns: HxColumn[] = [
     { field: "model", header: "Model", sortable: true },

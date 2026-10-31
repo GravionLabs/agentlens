@@ -9,6 +9,7 @@ import { Ipc } from "../../core/ipc";
 import { tokenFormat } from "../../core/token-format.service";
 import { HelpLinkStub } from "../../ui/help-link.testing";
 import type { UnusedItem } from "../../core/types";
+import { WithoutService } from "../../core/without.service";
 import { referencedBy, Unused, unusedView } from "./unused";
 
 let payload: unknown = null;
@@ -144,5 +145,36 @@ describe("Unused table on helix", () => {
     expect(el.querySelector("hx-data-table tbody")!.textContent).toContain(
       "Everything installed was used.",
     );
+  });
+});
+
+describe("Unused what-if action", () => {
+  const buttons = (el: HTMLElement) => [
+    ...el.querySelectorAll<HTMLButtonElement>("button.what-if"),
+  ];
+
+  it("adds KIND:NAME from the row, keeps the row and shows Added", async () => {
+    payload = {
+      items: [
+        item({ kind: "skill", name: "verify-project" }),
+        item({ kind: "mcp-server", name: "github", overhead_tokens: null }),
+      ],
+    };
+    const { fixture, el } = await render();
+    expect(buttons(el).map((b) => b.textContent!.trim())).toEqual([
+      "What if removed",
+      "What if removed",
+    ]);
+    const github = buttons(el).find((_, i) => column(el, 1)[i] === "github")!;
+    github.click();
+    fixture.detectChanges();
+    expect(TestBed.inject(WithoutService).items()).toEqual(["mcp-server:github"]);
+    expect(buttons(el)).toHaveLength(2);
+    expect(
+      buttons(el)
+        .map((b) => b.textContent!.trim())
+        .sort(),
+    ).toEqual(["Added", "What if removed"]);
+    expect(buttons(el).find((b) => b.textContent!.trim() === "Added")!.disabled).toBe(true);
   });
 });

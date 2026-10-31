@@ -55,6 +55,12 @@ Tables are sortable by their column headers. Where a table has a filter (for exa
 
 Every page has a one-line summary and an **Explain** link that unfolds the details. Terms with a dotted underline and the `?` in table headers lead to the glossary.
 
+## What if removed
+
+The **What if removed** button in a row of the Skills view and of the Unused view (skills, agents and MCP servers) adds the item to a list and nothing else: you stay in the view, and the button reads **Added** for items on the list. The list is kept while the application runs and is not saved.
+
+The Cost view shows the list as chips, one per item, each with a button to remove it, and a table below the cost table: for each item the installations, the requests that carried it, the tokens and the cost the listing added, and a total row. Everything in it is an estimate (a tilde), a cost without a price is `n/a`, and the notes and the warnings (an item that matches nothing installed) are printed under it. The table works together with the what-if model of the same view, and the export of the Cost view writes it as the CLI does (`cost --without`): the CSV holds the without table.
+
 ## Export
 
 The **Export** menu in the page header, next to the title of a view, saves it as JSON, CSV or (skills) the HTML report to a file you choose; see [Reports and export](reports-and-export.md#export-from-the-application).

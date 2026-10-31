@@ -1,7 +1,8 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
 import { analysis } from "../../core/analysis";
+import { WithoutService } from "../../core/without.service";
 import { exactTokens, number, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { UnusedItem, UnusedReport } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
@@ -103,6 +104,16 @@ export function unusedView(i: UnusedItem): UnusedView {
         <ng-template hxCell="cost" let-row>
           <span [class.est]="row.estimated" [attr.title]="tip(row.cost)">{{ row.costText }}</span>
         </ng-template>
+        <ng-template hxCell="action" let-row>
+          <button
+            type="button"
+            class="what-if"
+            [disabled]="without.has(row.kind, row.name)"
+            (click)="without.add(row.kind, row.name)"
+          >
+            {{ without.has(row.kind, row.name) ? "Added" : "What if removed" }}
+          </button>
+        </ng-template>
       </hx-data-table>
     </section>
   `,
@@ -117,11 +128,25 @@ export function unusedView(i: UnusedItem): UnusedView {
     .est {
       color: var(--warn);
     }
+    .what-if {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 2px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .what-if:disabled {
+      color: var(--muted);
+      cursor: default;
+    }
   `,
 })
 export class Unused {
   protected readonly res = analysis<UnusedReport>("unused");
   protected readonly all = signal(false);
+  protected readonly without = inject(WithoutService);
 
   protected readonly rows = computed(() =>
     (this.res.value()?.data.items ?? []).filter((i) => this.all() || i.uses === 0),
@@ -159,6 +184,11 @@ export class Unused {
       title:
         "Installed agents, commands and skills that name this skill. A mention does not prove use.",
       sortable: true,
+    },
+    {
+      field: "action",
+      header: "",
+      title: "Add the item to the what-if removal list of the cost view",
     },
   ];
 }
