@@ -1,0 +1,13 @@
+{
+  "governance": {
+    "adrDir": "docs/adr",
+    "adrPaths": [
+      "crates/agentlens-core/src/mcp_setup.rs",
+      "crates/agentlens-core/src/cli_tools.rs",
+      "crates/agentlens-core/src/cli_tools/**",
+      "crates/agentlens-core/src/exact.rs",
+      "src-tauri/windows/**"
+    ],
+    "skipLabels": ["skip-adr"]
+  }
+}

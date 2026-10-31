@@ -46,6 +46,7 @@ For the application: `pnpm lint && pnpm format:check && pnpm test && pnpm build`
 
 ## Issue and PR conventions
 
+- PR checks (`pr-checks.yml`, required check `PR checks`): a PR must close a ready issue (`Closes #n`; none of `needs-refinement`, `needs-decision`, no open "blocked by"; PRs from `release/**` are exempt). A PR that closes a `needs-decision` issue, or changes a path in `governance.adrPaths` of `.agents/config.json` (the code that writes to client or user configuration, the command line tools install and the Windows installer hook, and the opt-in network counting), must add or change an ADR in `docs/adr/` with a `Status:` line and an unused number. The label `skip-adr` skips the ADR check. The ADR check reads the config of the base branch.
 - Hierarchy: Epic → Feature → PBI → Task, linked as native sub-issues; dependencies as "blocked by". Titles carry the level prefix (`[PBI] feat: …`). The shared `issues.yml` workflow of `GravionLabs/ci` sets it from the level label.
 - One branch and one PR per PBI; the PR body says `Closes #<PBI>` and lists the task numbers. Conventional commit messages.
 - Work is integrated on `release/next`: every PBI branch is cut from it and its PR targets it; `main` only receives a finished `release/next` (the `github-release` skill cuts and finishes it). Milestones are named after the version the release gets.
