@@ -5,6 +5,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.13.0] — 2026-10-30
+
+### Features
+- **app**: Role filter in the filter bar (#466) (#486)
+- **app**: Vs. previous period deltas in the overview, skills, cost and efficiency views (#341) (#487)
+- A RetryLoops finding (#344) (#488)
+- **core**: A RetryLoops advice finding (#344)
+- **app**: Retry loops finding in types, glossary and docs (#344)
+
+
 ## [0.12.0] — 2026-10-30
 
 ### Bug Fixes
