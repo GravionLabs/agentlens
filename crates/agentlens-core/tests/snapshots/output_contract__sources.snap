@@ -13,7 +13,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       ],
       "note": null,
       "sessions": 8,
-      "events": 78,
+      "events": 80,
       "warnings": 0,
       "errors": []
     },

@@ -64,6 +64,30 @@ pub const DELEGATION_MAX_SHARE: f64 = 0.05;
 /// ... and at least this many main-agent requests with [`LARGE_CONTEXT_TOKENS`] of input in that client.
 pub const MIN_DELEGATION_REQUESTS: u64 = 20;
 
+/// SkillQuality: a skill loaded twice into the same context (a repeat load) is listed from this many.
+pub const MIN_REPEAT_LOADS: u32 = 1;
+/// SkillQuality: misfires (a model load with no work after it) need at least this many ...
+pub const MIN_MISFIRES: u32 = 2;
+/// ... and this share of the skill's model loads (0.2 is 20 %).
+pub const MIN_MISFIRE_SHARE: f64 = 0.2;
+/// SkillQuality: a skill the user starts as `/name` at least this many times and the model never loads
+/// is listed although the model could pick it (it sits in the listing for nothing).
+pub const MIN_USER_ONLY_STARTS: u32 = 3;
+/// SkillQuality: failing calls after a skill need at least this many ...
+pub const MIN_FOLLOW_ON_ERRORS: u64 = 5;
+/// ... at this many times the failure rate of the rest of the skill's sessions.
+pub const MIN_ERROR_RATE_FACTOR: u64 = 2;
+/// SkillQuality: retry loops that begin after a skill are listed from this many.
+pub const MIN_FOLLOW_ON_RETRY_LOOPS: u32 = 1;
+/// SkillQuality: compactions soon after a load need at least this many ...
+pub const MIN_COMPACTIONS_SOON: u32 = 2;
+/// ... and this share of the skill's loads (0.25 is 25 %).
+pub const MIN_COMPACTION_SHARE: f64 = 0.25;
+
+/// How the SkillQuality detail of an item names the signal of a skill only the user starts; `tips` finds
+/// it by this text.
+pub const USER_ONLY_SIGNAL: &str = "only started by /name";
+
 /// How long Anthropic keeps a prompt cache entry after its last use, by default: 5 minutes. A request after
 /// a longer pause writes its context to the cache again instead of reading it (CacheExpiry).
 pub const CACHE_TTL_5M: std::time::Duration = std::time::Duration::from_secs(5 * 60);
@@ -101,6 +125,9 @@ pub enum FindingKind {
     Delegation,
     /// Requests after a pause longer than the cache lifetime: the context was written again, not read.
     CacheExpiry,
+    /// Skills whose order of events hints at a problem: loaded twice, loaded without work after, never
+    /// picked by the model, or followed by failing work.
+    SkillQuality,
 }
 
 impl FindingKind {
@@ -142,6 +169,9 @@ impl FindingKind {
             }
             FindingKind::CacheExpiry => {
                 "After a pause longer than the cache lifetime the provider's prompt cache expired, and the whole context was written to the cache again at the write price instead of being read at the read price."
+            }
+            FindingKind::SkillQuality => {
+                "Skills with signs of a problem: loaded twice into the same context, loaded by the model without any work following, never picked by the model although listed, or followed by failing work. These are signals from the order of events, not proof."
             }
             FindingKind::Delegation => {
                 "Research and long reads that happen in the main context are carried on every later request; a subagent reads them in its own context and returns a summary. These clients ran many requests on a large context and almost none by subagents. No saving is estimated: what a subagent would have kept out of the main context cannot be counted from the requests."
@@ -187,6 +217,9 @@ impl FindingKind {
             }
             FindingKind::CacheExpiry => {
                 "Before a long pause, finish the task and start the next one in a fresh session, or compact (`/compact`) so that less has to be written again. Long-idle sessions with a large context are the expensive ones."
+            }
+            FindingKind::SkillQuality => {
+                "Repeat loads: say in the body that the skill is loaded once per task. Misfires: narrow the description to the situations it is for. Only started by /name: mark it as not automatically invoked (Claude Code: `disable-model-invocation: true`), so it leaves the listing. Errors or retry loops after it: check the commands, paths and scripts the skill gives. Compaction soon after: shorten the body or move steps into a script."
             }
             FindingKind::Delegation => {
                 "Delegate file searches, log reading and reviews to subagents, and keep the main context for decisions."
@@ -1297,6 +1330,142 @@ fn finding(kind: FindingKind, count: usize, items: Vec<Item>, total: Option<Toke
         notes: Vec::new(),
         impact: Impact::none(),
     }
+}
+
+/// The quality signals of a skill that pass their minimums, in the order of the table in the analyses
+/// guide. The first three have a saving, the rest have none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QualitySignal {
+    RepeatLoads,
+    Misfires,
+    UserOnly,
+    Errors,
+    RetryLoops,
+    Compactions,
+}
+
+impl QualitySignal {
+    fn has_saving(self) -> bool {
+        matches!(
+            self,
+            QualitySignal::RepeatLoads | QualitySignal::Misfires | QualitySignal::UserOnly
+        )
+    }
+}
+
+fn quality_signals(s: &SkillStats) -> Vec<QualitySignal> {
+    let q = &s.quality;
+    let mut out = Vec::new();
+    if q.repeat_loads >= MIN_REPEAT_LOADS {
+        out.push(QualitySignal::RepeatLoads);
+    }
+    if q.misfires >= MIN_MISFIRES
+        && f64::from(q.misfires) >= MIN_MISFIRE_SHARE * f64::from(s.triggers.model)
+    {
+        out.push(QualitySignal::Misfires);
+    }
+    if s.in_inventory && s.triggers.user >= MIN_USER_ONLY_STARTS && s.triggers.model == 0 {
+        out.push(QualitySignal::UserOnly);
+    }
+    // Rates compared by cross-multiplying; a baseline without errors always passes.
+    if q.follow_on_errors >= MIN_FOLLOW_ON_ERRORS
+        && u128::from(q.follow_on_errors) * u128::from(q.baseline_calls)
+            >= u128::from(MIN_ERROR_RATE_FACTOR)
+                * u128::from(q.baseline_errors)
+                * u128::from(q.follow_on_calls)
+    {
+        out.push(QualitySignal::Errors);
+    }
+    if q.follow_on_retry_loops >= MIN_FOLLOW_ON_RETRY_LOOPS {
+        out.push(QualitySignal::RetryLoops);
+    }
+    if q.compactions_soon >= MIN_COMPACTIONS_SOON
+        && f64::from(q.compactions_soon) >= MIN_COMPACTION_SHARE * f64::from(s.invocations)
+    {
+        out.push(QualitySignal::Compactions);
+    }
+    out
+}
+
+fn rate(errors: u64, calls: u64) -> String {
+    format!("{:.0} %", share(errors, calls).unwrap_or(0.0) * 100.0)
+}
+
+/// The passing signals in words.
+fn quality_detail(s: &SkillStats, signals: &[QualitySignal]) -> String {
+    let q = &s.quality;
+    signals
+        .iter()
+        .map(|sig| match sig {
+            QualitySignal::RepeatLoads => {
+                format!(
+                    "loaded again into the same context ({})",
+                    times(q.repeat_loads)
+                )
+            }
+            QualitySignal::Misfires => format!(
+                "{} of {} model loads without any work after",
+                q.misfires, s.triggers.model
+            ),
+            QualitySignal::UserOnly => {
+                format!("{USER_ONLY_SIGNAL} ({})", times(s.triggers.user))
+            }
+            QualitySignal::Errors => format!(
+                "{} failed calls after it vs {} in the rest of its sessions",
+                rate(q.follow_on_errors, q.follow_on_calls),
+                rate(q.baseline_errors, q.baseline_calls)
+            ),
+            QualitySignal::RetryLoops => format!(
+                "{} after it",
+                if q.follow_on_retry_loops == 1 {
+                    "1 retry loop".to_owned()
+                } else {
+                    format!("{} retry loops", q.follow_on_retry_loops)
+                }
+            ),
+            QualitySignal::Compactions => format!(
+                "compaction soon after {} of {} loads",
+                q.compactions_soon, s.invocations
+            ),
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// The saving of one skill listed for SkillQuality: the loads that did no good, each priced as load
+/// (cache write) and carry (the skill's own cache read : uncached ratio), and the listing of a skill
+/// only the user starts (cache read).
+fn quality_split(s: &SkillStats, signals: &[QualitySignal]) -> Split {
+    let mut split = Split::default();
+    let wasted = u64::from(
+        if signals.contains(&QualitySignal::RepeatLoads) {
+            s.quality.repeat_loads
+        } else {
+            0
+        } + if signals.contains(&QualitySignal::Misfires) {
+            s.quality.misfires
+        } else {
+            0
+        },
+    );
+    if wasted > 0 && s.invocations > 0 {
+        let uses = f64::from(s.invocations);
+        let load = s.load.count as f64 / uses * wasted as f64;
+        let carry = s.carry.tokens.count as f64 / uses * wasted as f64;
+        let carried = s.carry.cache_read_tokens + s.carry.uncached_tokens;
+        let read_share = if carried > 0 {
+            s.carry.cache_read_tokens as f64 / carried as f64
+        } else {
+            1.0
+        };
+        split.cache_write += load;
+        split.cache_read += carry * read_share;
+        split.input += carry * (1.0 - read_share);
+    }
+    if signals.contains(&QualitySignal::UserOnly) {
+        split.cache_read += s.baseline.tokens.count as f64;
+    }
+    split
 }
 
 fn per_request(s: &SkillStats) -> u64 {
@@ -2445,6 +2614,88 @@ pub fn analyze_with(
             n(MIN_DELEGATION_REQUESTS)
         ));
         findings.push((f, 0.0));
+    }
+
+    // Skills with signs of a problem in the order of their events.
+    {
+        struct Row<'a> {
+            skill: &'a SkillStats,
+            signals: Vec<QualitySignal>,
+            split: Split,
+            usd: Option<f64>,
+            saving: u64,
+        }
+        let mut rows: Vec<Row> = report
+            .skills
+            .iter()
+            .filter_map(|s| {
+                let signals = quality_signals(s);
+                if signals.is_empty() {
+                    return None;
+                }
+                let split = quality_split(s, &signals);
+                Some(Row {
+                    skill: s,
+                    usd: pricing.usd(&split),
+                    saving: (split.input + split.cache_read + split.cache_write).round() as u64,
+                    signals,
+                    split,
+                })
+            })
+            .collect();
+        if !rows.is_empty() {
+            let has = |r: &Row| r.signals.iter().any(|sig| sig.has_saving());
+            rows.sort_by(|a, b| {
+                has(b)
+                    .cmp(&has(a))
+                    .then_with(|| match (a.usd, b.usd) {
+                        (Some(x), Some(y)) => y.total_cmp(&x),
+                        _ => b.split.weight().total_cmp(&a.split.weight()),
+                    })
+                    .then_with(|| b.signals.len().cmp(&a.signals.len()))
+                    .then_with(|| a.skill.name.cmp(&b.skill.name))
+            });
+            let items: Vec<Item> = rows
+                .iter()
+                .take(TOP)
+                .map(|r| Item {
+                    name: r.skill.name.clone(),
+                    tokens: Tokens::estimated(r.saving),
+                    requests: u64::from(r.skill.invocations),
+                    detail: quality_detail(r.skill, &r.signals),
+                    referenced_by: Vec::new(),
+                    session_id: None,
+                })
+                .collect();
+            let saved: u64 = rows.iter().map(|r| r.saving).sum();
+            let split = rows.iter().fold(Split::default(), |mut acc, r| {
+                acc.input += r.split.input;
+                acc.cache_read += r.split.cache_read;
+                acc.cache_write += r.split.cache_write;
+                acc
+            });
+            let total = Tokens::estimated(saved);
+            let mut f = finding(FindingKind::SkillQuality, rows.len(), items, Some(total));
+            f.share_of_total_tokens = share(saved, total_tokens.count);
+            if saved > 0 {
+                f.impact = Impact {
+                    saving: total,
+                    saving_usd: pricing.usd(&split),
+                    confidence: Confidence::Inferred,
+                };
+            }
+            f.notes.push(
+                "Signals count loads by the main agent only; skills of subagents are not judged. They hint at a problem and prove nothing.".to_owned(),
+            );
+            f.notes.push(
+                "A skill can also appear in Costly descriptions or Large skill bodies; the savings of the findings are not additive.".to_owned(),
+            );
+            f.notes.push(
+                "The saving is the load and carry of repeat loads and misfires, and the listing of a skill only started by /name. Errors, retry loops and compactions after a skill have no saving: their cost cannot be attributed to the skill; a skill listed only for them ranks last.".to_owned(),
+            );
+            unpriced_note(&mut f);
+            findings.push((f, split.weight()));
+        }
     }
 
     // Ranked by the USD saving, then by the weighted tokens, then in the order above; findings without
@@ -4939,5 +5190,238 @@ mod tests {
             &expiry_advice(&[after_gap(299)]),
             FindingKind::CacheExpiry
         ));
+    }
+
+    // SkillQuality.
+
+    /// A quality skill: loaded four times, two by the model, two by the user, with the given tweak.
+    fn quality_skill(name: &str, tweak: impl FnOnce(&mut SkillStats)) -> SkillStats {
+        let mut s = skill(name, true, 4, 0, (100, 1000));
+        s.triggers = TriggerCounts {
+            model: 2,
+            user: 2,
+            nested: 0,
+        };
+        tweak(&mut s);
+        s
+    }
+
+    /// The names listed for SkillQuality, or none when the finding is missing.
+    fn quality_names(skills: Vec<SkillStats>) -> Vec<String> {
+        analyze(&report(skills))
+            .findings
+            .iter()
+            .find(|f| f.kind == FindingKind::SkillQuality)
+            .map(|f| f.items.iter().map(|i| i.name.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    fn listed(tweak: impl FnOnce(&mut SkillStats)) -> bool {
+        !quality_names(vec![quality_skill("s", tweak)]).is_empty()
+    }
+
+    #[test]
+    fn a_repeat_load_passes_at_one_and_none_is_no_finding() {
+        assert!(listed(|s| s.quality.repeat_loads = 1));
+        assert!(!listed(|s| s.quality.repeat_loads = 0));
+    }
+
+    #[test]
+    fn misfires_need_two_and_a_fifth_of_the_model_loads() {
+        // 2 of 10 model loads: at the minimum of both.
+        assert!(listed(|s| {
+            s.triggers.model = 10;
+            s.quality.misfires = 2;
+        }));
+        // 2 of 11: just below 20 %.
+        assert!(!listed(|s| {
+            s.triggers.model = 11;
+            s.quality.misfires = 2;
+        }));
+        // 1 of 2 is 50 % but a single misfire is below the count.
+        assert!(!listed(|s| {
+            s.triggers.model = 2;
+            s.quality.misfires = 1;
+        }));
+    }
+
+    #[test]
+    fn a_skill_only_the_user_starts_needs_three_starts_no_model_load_and_an_installed_skill() {
+        let only = |user: u32, model: u32, installed: bool| {
+            listed(|s| {
+                s.triggers.user = user;
+                s.triggers.model = model;
+                s.in_inventory = installed;
+            })
+        };
+        assert!(only(3, 0, true));
+        assert!(!only(2, 0, true));
+        assert!(!only(3, 1, true));
+        assert!(!only(3, 0, false));
+    }
+
+    #[test]
+    fn errors_after_a_skill_need_five_at_twice_the_rate_of_the_rest() {
+        let errors = |fe: u64, fc: u64, be: u64, bc: u64| {
+            listed(|s| {
+                s.quality.follow_on_errors = fe;
+                s.quality.follow_on_calls = fc;
+                s.quality.baseline_errors = be;
+                s.quality.baseline_calls = bc;
+            })
+        };
+        // 20 % against 10 %: exactly twice.
+        assert!(errors(5, 25, 10, 100));
+        // 20 % against 10.1 %: just below.
+        assert!(!errors(5, 25, 101, 1000));
+        // Twice the rate but only 4 errors.
+        assert!(!errors(4, 10, 1, 100));
+        // A baseline without errors: five errors pass, four do not.
+        assert!(errors(5, 100, 0, 200));
+        assert!(!errors(4, 100, 0, 200));
+        // No baseline calls at all counts as no errors.
+        assert!(errors(5, 100, 0, 0));
+    }
+
+    #[test]
+    fn a_retry_loop_after_a_skill_passes_at_one() {
+        assert!(listed(|s| s.quality.follow_on_retry_loops = 1));
+        assert!(!listed(|s| s.quality.follow_on_retry_loops = 0));
+    }
+
+    #[test]
+    fn compactions_soon_after_need_two_and_a_quarter_of_the_loads() {
+        // 2 of 8 loads is exactly 25 %.
+        assert!(listed(|s| {
+            s.invocations = 8;
+            s.quality.compactions_soon = 2;
+        }));
+        // 2 of 9 is below.
+        assert!(!listed(|s| {
+            s.invocations = 9;
+            s.quality.compactions_soon = 2;
+        }));
+        // 1 of 1 is 100 % but below the count.
+        assert!(!listed(|s| {
+            s.invocations = 1;
+            s.quality.compactions_soon = 1;
+        }));
+    }
+
+    #[test]
+    fn no_skill_passing_no_finding() {
+        assert!(quality_names(vec![quality_skill("calm", |_| {})]).is_empty());
+    }
+
+    #[test]
+    fn the_saving_is_the_wasted_loads_times_load_and_carry_per_use() {
+        let mut s = quality_skill("heavy", |s| {
+            s.quality.repeat_loads = 1;
+            s.triggers.model = 4;
+            s.quality.misfires = 2;
+            s.load = Tokens::estimated(400);
+            s.carry = CarryCost {
+                requests: 40,
+                tokens: Tokens::estimated(2000),
+                cache_read_tokens: 1500,
+                uncached_tokens: 500,
+            };
+        });
+        s.triggers.user = 0;
+        let r = report(vec![s]);
+        let a = analyze_with(
+            &r,
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
+            &CacheExpiryUse::default(),
+            &pricing(),
+        );
+        let f = find(&a, FindingKind::SkillQuality);
+        // 3 wasted loads x (100 load + 500 carry) = 1800 tokens.
+        assert_eq!(f.impact.saving.count, 1800);
+        assert_eq!(f.impact.confidence, Confidence::Inferred);
+        // 300 cache write at 3.75, 1125 cache read at 0.5, 375 input at 3.
+        assert!(close(f.impact.saving_usd, 2812.5 / 1_000_000.0));
+        assert_eq!(f.items[0].tokens.count, 1800);
+        assert_eq!(
+            f.items[0].detail,
+            "loaded again into the same context (once); 2 of 4 model loads without any work after"
+        );
+    }
+
+    #[test]
+    fn a_skill_only_the_user_starts_saves_its_listing_as_cache_read() {
+        let a = analyze(&report(vec![quality_skill("manual", |s| {
+            s.triggers.user = 5;
+            s.triggers.model = 0;
+        })]));
+        let f = find(&a, FindingKind::SkillQuality);
+        assert_eq!(f.impact.saving.count, 1000);
+        assert_eq!(f.items[0].detail, "only started by /name (5 times)");
+    }
+
+    #[test]
+    fn signals_without_a_saving_rank_after_skills_with_one_and_have_no_saving() {
+        let a = analyze(&report(vec![
+            quality_skill("a-loops", |s| s.quality.follow_on_retry_loops = 3),
+            quality_skill("z-repeat", |s| {
+                s.quality.repeat_loads = 1;
+                s.load = Tokens::estimated(40);
+            }),
+        ]));
+        let f = find(&a, FindingKind::SkillQuality);
+        let names: Vec<&str> = f.items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["z-repeat", "a-loops"]);
+        assert_eq!(f.items[1].tokens.count, 0);
+        assert_eq!(f.items[1].detail, "3 retry loops after it");
+        assert_eq!(f.count, 2);
+        assert_eq!(f.impact.saving.count, 10);
+    }
+
+    #[test]
+    fn a_skill_only_with_signals_without_saving_leaves_the_finding_without_impact() {
+        let a = analyze(&report(vec![quality_skill("loops", |s| {
+            s.quality.follow_on_retry_loops = 1;
+        })]));
+        let f = find(&a, FindingKind::SkillQuality);
+        assert_eq!(f.impact.saving.count, 0);
+        assert_eq!(f.impact.saving_usd, None);
+    }
+
+    #[test]
+    fn the_error_detail_compares_both_rates() {
+        let a = analyze(&report(vec![quality_skill("e", |s| {
+            s.quality.follow_on_errors = 5;
+            s.quality.follow_on_calls = 25;
+            s.quality.baseline_errors = 10;
+            s.quality.baseline_calls = 100;
+        })]));
+        assert_eq!(
+            find(&a, FindingKind::SkillQuality).items[0].detail,
+            "20 % failed calls after it vs 10 % in the rest of its sessions"
+        );
+    }
+
+    #[test]
+    fn ties_in_saving_go_by_signal_count_then_name() {
+        let a = analyze(&report(vec![
+            quality_skill("b", |s| s.quality.follow_on_retry_loops = 1),
+            quality_skill("a", |s| s.quality.follow_on_retry_loops = 1),
+            quality_skill("c", |s| {
+                s.quality.follow_on_retry_loops = 1;
+                s.quality.follow_on_errors = 5;
+            }),
+        ]));
+        let names: Vec<&str> = find(&a, FindingKind::SkillQuality)
+            .items
+            .iter()
+            .map(|i| i.name.as_str())
+            .collect();
+        assert_eq!(names, ["c", "a", "b"]);
     }
 }

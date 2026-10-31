@@ -17,7 +17,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "copilot-cli",
           "vscode-copilot"
         ],
-        "uses": 1,
+        "uses": 2,
         "requests": 33,
         "overhead_tokens": {
           "count": 330,

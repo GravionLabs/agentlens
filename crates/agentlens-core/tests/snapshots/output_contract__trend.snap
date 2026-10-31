@@ -130,15 +130,15 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "status": "new",
         "loads": {
           "before": 0.0,
-          "after": 0.07142857142857142,
-          "change": 0.07142857142857142,
+          "after": 0.14285714285714285,
+          "change": 0.14285714285714285,
           "change_pct": null,
           "measured": true
         },
         "overhead_tokens": {
           "before": 0.0,
-          "after": 28.571428571428573,
-          "change": 28.571428571428573,
+          "after": 30.071428571428573,
+          "change": 30.071428571428573,
           "change_pct": null,
           "measured": false
         }

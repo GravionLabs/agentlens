@@ -42,6 +42,37 @@ fn setup() -> (TempHome, Context) {
         "claude_code/retry_loop.jsonl",
         ".claude/projects/-work-demo/retry_loop.jsonl",
     );
+    // The typed-command session runs `/cliff-setup` a second time in the same context (a SkillQuality
+    // signal: a repeat load). Appended here so that no other fixture or test changes.
+    {
+        use std::io::Write;
+        let line = |ts: &str, content: &str| {
+            serde_json::json!({"sessionId":"tc1","cwd":"/work/demo","gitBranch":"main","timestamp":ts,
+                "type":"user","message":{"role":"user","content":content}})
+            .to_string()
+        };
+        let meta = serde_json::json!({"sessionId":"tc1","cwd":"/work/demo","gitBranch":"main",
+            "timestamp":"2026-10-02T11:03:00Z","type":"user","isMeta":true,
+            "message":{"role":"user","content":[{"type":"text","text":
+            "Base directory for this skill: /home/u/.claude/skills/cliff-setup\n\nbody body body"}]}})
+        .to_string();
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(
+                home.path()
+                    .join(".claude/projects/-work-demo/typed_skill.jsonl"),
+            )
+            .unwrap();
+        writeln!(
+            file,
+            "{}\n{meta}",
+            line(
+                "2026-10-02T11:03:00Z",
+                "<command-message>cliff-setup</command-message>\n<command-name>/cliff-setup</command-name>\n<command-args>0.9</command-args>"
+            )
+        )
+        .unwrap();
+    }
     for fixture in [
         "clear_at_start",
         "two_compactions",

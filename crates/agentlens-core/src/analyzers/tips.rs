@@ -6,7 +6,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::analyzers::advice::{AdviceReport, Confidence, Finding, FindingKind, n};
+use crate::analyzers::advice::{
+    AdviceReport, Confidence, Finding, FindingKind, USER_ONLY_SIGNAL, n,
+};
 use crate::analyzers::trend::Windows;
 use crate::inventory::{LocationKind, SkillEntry};
 use crate::model::Source;
@@ -148,6 +150,10 @@ fn headline(f: &Finding, share: Option<f64>) -> String {
         FindingKind::CacheExpiry => {
             format!("Context written to the cache again after a pause: {s}{tail}")
         }
+        FindingKind::SkillQuality => format!(
+            "{} with signs of a problem: {s}{tail}",
+            plural(c, "skill", "skills")
+        ),
     }
 }
 
@@ -187,9 +193,13 @@ fn mcp_step(server: &str) -> Step {
     }
 }
 
-fn steps(kind: FindingKind, name: &str, skills: &[SkillEntry]) -> Vec<Step> {
+fn steps(kind: FindingKind, name: &str, detail: &str, skills: &[SkillEntry]) -> Vec<Step> {
     match kind {
         FindingKind::UnusedSkills | FindingKind::ListedButLoadedByHand => {
+            skill_step(name, skills).into_iter().collect()
+        }
+        // Only the "only started by /name" signal has the step; the item's detail names it.
+        FindingKind::SkillQuality if detail.contains(USER_ONLY_SIGNAL) => {
             skill_step(name, skills).into_iter().collect()
         }
         FindingKind::CostlyMcpServers => vec![mcp_step(name)],
@@ -247,7 +257,7 @@ pub fn tips(
                 .map(|i| Target {
                     name: i.name.clone(),
                     detail: i.detail.clone(),
-                    steps: steps(f.kind, &i.name, skills),
+                    steps: steps(f.kind, &i.name, &i.detail, skills),
                 })
                 .collect(),
             more: f.count.saturating_sub(TIP_TARGETS as u32),
@@ -638,6 +648,31 @@ mod tests {
         assert!(cc[0].change.contains("disable-model-invocation: true"));
         assert!(t.targets[1].steps.is_empty(), "OpenCode only");
         assert!(t.targets[2].steps.is_empty(), "plugin skill");
+    }
+
+    #[test]
+    fn a_skill_quality_tip_has_the_step_only_for_the_user_started_signal() {
+        let skills = vec![
+            entry("manual", LocationKind::UserClaude, vec![Source::ClaudeCode]),
+            entry("twice", LocationKind::UserClaude, vec![Source::ClaudeCode]),
+        ];
+        let mut f = finding(
+            1,
+            FindingKind::SkillQuality,
+            100,
+            Some(1.0),
+            &["manual", "twice"],
+        );
+        f.items[0].detail = "only started by /name (5 times)".into();
+        f.items[1].detail = "loaded again into the same context (once)".into();
+        let t = &tips(&advice(vec![f]), &skills, Some(10.0), 0, 5).tips[0];
+        assert_eq!(t.targets[0].steps.len(), 1);
+        assert!(
+            t.targets[0].steps[0]
+                .change
+                .contains("disable-model-invocation: true")
+        );
+        assert!(t.targets[1].steps.is_empty());
     }
 
     #[test]

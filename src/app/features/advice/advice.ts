@@ -46,6 +46,7 @@ const TITLES: Record<FindingKind, string> = {
   delegation: "Delegation",
   "context-hygiene": "Context hygiene",
   "cache-expiry": "Cache expiry",
+  "skill-quality": "Skill quality",
 };
 
 /** An advice item with the sortable token count and the estimate flag next to the display text. */

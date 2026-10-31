@@ -58,6 +58,42 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       {
         "tip": {
           "rank": 2,
+          "kind": "skill-quality",
+          "headline": "1 skill with signs of a problem: ~51 tokens (1.2 %)",
+          "saving": {
+            "count": 51,
+            "measured": false
+          },
+          "saving_usd": null,
+          "share": 0.011977454203851573,
+          "confidence": "inferred",
+          "action": "Repeat loads: say in the body that the skill is loaded once per task. Misfires: narrow the description to the situations it is for. Only started by /name: mark it as not automatically invoked (Claude Code: `disable-model-invocation: true`), so it leaves the listing. Errors or retry loops after it: check the commands, paths and scripts the skill gives. Compaction soon after: shorten the body or move steps into a script.",
+          "targets": [
+            {
+              "name": "cliff-setup",
+              "detail": "loaded again into the same context (once)",
+              "steps": []
+            }
+          ],
+          "more": 0
+        },
+        "unit": "tokens",
+        "before_per_1k": 3642.8571428571427,
+        "after_per_1k": 0.0,
+        "before_per_day": 25.5,
+        "after_per_day": 0.0,
+        "change_pct": -100.0,
+        "verdict": "too-little-data",
+        "targets": [
+          {
+            "name": "cliff-setup",
+            "status": "resolved"
+          }
+        ]
+      },
+      {
+        "tip": {
+          "rank": 3,
           "kind": "costly-mcp-servers",
           "headline": "1 MCP server cost ~363 tokens in the period (8.5 %)",
           "saving": {
@@ -99,7 +135,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       },
       {
         "tip": {
-          "rank": 3,
+          "rank": 4,
           "kind": "unused-skills",
           "headline": "1 unused skill cost ~84 tokens in the period (2.0 %)",
           "saving": {
@@ -141,7 +177,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       },
       {
         "tip": {
-          "rank": 4,
+          "rank": 5,
           "kind": "listed-but-loaded-by-hand",
           "headline": "1 skill is listed in every request but only loaded by hand: ~84 tokens (2.0 %)",
           "saving": {
