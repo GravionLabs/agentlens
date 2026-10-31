@@ -224,6 +224,13 @@ export const GLOSSARY: GlossaryEntry[] = [
     long: "Every advice finding has an impact: its saving in tokens, the saving in USD (always an estimate, computed from the price table) and the confidence of the saving. The findings are ranked by it: by the USD saving, without any price by the tokens weighted by class (input 1, cache write 1.25, cache read 0.1); findings without a saving come last.",
   },
   {
+    id: "tip",
+    term: "Tip",
+    group: "Cost",
+    short: "One advice finding that pays most, in one line, with its targets and a ready step.",
+    long: "A tip is a view over a finding of the advice: its headline, saving, share of the period's cost and confidence, the general action, and up to three targets (the first items of the finding). Only findings that save at least 0.5% of the period's cost (without any price: of the tokens weighted by class) are tips; the others are counted in below_threshold. Where a client documents the syntax, a target carries a step with the file and the change (Claude Code: disable-model-invocation in the front matter of a skill, the project scope .mcp.json for an MCP server). Tips are computed, never written by a model.",
+  },
+  {
     id: "saving",
     term: "Saving",
     group: "Cost",
