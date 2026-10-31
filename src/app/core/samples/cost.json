@@ -71,7 +71,39 @@
         "excluded_requests": 4
       }
     },
-    "without": null
+    "without": {
+      "rows": [
+        {
+          "item": "demo",
+          "kind": "skill",
+          "installations": 1,
+          "requests": 4,
+          "tokens": {
+            "count": 24,
+            "measured": false
+          },
+          "cost_usd": 0.0,
+          "unpriced_requests": 4,
+          "detail": "1 installation, 4 requests"
+        }
+      ],
+      "total": {
+        "requests": 4,
+        "tokens": {
+          "count": 24,
+          "measured": false
+        },
+        "cost_usd": 0.0,
+        "unpriced_requests": 4
+      },
+      "notes": [
+        "Estimated: the tokens come from the sizes of the listings, not from the client.",
+        "Assumes the same requests and the same cache mix: each token is priced at the effective input price per token of the request it sits in.",
+        "Counts the listing only (for a skill also its load and what it carried); the results of MCP tool calls and the work of subagent runs are not removed.",
+        "Requests without a price (4) are counted apart, not priced."
+      ],
+      "warnings": []
+    }
   },
   "warnings": 2,
   "errors": []
