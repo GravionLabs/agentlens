@@ -1,6 +1,5 @@
 ---
 source: crates/agentlens-core/tests/output_contract.rs
-assertion_line: 114
 description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
 ---
 {
@@ -118,7 +117,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
               "steps": [
                 {
                   "client": "claude-code",
-                  "file": "/private/home/user/.claude/skills/idle/SKILL.md",
+                  "file": "/home/user/.claude/skills/idle/SKILL.md",
                   "change": "Add `disable-model-invocation: true` to the front matter. The skill leaves the listing and stays usable as `/idle`."
                 }
               ]
@@ -160,7 +159,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
               "steps": [
                 {
                   "client": "claude-code",
-                  "file": "/private/home/user/.claude/skills/demo/SKILL.md",
+                  "file": "/home/user/.claude/skills/demo/SKILL.md",
                   "change": "Add `disable-model-invocation: true` to the front matter. The skill leaves the listing and stays usable as `/demo`."
                 }
               ]

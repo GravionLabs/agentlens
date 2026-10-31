@@ -100,7 +100,13 @@ fn text<T: Serialize>(home: &TempHome, value: &T) -> String {
         json.contains(&format!("\"schema_version\": {SCHEMA_VERSION},")),
         "the answer says which version of the layout it has"
     );
-    json.replace(&home.path().display().to_string(), "/home/user")
+    // Paths may come back canonicalized (macOS resolves the temp dir through `/private`), so replace both spellings.
+    let canonical = home
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|_| home.path().to_path_buf());
+    json.replace(&canonical.display().to_string(), "/home/user")
+        .replace(&home.path().display().to_string(), "/home/user")
 }
 
 #[test]
