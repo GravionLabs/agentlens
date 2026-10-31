@@ -4,6 +4,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@a
 import { analysis, trendAnalysis } from "../../core/analysis";
 import { type DeltaView, deltaView, sumDeltas, trendNote } from "../../core/delta";
 import { FiltersService } from "../../core/filters.service";
+import { WithoutService } from "../../core/without.service";
 import { day, exactTokens, number, tokens } from "../../core/format";
 import type { SkillStats, SkillsData } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
@@ -212,6 +213,16 @@ export function skillView(s: SkillStats): SkillView {
           }
         </ng-template>
         <ng-template hxCell="last_used" let-value="value">{{ day(value) }}</ng-template>
+        <ng-template hxCell="action" let-row>
+          <button
+            type="button"
+            class="what-if"
+            [disabled]="without.has('skill', row.name)"
+            (click)="without.add('skill', row.name)"
+          >
+            {{ without.has("skill", row.name) ? "Added" : "What if removed" }}
+          </button>
+        </ng-template>
       </hx-data-table>
     </section>
   `,
@@ -230,6 +241,19 @@ export function skillView(s: SkillStats): SkillView {
     .est {
       color: var(--warn);
     }
+    .what-if {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 2px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .what-if:disabled {
+      color: var(--muted);
+      cursor: default;
+    }
     .change {
       font-variant-numeric: tabular-nums;
     }
@@ -247,6 +271,7 @@ export function skillView(s: SkillStats): SkillView {
 export class Skills {
   protected readonly res = analysis<SkillsData>("skills");
   protected readonly usedOnly = signal(false);
+  protected readonly without = inject(WithoutService);
 
   private readonly all = computed(() => this.res.value()?.data.report.skills ?? []);
 
@@ -437,6 +462,11 @@ export class Skills {
         sortable: true,
       });
     }
+    cols.push({
+      field: "action",
+      header: "",
+      title: "Add the skill to the what-if removal list of the cost view",
+    });
     return cols;
   });
 }

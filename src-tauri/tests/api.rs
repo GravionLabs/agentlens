@@ -241,7 +241,14 @@ fn json_samples_for_the_frontend_are_up_to_date() {
         (
             "cost",
             serde_json::to_string_pretty(
-                &api::cost(&ctx, &all, "model", Some("claude-haiku-4-5"), &[]).unwrap(),
+                &api::cost(
+                    &ctx,
+                    &all,
+                    "model",
+                    Some("claude-haiku-4-5"),
+                    &["skill:demo".to_owned()],
+                )
+                .unwrap(),
             )
             .unwrap(),
         ),

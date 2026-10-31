@@ -10,6 +10,7 @@ import { tokenFormat } from "../../core/token-format.service";
 import { HelpLinkStub } from "../../ui/help-link.testing";
 import type { Answer, SkillsData } from "../../core/types";
 import samples from "../../core/samples/skills.json";
+import { WithoutService } from "../../core/without.service";
 import { overhead, Skills, skillView } from "./skills";
 
 let payload: unknown = null;
@@ -223,3 +224,30 @@ describe("Skills change column", () => {
 });
 
 const order = (n: string) => ["big", "small", "idle"].indexOf(n);
+
+describe("Skills what-if action", () => {
+  beforeEach(() => {
+    payload = {
+      installed_skills: 2,
+      report: { skills: [stats("small"), stats("big")] },
+    };
+  });
+
+  it("adds a skill to the what-if list with the row action, once", async () => {
+    const { fixture, el } = await render();
+    const buttons = () => [...el.querySelectorAll<HTMLButtonElement>("button.what-if")];
+    expect(buttons().map((b) => b.textContent!.trim())).toEqual([
+      "What if removed",
+      "What if removed",
+    ]);
+    const bigIndex = column(el, 0).indexOf("big");
+    buttons()[bigIndex].click();
+    fixture.detectChanges();
+    expect(TestBed.inject(WithoutService).items()).toEqual(["skill:big"]);
+    expect(buttons()[bigIndex].textContent!.trim()).toBe("Added");
+    expect(buttons()[bigIndex].disabled).toBe(true);
+    expect(buttons()).toHaveLength(2);
+    buttons()[bigIndex].click();
+    expect(TestBed.inject(WithoutService).items()).toEqual(["skill:big"]);
+  });
+});
