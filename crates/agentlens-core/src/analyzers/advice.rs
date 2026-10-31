@@ -331,6 +331,34 @@ impl Pricing {
     }
 }
 
+/// The cost of all priced requests of the sessions (`None` if no request has a price) and their tokens
+/// weighted by class ([`INPUT_WEIGHT`] and the others; output is not weighted, no finding saves it).
+pub fn period_totals(sessions: &[SessionEvents], prices: &PriceTable) -> (Option<f64>, u64) {
+    let mut usd = None;
+    let mut weighted = 0.0;
+    for se in sessions {
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            let mut usage = u.clone();
+            if usage.model.is_none() {
+                usage.model = se.session.model.clone();
+            }
+            if let Some(c) = prices.cost(&usage) {
+                *usd.get_or_insert(0.0) += c.usd;
+            }
+            weighted += Split {
+                input: u.input as f64,
+                cache_read: u.cache_read as f64,
+                cache_write: u.cache_write as f64,
+            }
+            .weight();
+        }
+    }
+    (usd, weighted.round() as u64)
+}
+
 /// What starting fresh sessions could have saved: on every main-agent request with at least
 /// [`LARGE_CONTEXT_TOKENS`] of input, the input above the size of its session's first main-agent request.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -1213,7 +1241,7 @@ pub struct AdviceReport {
 }
 
 /// `1234567` -> `1,234,567`.
-fn n(value: u64) -> String {
+pub(crate) fn n(value: u64) -> String {
     let digits = value.to_string();
     let mut out = String::new();
     for (i, c) in digits.chars().enumerate() {

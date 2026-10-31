@@ -88,6 +88,12 @@ pub struct SkillRun {
 
 pub struct AdviceRun {
     pub report: AdviceReport,
+    /// The installed skills, for the steps of the tips.
+    pub skills: Vec<crate::inventory::SkillEntry>,
+    /// The cost of all priced requests of the period; `None` without a price.
+    pub period_cost_usd: Option<f64>,
+    /// The class-weighted tokens of the period (the fallback of the tips' share).
+    pub weighted_tokens: u64,
     pub warnings: u64,
     pub errors: Vec<String>,
 }
@@ -122,7 +128,11 @@ pub fn advice_run(
     let delegation = advice::delegation_use(&sessions);
     let cache_expiry = advice::cache_expiry_use(&sessions, prices);
     let pricing = advice::Pricing::from_sessions(&sessions, prices);
+    let (period_cost_usd, weighted_tokens) = advice::period_totals(&sessions, prices);
     AdviceRun {
+        skills: run.inventory.skills.clone(),
+        period_cost_usd,
+        weighted_tokens,
         report: advice::analyze_with(
             &run.report,
             &references,

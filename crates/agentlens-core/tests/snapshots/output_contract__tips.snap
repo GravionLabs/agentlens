@@ -1,0 +1,89 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "schema_version": 2,
+  "data": {
+    "period_cost_usd": 0.27149999999999996,
+    "threshold": 0.005,
+    "tips": [
+      {
+        "rank": 1,
+        "kind": "context-hygiene",
+        "headline": "Sessions that carried their context on after the task: ~$0.30 (109.0 %)",
+        "saving": {
+          "count": 297000,
+          "measured": false
+        },
+        "saving_usd": 0.295949,
+        "share": 1.0900515653775324,
+        "confidence": "inferred",
+        "action": "Clear the context between tasks (`/clear` in Claude Code, a new session in the other clients), compact before the limit (`/compact`), and keep sessions short.",
+        "targets": [
+          {
+            "name": "demo · near_lim",
+            "detail": "3 requests, peak 190,000 tokens, 0 compactions, 0 clears, near the limit; 10,000 tokens at the start",
+            "steps": []
+          },
+          {
+            "name": "demo · clear_at",
+            "detail": "6 requests, peak 6,000 tokens, 2 compactions, 1 clear, not near the limit; 5,500 tokens before a compaction against 1,000 at the start",
+            "steps": []
+          },
+          {
+            "name": "demo · two_comp",
+            "detail": "6 requests, peak 6,000 tokens, 2 compactions, 0 clears, not near the limit; 5,500 tokens before a compaction against 1,000 at the start",
+            "steps": []
+          }
+        ],
+        "more": 0
+      },
+      {
+        "rank": 2,
+        "kind": "cache-expiry",
+        "headline": "Context written to the cache again after a pause: ~$0.12 (43.4 %)",
+        "saving": {
+          "count": 20500,
+          "measured": true
+        },
+        "saving_usd": 0.117875,
+        "share": 0.4341620626151013,
+        "confidence": "inferred",
+        "action": "Before a long pause, finish the task and start the next one in a fresh session, or compact (`/compact`) so that less has to be written again. Long-idle sessions with a large context are the expensive ones.",
+        "targets": [
+          {
+            "name": "cache_expiry",
+            "detail": "1 request after a pause of 30 min, 20.5k tokens written again, TTL 5 min",
+            "steps": []
+          }
+        ],
+        "more": 0
+      },
+      {
+        "rank": 3,
+        "kind": "retry-loops",
+        "headline": "Repeated failing tool calls: ~$0.00 (1.0 %)",
+        "saving": {
+          "count": 5020,
+          "measured": false
+        },
+        "saving_usd": 0.0026,
+        "share": 0.009576427255985268,
+        "confidence": "inferred",
+        "action": "Read the tool error and fix the cause, such as a missing file, a wrong path, a permission or a hook. When a hook failed inside the loop, check the hook configuration first.",
+        "targets": [
+          {
+            "name": "Bash",
+            "detail": "1 loop in 1 session, 3 calls; most often on `cargo`",
+            "steps": []
+          }
+        ],
+        "more": 0
+      }
+    ],
+    "below_threshold": 3
+  },
+  "warnings": 2,
+  "errors": []
+}
