@@ -654,7 +654,7 @@ pub fn tips(report: &TipsReport) -> Result<String, CsvError> {
 }
 
 /// `tips --changed-at`: one row per target of each checked tip, with the tip's rank, kind and verdict
-/// on every row, the saving per 1,000 requests before and after the date and its change in percent
+/// on every row, the `unit` (`usd` or `tokens`), the saving per 1,000 requests before and after the date and its change in percent
 /// (empty where a value is missing).
 pub fn tips_check(report: &TipCheck) -> Result<String, CsvError> {
     let header = [
@@ -663,6 +663,7 @@ pub fn tips_check(report: &TipCheck) -> Result<String, CsvError> {
         "verdict",
         "target",
         "status",
+        "unit",
         "before_per_1k",
         "after_per_1k",
         "change_pct",
@@ -682,6 +683,7 @@ pub fn tips_check(report: &TipCheck) -> Result<String, CsvError> {
                 id(serde_json::to_value(c.verdict)),
                 target.name.clone(),
                 id(serde_json::to_value(target.status)),
+                id(serde_json::to_value(c.unit)),
                 number(c.before_per_1k),
                 number(c.after_per_1k),
                 number(c.change_pct),

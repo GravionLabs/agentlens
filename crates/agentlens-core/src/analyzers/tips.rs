@@ -290,10 +290,22 @@ pub struct TipCheck {
     pub new: Vec<Tip>,
 }
 
+/// The unit of the per-1,000-request and per-day figures of a [`Check`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CheckUnit {
+    /// Estimated US dollars.
+    Usd,
+    /// Class-weighted tokens.
+    Tokens,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Check {
     /// The tip as it was before the date.
     pub tip: Tip,
+    /// The unit of the `*_per_1k` and `*_per_day` figures.
+    pub unit: CheckUnit,
     /// The saving of the finding per 1,000 requests of the window: in USD (an estimate) where both
     /// windows are priced, else in class-weighted tokens. `None` without requests.
     pub before_per_1k: Option<f64>,
@@ -409,6 +421,11 @@ pub fn check(before: &WindowTips, after: &WindowTips, windows: Windows, limit: u
             })
             .collect();
         checks.push(Check {
+            unit: if usd {
+                CheckUnit::Usd
+            } else {
+                CheckUnit::Tokens
+            },
             before_per_day: per(before_total, before_days),
             after_per_day: per(after_total, after_days),
             before_per_1k,
@@ -872,5 +889,23 @@ mod tests {
         assert_eq!(c.before_per_1k, Some(1000.0));
         assert_eq!(c.after_per_1k, Some(500.0));
         assert_eq!(c.verdict, Verdict::Improved);
+    }
+
+    #[test]
+    fn a_priced_tip_with_an_unpriced_finding_after_falls_back_to_tokens() {
+        let b = one(1.0);
+        let a = advice(vec![finding(1, FindingKind::RetryLoops, 50, None, &["a"])]);
+        let c = check(&window(&b, 100), &window(&a, 100), windows(), 5);
+        let c = &c.checks[0];
+        assert_eq!(c.unit, CheckUnit::Tokens);
+        assert_eq!(c.before_per_1k, Some(1000.0));
+        assert_eq!(c.after_per_1k, Some(500.0));
+    }
+
+    #[test]
+    fn a_fully_priced_check_is_in_usd() {
+        let (b, a) = (one(1.0), one(0.5));
+        let c = check(&window(&b, 100), &window(&a, 100), windows(), 5);
+        assert_eq!(c.checks[0].unit, CheckUnit::Usd);
     }
 }

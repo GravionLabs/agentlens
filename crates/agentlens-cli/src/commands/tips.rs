@@ -1,5 +1,7 @@
 use agentlens_core::analyzers::advice::Confidence;
-use agentlens_core::analyzers::tips::{Check, TargetStatus, TipCheck, TipsReport, Verdict};
+use agentlens_core::analyzers::tips::{
+    Check, CheckUnit, TargetStatus, TipCheck, TipsReport, Verdict,
+};
 use agentlens_core::api::{self, Context, Filters};
 use agentlens_core::export;
 use anyhow::{Result, anyhow};
@@ -77,8 +79,7 @@ fn per_1k(value: Option<f64>, usd: bool) -> String {
 }
 
 fn print_check(c: &Check) {
-    // A tip priced in USD carries a USD saving; the check used the same unit.
-    let usd = c.tip.saving_usd.is_some();
+    let usd = c.unit == CheckUnit::Usd;
     let change = c
         .change_pct
         .map(|p| format!("{p:+.0} %"))

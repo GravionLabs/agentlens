@@ -2214,10 +2214,15 @@ fn tips_changed_at_checks_the_tips_of_the_window_before_the_date() {
         .clone();
     let csv = String::from_utf8(out).unwrap();
     assert!(
-        csv.starts_with("rank,kind,verdict,target,status,before_per_1k,after_per_1k,change_pct\n"),
+        csv.starts_with(
+            "rank,kind,verdict,target,status,unit,before_per_1k,after_per_1k,change_pct\n"
+        ),
         "{csv}"
     );
-    assert!(csv.lines().any(|l| l.contains(",unused,open,")), "{csv}");
+    assert!(
+        csv.lines().any(|l| l.contains(",unused,open,tokens,")),
+        "{csv}"
+    );
 
     let out = agentlens(&home)
         .args(check)

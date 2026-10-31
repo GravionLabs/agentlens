@@ -118,7 +118,7 @@ Name the date of a change and AgentLens compares the tips from before it with th
 - **Verdict.** It compares the saving per 1,000 requests (in USD, or in tokens weighted by class where a window has no price), so a busier window with the same saving per request is `unchanged`. `improved` if the value dropped by at least `CHECK_CHANGE` (20 %), `worse` if it rose by at least 20 %, else `unchanged`; a finding that is gone after the date with enough data is `improved`. With fewer than `MIN_CHECK_REQUESTS` (50) requests in either window the verdict is `too-little-data`. The values per day are shown next to it but do not decide.
 - **Targets.** Each of the (up to three) targets of a tip is `resolved` if its name is not among the items of the finding after the date, `open` if it is, and `unknown` if it is not listed but the items of the finding are cut (it may be beyond the top). The summary reads "2 of 3 resolved".
 
-`--format json` prints `windows` (`current` is after the date, `against` before it), `checks` (the `tip`, `before_per_1k`, `after_per_1k`, `before_per_day`, `after_per_day`, `change_pct`, `verdict` and `targets`) and `new`; `--format csv` has one row per target (`rank`, `kind`, `verdict`, `target`, `status`, `before_per_1k`, `after_per_1k`, `change_pct`).
+`--format json` prints `windows` (`current` is after the date, `against` before it), `checks` (the `tip`, `unit` (`usd` or `tokens`, the unit of the per-1k and per-day values), `before_per_1k`, `after_per_1k`, `before_per_day`, `after_per_day`, `change_pct`, `verdict` and `targets`) and `new`; `--format csv` has one row per target (`rank`, `kind`, `verdict`, `target`, `status`, `unit`, `before_per_1k`, `after_per_1k`, `change_pct`).
 
 ## Context
 

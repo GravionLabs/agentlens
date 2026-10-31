@@ -230,9 +230,13 @@ export interface TargetCheck {
   status: TargetStatus;
 }
 
+export type CheckUnit = "usd" | "tokens";
+
 export interface TipCheckEntry {
   /** The tip as it was before the date. */
   tip: Tip;
+  /** The unit of the per-1,000-request and per-day figures. */
+  unit: CheckUnit;
   /** The saving per 1,000 requests: in ~USD where both windows are priced, else in weighted tokens. */
   before_per_1k: number | null;
   after_per_1k: number | null;
