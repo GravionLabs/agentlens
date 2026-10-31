@@ -76,6 +76,9 @@ pub enum Command {
         /// How many tips to show
         #[arg(long, default_value_t = 5)]
         limit: usize,
+        /// Check whether a change paid off: the tips before this date next to the same findings after it (same forms as --since); --since is ignored, --until ends the window after
+        #[arg(long, value_name = "DATE")]
+        changed_at: Option<String>,
     },
     /// Show what the clients put into the context besides the conversation
     Context {

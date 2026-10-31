@@ -100,7 +100,13 @@ fn text<T: Serialize>(home: &TempHome, value: &T) -> String {
         json.contains(&format!("\"schema_version\": {SCHEMA_VERSION},")),
         "the answer says which version of the layout it has"
     );
-    json.replace(&home.path().display().to_string(), "/home/user")
+    // Paths may come back canonicalized (macOS resolves the temp dir through `/private`), so replace both spellings.
+    let canonical = home
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|_| home.path().to_path_buf());
+    json.replace(&canonical.display().to_string(), "/home/user")
+        .replace(&home.path().display().to_string(), "/home/user")
 }
 
 #[test]
@@ -121,6 +127,23 @@ fn the_json_of_every_analysis_keeps_its_shape() {
     snap("skills", text(&home, &api::skills(&ctx, &all()).unwrap()));
     snap("advice", text(&home, &api::advice(&ctx, &all()).unwrap()));
     snap("tips", text(&home, &api::tips(&ctx, &all(), 5).unwrap()));
+    snap(
+        "tips_check",
+        text(
+            &home,
+            // Fixed windows (2026-10-01..03 and 2026-10-03..05), so that nothing depends on today's date.
+            &api::tips_check(
+                &ctx,
+                &Filters {
+                    until: Some("2026-10-05".into()),
+                    ..Filters::default()
+                },
+                "2026-10-03",
+                5,
+            )
+            .unwrap(),
+        ),
+    );
     snap("context", text(&home, &api::context(&ctx, &all()).unwrap()));
     snap("unused", text(&home, &api::unused(&ctx, &all()).unwrap()));
     snap("flow", text(&home, &api::flow(&ctx, &all()).unwrap()));

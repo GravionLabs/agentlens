@@ -9,7 +9,7 @@
 | `sources`              | which agents left sessions on this machine, and how many                                          |
 | `skills`               | uses, load, carry, baseline and overhead tokens per skill                                         |
 | `advice`               | what to change to save tokens: unused skills, costly descriptions, large contexts, with the numbers behind each finding |
-| `tips`                 | the few advice findings that pay most, one line each, with up to three targets and ready steps where the client documents the syntax; takes `limit` (default 5) |
+| `tips`                 | the few advice findings that pay most, one line each, with up to three targets and ready steps where the client documents the syntax; takes `limit` (default 5) and an optional `changed_at` (a date): the tips of the window before it with a verdict each, checked against the window after it |
 | `context`              | static context: tool listings, MCP instructions, instruction files, agent and skill listings     |
 | `unused`               | installed skills, agents and MCP servers nobody used, and what they cost while idle               |
 | `flow`                 | context growth and compactions, tool errors and retry loops, hooks and permission waits           |
@@ -26,7 +26,7 @@ Every tool takes the filter of the CLI (`since`, `until`, `sources`, `project`, 
 Besides the tools the server offers three things that make an analysis easier for an agent:
 
 - **The prompt `optimize-skills`** tells the agent how to analyze a skill setup: call `advice` first, read the glossary where a field is unclear, look closer with the other tools, trust measured numbers and say when a conclusion rests on an estimate, call a skill unused only if it was neither loaded nor used through its files, price out the top findings about skills, agents and MCP servers with `cost` and `without` (an estimate, said as such), and change nothing without asking. It takes an optional `since` (default `30d`). Clients that list prompts show it as a command, in Claude Code as `/mcp__agentlens__optimize-skills`.
-- **The prompt `tips`** asks the agent to call `tips`, explain each tip in plain language, look closer with `advice`, `skills`, `context` or `timeline` where a tip is surprising, and propose the edits (with the steps where given) without changing anything. It takes an optional `since` (default `30d`) and shows up in Claude Code as `/mcp__agentlens__tips`.
+- **The prompt `tips`** asks the agent to call `tips`, explain each tip in plain language, look closer with `advice`, `skills`, `context` or `timeline` where a tip is surprising, and propose the edits (with the steps where given) without changing anything. It takes an optional `since` (default `30d`) and shows up in Claude Code as `/mcp__agentlens__tips`. It also says how to check a change: call `tips` again with `changed_at`.
 - **The resource `agentlens://glossary`** is the [glossary](glossary.md) in Markdown, made from the same source as the application's Glossary view, so a field name in a result (`load`, `carry`, `baseline`, `follow_on`, `file_uses`) can be looked up where the data is instead of guessed. The tool descriptions point to it.
 
 ## Registering it in a client

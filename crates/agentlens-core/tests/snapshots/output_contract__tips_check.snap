@@ -1,0 +1,242 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "schema_version": 2,
+  "data": {
+    "windows": {
+      "current": {
+        "since": "2026-10-03T00:00:00Z",
+        "until": "2026-10-05T00:00:00Z",
+        "sessions": 4
+      },
+      "against": {
+        "since": "2026-10-01T00:00:00Z",
+        "until": "2026-10-03T00:00:00Z",
+        "sessions": 4
+      },
+      "normalized": false
+    },
+    "checks": [
+      {
+        "tip": {
+          "rank": 1,
+          "kind": "retry-loops",
+          "headline": "Repeated failing tool calls: ~5,020 tokens (100.0 %)",
+          "saving": {
+            "count": 5020,
+            "measured": false
+          },
+          "saving_usd": null,
+          "share": 1.0,
+          "confidence": "inferred",
+          "action": "Read the tool error and fix the cause, such as a missing file, a wrong path, a permission or a hook. When a hook failed inside the loop, check the hook configuration first.",
+          "targets": [
+            {
+              "name": "Bash",
+              "detail": "1 loop in 1 session, 3 calls; most often on `cargo`",
+              "steps": []
+            }
+          ],
+          "more": 0
+        },
+        "unit": "tokens",
+        "before_per_1k": 358571.4285714286,
+        "after_per_1k": 0.0,
+        "before_per_day": 2510.0,
+        "after_per_day": 0.0,
+        "change_pct": -100.0,
+        "verdict": "too-little-data",
+        "targets": [
+          {
+            "name": "Bash",
+            "status": "resolved"
+          }
+        ]
+      },
+      {
+        "tip": {
+          "rank": 2,
+          "kind": "costly-mcp-servers",
+          "headline": "1 MCP server cost ~363 tokens in the period (8.5 %)",
+          "saving": {
+            "count": 363,
+            "measured": false
+          },
+          "saving_usd": null,
+          "share": 0.08525129168623767,
+          "confidence": "estimated",
+          "action": "Enable the server only in the projects that need it, or switch it off when it is not in use.",
+          "targets": [
+            {
+              "name": "srv",
+              "detail": "60 tokens per request, 363 in total; 0 tool calls, 363 tokens per call",
+              "steps": [
+                {
+                  "client": "claude-code",
+                  "file": ".mcp.json",
+                  "change": "In Claude Code, remove `srv` from the user scope (`~/.claude.json`) and add it to `.mcp.json` in the root of each project that calls it."
+                }
+              ]
+            }
+          ],
+          "more": 0
+        },
+        "unit": "tokens",
+        "before_per_1k": 25928.571428571428,
+        "after_per_1k": 0.0,
+        "before_per_day": 181.5,
+        "after_per_day": 0.0,
+        "change_pct": -100.0,
+        "verdict": "too-little-data",
+        "targets": [
+          {
+            "name": "srv",
+            "status": "resolved"
+          }
+        ]
+      },
+      {
+        "tip": {
+          "rank": 3,
+          "kind": "unused-skills",
+          "headline": "1 unused skill cost ~84 tokens in the period (2.0 %)",
+          "saving": {
+            "count": 84,
+            "measured": false
+          },
+          "saving_usd": null,
+          "share": 0.01972757162987318,
+          "confidence": "estimated",
+          "action": "Remove the skill from the global folder or install it only in the projects that use it. If the client supports it, mark a skill that should only run on request as not automatically invoked in its front matter.",
+          "targets": [
+            {
+              "name": "idle",
+              "detail": "84 tokens in 14 requests",
+              "steps": [
+                {
+                  "client": "claude-code",
+                  "file": "/home/user/.claude/skills/idle/SKILL.md",
+                  "change": "Add `disable-model-invocation: true` to the front matter. The skill leaves the listing and stays usable as `/idle`."
+                }
+              ]
+            }
+          ],
+          "more": 0
+        },
+        "unit": "tokens",
+        "before_per_1k": 6000.0,
+        "after_per_1k": 22000.0,
+        "before_per_day": 42.0,
+        "after_per_day": 198.0,
+        "change_pct": 266.66666666666663,
+        "verdict": "too-little-data",
+        "targets": [
+          {
+            "name": "idle",
+            "status": "open"
+          }
+        ]
+      },
+      {
+        "tip": {
+          "rank": 4,
+          "kind": "listed-but-loaded-by-hand",
+          "headline": "1 skill is listed in every request but only loaded by hand: ~84 tokens (2.0 %)",
+          "saving": {
+            "count": 84,
+            "measured": false
+          },
+          "saving_usd": null,
+          "share": 0.01972757162987318,
+          "confidence": "estimated",
+          "action": "Put such a skill below the skill that opens it (as a file in its folder) instead of listing it on its own, or mark it as not automatically invoked in its front matter if the client supports it.",
+          "targets": [
+            {
+              "name": "demo",
+              "detail": "6 tokens per request, 84 in total; files used 2 times",
+              "steps": [
+                {
+                  "client": "claude-code",
+                  "file": "/home/user/.claude/skills/demo/SKILL.md",
+                  "change": "Add `disable-model-invocation: true` to the front matter. The skill leaves the listing and stays usable as `/demo`."
+                }
+              ]
+            }
+          ],
+          "more": 0
+        },
+        "unit": "tokens",
+        "before_per_1k": 6000.0,
+        "after_per_1k": 0.0,
+        "before_per_day": 42.0,
+        "after_per_day": 0.0,
+        "change_pct": -100.0,
+        "verdict": "too-little-data",
+        "targets": [
+          {
+            "name": "demo",
+            "status": "resolved"
+          }
+        ]
+      }
+    ],
+    "new": [
+      {
+        "rank": 1,
+        "kind": "context-hygiene",
+        "headline": "Sessions that carried their context on after the task: ~$0.30 (100.0 %)",
+        "saving": {
+          "count": 297000,
+          "measured": false
+        },
+        "saving_usd": 0.295949,
+        "share": 1.0,
+        "confidence": "inferred",
+        "action": "Clear the context between tasks (`/clear` in Claude Code, a new session in the other clients), compact before the limit (`/compact`), and keep sessions short.",
+        "targets": [
+          {
+            "name": "demo · near_lim",
+            "detail": "3 requests, peak 190,000 tokens, 0 compactions, 0 clears, near the limit; 10,000 tokens at the start",
+            "steps": []
+          },
+          {
+            "name": "demo · clear_at",
+            "detail": "6 requests, peak 6,000 tokens, 2 compactions, 1 clear, not near the limit; 5,500 tokens before a compaction against 1,000 at the start",
+            "steps": []
+          },
+          {
+            "name": "demo · two_comp",
+            "detail": "6 requests, peak 6,000 tokens, 2 compactions, 0 clears, not near the limit; 5,500 tokens before a compaction against 1,000 at the start",
+            "steps": []
+          }
+        ],
+        "more": 0
+      },
+      {
+        "rank": 2,
+        "kind": "cache-expiry",
+        "headline": "Context written to the cache again after a pause: ~$0.12 (43.4 %)",
+        "saving": {
+          "count": 20500,
+          "measured": true
+        },
+        "saving_usd": 0.117875,
+        "share": 0.4341620626151013,
+        "confidence": "inferred",
+        "action": "Before a long pause, finish the task and start the next one in a fresh session, or compact (`/compact`) so that less has to be written again. Long-idle sessions with a large context are the expensive ones.",
+        "targets": [
+          {
+            "name": "cache_expiry",
+            "detail": "1 request after a pause of 30 min, 20.5k tokens written again, TTL 5 min",
+            "steps": []
+          }
+        ],
+        "more": 0
+      }
+    ]
+  },
+  "warnings": 0,
+  "errors": []
+}

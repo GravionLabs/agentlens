@@ -20,7 +20,7 @@ use crate::analyzers::efficiency::{CacheBy, EfficiencyReport};
 use crate::analyzers::flow::{ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::SkillReport;
 use crate::analyzers::timeline::{SessionSummary, Timeline};
-use crate::analyzers::tips::{self, TipsReport};
+use crate::analyzers::tips::{self, TipCheck, TipsReport, WindowTips};
 use crate::analyzers::trend::{self, TrendReport, Windows};
 use crate::analyzers::unused::UnusedReport;
 use crate::cli_tools::{self, CliTools};
@@ -285,6 +285,79 @@ pub fn tips(ctx: &Context, f: &Filters, limit: usize) -> Result<Answer<TipsRepor
         limit,
     );
     answer(report, run.warnings, run.errors)
+}
+
+/// Did a change pay off: the tips of the window before `changed_at` next to the same findings in the
+/// window `[changed_at, until)` after it (`until` of the filters, default now). The window before has the
+/// length of the one after; both are read once. `since` of the filters is ignored (the date defines the
+/// windows) and says so in the errors. A date in the future, or an after window shorter than a day, is an
+/// error. `changed_at` takes the forms of `since`.
+pub fn tips_check(
+    ctx: &Context,
+    f: &Filters,
+    changed_at: &str,
+    limit: usize,
+) -> Result<Answer<TipCheck>, String> {
+    tips_check_at(ctx, f, changed_at, limit, Timestamp::now())
+}
+
+fn window_tips(r: &pipeline::AdviceRun) -> WindowTips<'_> {
+    WindowTips {
+        advice: &r.report,
+        skills: &r.skills,
+        period_cost_usd: r.period_cost_usd,
+        weighted_tokens: r.weighted_tokens,
+        requests: r.requests,
+    }
+}
+
+/// The shortest window after the date a check accepts.
+const MIN_CHECK_SECONDS: i64 = 86_400;
+
+fn tips_check_at(
+    ctx: &Context,
+    f: &Filters,
+    changed_at: &str,
+    limit: usize,
+    now: Timestamp,
+) -> Result<Answer<TipCheck>, String> {
+    let changed =
+        crate::since::parse_since(changed_at, now).map_err(|e| format!("changed_at: {e}"))?;
+    if changed > now {
+        return Err(format!("changed_at ({changed}) is in the future"));
+    }
+    let (resolved, _) = f.resolve(now)?;
+    let step =
+        Timestamp::from_second(now.as_second() - now.as_second().rem_euclid(300)).unwrap_or(now);
+    let until = resolved.until.unwrap_or(step);
+    let len = until.as_second() - changed.as_second();
+    if len < MIN_CHECK_SECONDS {
+        return Err(format!(
+            "the window after changed_at ({changed}..{until}) is shorter than 1 day"
+        ));
+    }
+    let before_start = Timestamp::from_second(changed.as_second() - len)
+        .map_err(|e| format!("the window before changed_at starts out of range: {e}"))?;
+    let mut window_filters = f.clone();
+    window_filters.since = Some(changed.to_string());
+    let (windows, after, before, warnings, mut errors) =
+        windows_at(ctx, &window_filters, Some((before_start, changed)), now)?;
+    if f.since.as_deref().is_some_and(|s| !s.trim().is_empty()) {
+        errors.push("since is ignored: changed_at defines the windows".into());
+    }
+    let (prices, price_warning) = prices::load_or_bundled(&ctx.env, None);
+    errors.extend(price_warning);
+    let run = |sessions: &[SessionEvents]| {
+        pipeline::advice_run_from(&ctx.env, sessions, Vec::new(), &CharsPerToken, &prices)
+    };
+    let (before_run, after_run) = (run(&before), run(&after));
+    let report = tips::check(
+        &window_tips(&before_run),
+        &window_tips(&after_run),
+        windows,
+        limit,
+    );
+    answer(report, warnings, errors)
 }
 
 pub fn context(ctx: &Context, f: &Filters) -> Result<Answer<ContextReport>, String> {
@@ -1098,6 +1171,65 @@ mod tests {
         ));
         let err = windows_at(&ctx, &f, against, now()).unwrap_err();
         assert!(err.contains("overlaps"), "{err}");
+        assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_check_reads_once_and_builds_its_windows_from_the_date() {
+        let (ctx, reads) = counting_context(vec![
+            "2026-09-30T00:00:00Z", // before
+            "2026-10-03T00:00:00Z", // exactly the date: after
+            "2026-10-09T00:00:00Z", // after
+            "2026-09-01T00:00:00Z", // before both
+        ]);
+        let f = filters(None, None);
+        let a = tips_check_at(&ctx, &f, "2026-10-03", 5, now()).unwrap();
+        assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 1);
+        let w = a.data.windows;
+        assert_eq!(w.current.since.to_string(), "2026-10-03T00:00:00Z");
+        assert_eq!(w.current.until.to_string(), "2026-10-10T12:00:00Z");
+        assert_eq!(w.against.until, w.current.since);
+        assert_eq!(w.against.since.to_string(), "2026-09-25T12:00:00Z");
+        assert_eq!((w.current.sessions, w.against.sessions), (2, 1));
+        assert!(a.errors.is_empty(), "{:?}", a.errors);
+    }
+
+    #[test]
+    fn a_check_ends_at_the_given_until() {
+        let (ctx, _) = counting_context(vec![]);
+        let f = filters(None, Some("2026-10-05"));
+        let a = tips_check_at(&ctx, &f, "2026-10-03", 5, now()).unwrap();
+        let w = a.data.windows;
+        assert_eq!(w.current.until.to_string(), "2026-10-05T00:00:00Z");
+        assert_eq!(w.against.since.to_string(), "2026-10-01T00:00:00Z");
+    }
+
+    #[test]
+    fn a_check_ignores_since_with_a_warning() {
+        let (ctx, _) = counting_context(vec![]);
+        let f = filters(Some("2026-01-01"), None);
+        let a = tips_check_at(&ctx, &f, "2026-10-03", 5, now()).unwrap();
+        assert_eq!(
+            a.data.windows.current.since.to_string(),
+            "2026-10-03T00:00:00Z"
+        );
+        assert!(
+            a.errors.iter().any(|e| e.contains("since is ignored")),
+            "{:?}",
+            a.errors
+        );
+    }
+
+    #[test]
+    fn a_check_with_a_future_date_or_a_short_window_is_an_error() {
+        let (ctx, reads) = counting_context(vec![]);
+        let f = filters(None, None);
+        let err = tips_check_at(&ctx, &f, "2026-10-11", 5, now()).unwrap_err();
+        assert!(err.contains("in the future"), "{err}");
+        let err = tips_check_at(&ctx, &f, "2026-10-10T00:00:00Z", 5, now()).unwrap_err();
+        assert!(err.contains("shorter than 1 day"), "{err}");
+        let err = tips_check_at(&ctx, &f, "soon", 5, now()).unwrap_err();
+        assert!(err.starts_with("changed_at: cannot parse"), "{err}");
         assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 0);
     }
 }

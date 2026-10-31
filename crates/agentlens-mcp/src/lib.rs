@@ -149,6 +149,10 @@ pub struct TipsQuery {
     pub query: Query,
     /// How many tips to return, at most. Default: 5.
     pub limit: Option<usize>,
+    /// Check whether a change paid off: a date (`2026-10-01`), a duration (`14d`) or an RFC 3339 instant.
+    /// Returns the tips of the window before it with a verdict each, compared with the same findings in the
+    /// window after it (up to `until`, default now). `since` is ignored then.
+    pub changed_at: Option<String>,
 }
 
 /// What the `tips` prompt asks for.
@@ -234,7 +238,7 @@ impl AgentLensServer {
     }
 
     #[tool(
-        description = "The few advice findings that pay most (each saves at least `threshold`, 0.5 %, of the period's cost), one line each: `headline`, the saving in tokens and USD (an estimate) with its `share` of the period's cost and its `confidence`, the general `action`, and up to three `targets` with the ready `steps` where the client documents the syntax (Claude Code: `disable-model-invocation` for a skill, the project scope `.mcp.json` for an MCP server). `more` counts the targets not listed, `below_threshold` the findings with a smaller saving. Computed, no model involved; `limit` (default 5) caps the tips. The fields are explained in the resource agentlens://glossary.",
+        description = "The few advice findings that pay most (each saves at least `threshold`, 0.5 %, of the period's cost), one line each: `headline`, the saving in tokens and USD (an estimate) with its `share` of the period's cost and its `confidence`, the general `action`, and up to three `targets` with the ready `steps` where the client documents the syntax (Claude Code: `disable-model-invocation` for a skill, the project scope `.mcp.json` for an MCP server). `more` counts the targets not listed, `below_threshold` the findings with a smaller saving. Computed, no model involved; `limit` (default 5) caps the tips. With `changed_at` (a date) it checks whether a change paid off instead: `checks` holds the tips of the window before the date, each with the saving per 1,000 requests before and after (`before_per_1k`, `after_per_1k`), `change_pct`, a `verdict` (`improved`, `unchanged`, `worse`, `too-little-data`) and the status of its targets (`resolved`, `open`, `unknown`); `new` lists tips that appeared after the date. `since` is ignored then. The fields are explained in the resource agentlens://glossary.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn tips(&self, Parameters(q): Parameters<TipsQuery>) -> CallToolResult {
@@ -242,7 +246,13 @@ impl AgentLensServer {
         let limit = q
             .limit
             .unwrap_or(agentlens_core::analyzers::tips::DEFAULT_LIMIT);
-        self.run(move |c| api::tips(c, &f, limit)).await
+        match q.changed_at {
+            Some(changed_at) => {
+                self.run(move |c| api::tips_check(c, &f, &changed_at, limit))
+                    .await
+            }
+            None => self.run(move |c| api::tips(c, &f, limit)).await,
+        }
     }
 
     #[tool(
@@ -362,6 +372,7 @@ impl AgentLensServer {
 2. If a field is unclear, read the resource {GLOSSARY_URI} instead of guessing.\n\
 3. Where a tip is surprising, look closer: `advice` for the whole finding, `skills` for one skill, `context` for what the clients add to every request, `timeline` for one long session.\n\
 4. Propose the edits. For a target with `steps`, give the `file` and the `change` as they are; where a target has no step, use the tip's `action` and say that the syntax was not checked. `more` counts targets that are not listed, `below_threshold` findings that save less than the `threshold`.\n\n\
+5. To see whether a change I made paid off, call `tips` again with `changed_at` set to the date of the change. Each tip of the window before it comes back with `before_per_1k` and `after_per_1k` (the saving per 1,000 requests), `change_pct`, a `verdict` (`improved`, `unchanged`, `worse`, or `too-little-data` when a window has fewer than 50 requests) and its targets as `resolved`, `open` or `unknown` (not listed, but the finding's items are cut). `new` lists tips that appeared after the date; they have no verdict. Say plainly what worked and what is still open.\n\n\
 Rules for the conclusions:\n\
 - Trust a number without a tilde (`measured: true`); say so when a conclusion rests on an estimate (`~`, `measured: false`). A saving in USD is always an estimate.\n\
 - `confidence` says how sure a saving is: `measured`, `estimated`, or `inferred`. An `inferred` saving rests on an assumption; say so.\n\

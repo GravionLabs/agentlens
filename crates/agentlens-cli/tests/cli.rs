@@ -2181,3 +2181,79 @@ fn tips_rejects_a_limit_that_is_no_number() {
         .assert()
         .failure();
 }
+
+#[test]
+fn tips_changed_at_checks_the_tips_of_the_window_before_the_date() {
+    let home = home();
+    let check = [
+        "tips",
+        "--changed-at",
+        "2026-10-03",
+        "--until",
+        "2026-10-05",
+    ];
+    let v = json(agentlens(&home).args(check).args(["--format", "json"]));
+    assert_eq!(v["windows"]["current"]["since"], "2026-10-03T00:00:00Z");
+    assert_eq!(v["windows"]["against"]["since"], "2026-10-01T00:00:00Z");
+    let checks = v["checks"].as_array().unwrap();
+    assert!(!checks.is_empty());
+    for c in checks {
+        assert!(
+            ["improved", "unchanged", "worse", "too-little-data"]
+                .contains(&c["verdict"].as_str().unwrap())
+        );
+    }
+
+    let out = agentlens(&home)
+        .args(check)
+        .args(["--format", "csv"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let csv = String::from_utf8(out).unwrap();
+    assert!(
+        csv.starts_with(
+            "rank,kind,verdict,target,status,unit,before_per_1k,after_per_1k,change_pct\n"
+        ),
+        "{csv}"
+    );
+    assert!(
+        csv.lines().any(|l| l.contains(",unused,open,tokens,")),
+        "{csv}"
+    );
+
+    let out = agentlens(&home)
+        .args(check)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let table = String::from_utf8(out).unwrap();
+    assert!(table.contains("per 1,000 requests:"), "{table}");
+    assert!(table.contains("Targets: 0 of 1 resolved"), "{table}");
+}
+
+#[test]
+fn tips_changed_at_in_the_future_is_an_error_and_since_is_ignored() {
+    let home = home();
+    agentlens(&home)
+        .args(["tips", "--changed-at", "2999-01-01"])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("in the future"));
+    agentlens(&home)
+        .args([
+            "tips",
+            "--changed-at",
+            "2026-10-03",
+            "--until",
+            "2026-10-05",
+        ])
+        .args(["--since", "2026-01-01"])
+        .assert()
+        .success()
+        .stderr(predicates::str::contains("since is ignored"));
+}

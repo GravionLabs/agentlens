@@ -451,6 +451,8 @@ fn the_tips_tool_caps_the_tips_and_the_prompt_names_the_tools_to_use() {
         "`context`",
         "`timeline`",
         "`steps`",
+        "`changed_at`",
+        "`verdict`",
         "Do not change anything",
     ] {
         assert!(text.contains(needle), "{needle} missing in {text}");
@@ -462,6 +464,24 @@ fn the_tips_tool_caps_the_tips_and_the_prompt_names_the_tools_to_use() {
             .unwrap()
             .contains("last 30d")
     );
+}
+
+#[test]
+fn the_tips_tool_checks_a_change_with_changed_at() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    let result = client.call(
+        "tips",
+        json!({"sources": ["claude-code"], "changed_at": "2026-10-03", "until": "2026-10-05"}),
+    );
+    assert_eq!(result["isError"], false, "{result}");
+    let data = &result["structuredContent"]["data"];
+    assert_eq!(data["windows"]["current"]["since"], "2026-10-03T00:00:00Z");
+    assert!(data["checks"].is_array());
+    assert!(data["new"].is_array());
+
+    let result = client.call("tips", json!({"changed_at": "2999-01-01"}));
+    assert_eq!(result["isError"], true, "{result}");
 }
 
 #[test]
