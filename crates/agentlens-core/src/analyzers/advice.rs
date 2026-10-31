@@ -64,6 +64,13 @@ pub const DELEGATION_MAX_SHARE: f64 = 0.05;
 /// ... and at least this many main-agent requests with [`LARGE_CONTEXT_TOKENS`] of input in that client.
 pub const MIN_DELEGATION_REQUESTS: u64 = 20;
 
+/// How long Anthropic keeps a prompt cache entry after its last use, by default: 5 minutes. A request after
+/// a longer pause writes its context to the cache again instead of reading it (CacheExpiry).
+pub const CACHE_TTL_5M: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+/// The longer lifetime of 1 hour, which a client opts into. A session has it when any of its requests
+/// wrote tokens with it (`Usage::cache_write_1h`).
+pub const CACHE_TTL_1H: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FindingKind {
@@ -92,6 +99,8 @@ pub enum FindingKind {
     ContextHygiene,
     /// Work on a large context with almost no subagent requests: reading and research stay in the main context.
     Delegation,
+    /// Requests after a pause longer than the cache lifetime: the context was written again, not read.
+    CacheExpiry,
 }
 
 impl FindingKind {
@@ -130,6 +139,9 @@ impl FindingKind {
             }
             FindingKind::ContextHygiene => {
                 "Context that is carried on after the task is done is paid on every request. These sessions came near the limit of the context window without a compaction, or were compacted again and again instead of starting fresh."
+            }
+            FindingKind::CacheExpiry => {
+                "After a pause longer than the cache lifetime the provider's prompt cache expired, and the whole context was written to the cache again at the write price instead of being read at the read price."
             }
             FindingKind::Delegation => {
                 "Research and long reads that happen in the main context are carried on every later request; a subagent reads them in its own context and returns a summary. These clients ran many requests on a large context and almost none by subagents. No saving is estimated: what a subagent would have kept out of the main context cannot be counted from the requests."
@@ -172,6 +184,9 @@ impl FindingKind {
             }
             FindingKind::ContextHygiene => {
                 "Clear the context between tasks (`/clear` in Claude Code, a new session in the other clients), compact before the limit (`/compact`), and keep sessions short."
+            }
+            FindingKind::CacheExpiry => {
+                "Before a long pause, finish the task and start the next one in a fresh session, or compact (`/compact`) so that less has to be written again. Long-idle sessions with a large context are the expensive ones."
             }
             FindingKind::Delegation => {
                 "Delegate file searches, log reading and reviews to subagents, and keep the main context for decisions."
@@ -775,6 +790,110 @@ pub fn retry_saving(sessions: &[SessionEvents], prices: &PriceTable) -> RetryLoo
     }
 }
 
+/// One session in the input of the CacheExpiry finding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CacheExpirySession {
+    pub id: String,
+    pub project: Option<PathBuf>,
+    /// The session's cache lifetime: [`CACHE_TTL_1H`] if any request wrote 1-hour tokens, else [`CACHE_TTL_5M`].
+    pub ttl: std::time::Duration,
+    /// Requests that came after a pause longer than `ttl` and wrote more than they read.
+    pub requests: u64,
+    /// The cache-write tokens of those requests: what was written again.
+    pub tokens: u64,
+    /// The shortest and the longest pause before such a request, in seconds.
+    pub min_gap_secs: u64,
+    pub max_gap_secs: u64,
+    /// `false` if one of those requests was estimated, not reported.
+    pub measured: bool,
+    /// What writing again cost over reading, per request with the prices of its own model, in USD.
+    pub usd: f64,
+    /// The requests among them with a price for their model; `usd` covers only these.
+    pub priced_requests: u64,
+}
+
+/// The input of the CacheExpiry finding.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CacheExpiryUse {
+    /// The sessions with at least one expired request, the largest saving first.
+    pub sessions: Vec<CacheExpirySession>,
+    /// Requests left out because their model is not an Anthropic model ...
+    pub skipped_models: u64,
+    /// ... and because they or the request before them have no timestamp.
+    pub skipped_untimed: u64,
+}
+
+/// The input of the CacheExpiry finding: per session the main-agent requests that came after a pause longer
+/// than the session's cache lifetime and wrote more tokens than they read. The first request of a session
+/// never counts, and neither do subagent requests, which have their own context.
+pub fn cache_expiry_use(sessions: &[SessionEvents], prices: &PriceTable) -> CacheExpiryUse {
+    let mut out = CacheExpiryUse::default();
+    for se in sessions {
+        let one_hour = se
+            .events
+            .iter()
+            .any(|e| matches!(&e.kind, EventKind::Usage(u) if u.cache_write_1h > 0));
+        let ttl = if one_hour { CACHE_TTL_1H } else { CACHE_TTL_5M };
+        let mut row = CacheExpirySession {
+            id: se.session.id.clone(),
+            project: se.session.project_dir.clone(),
+            ttl,
+            requests: 0,
+            tokens: 0,
+            min_gap_secs: u64::MAX,
+            max_gap_secs: 0,
+            measured: true,
+            usd: 0.0,
+            priced_requests: 0,
+        };
+        let mut previous: Option<Option<jiff::Timestamp>> = None;
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            if u.subagent {
+                continue;
+            }
+            let Some(before) = previous.replace(e.at) else {
+                continue;
+            };
+            let model = u.model.as_deref();
+            if !model.is_some_and(|m| crate::prices::normalize(m).starts_with("claude")) {
+                out.skipped_models += 1;
+                continue;
+            }
+            let (Some(from), Some(to)) = (before, e.at) else {
+                out.skipped_untimed += 1;
+                continue;
+            };
+            let gap_ms = to.as_millisecond() - from.as_millisecond();
+            if gap_ms <= ttl.as_millis() as i64 || u.cache_write <= u.cache_read {
+                continue;
+            }
+            let gap = (gap_ms / 1000) as u64;
+            row.requests += 1;
+            row.tokens += u.cache_write;
+            row.min_gap_secs = row.min_gap_secs.min(gap);
+            row.max_gap_secs = row.max_gap_secs.max(gap);
+            row.measured &= u.measured;
+            if let Some(r) = model.and_then(|m| prices.rates(m, u.total_input())) {
+                row.usd += u.cache_write as f64 * (r.cache_write - r.cache_read) / 1_000_000.0;
+                row.priced_requests += 1;
+            }
+        }
+        if row.requests > 0 {
+            out.sessions.push(row);
+        }
+    }
+    out.sessions.sort_by(|a, b| {
+        b.usd
+            .total_cmp(&a.usd)
+            .then_with(|| b.tokens.cmp(&a.tokens))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    out
+}
+
 /// One client in the input of the Delegation finding.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DelegationSource {
@@ -1106,6 +1225,17 @@ fn n(value: u64) -> String {
     out
 }
 
+/// `1234567` -> `1.2M`, `12345` -> `12.3k`, small numbers as they are.
+fn short_tokens(value: u64) -> String {
+    if value >= 1_000_000 {
+        format!("{:.1}M", value as f64 / 1_000_000.0)
+    } else if value >= 1_000 {
+        format!("{:.1}k", value as f64 / 1_000.0)
+    } else {
+        value.to_string()
+    }
+}
+
 fn times(count: u32) -> String {
     if count == 1 {
         "once".into()
@@ -1160,6 +1290,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         &ModelMixUse::default(),
         &ContextHygieneUse::default(),
         &DelegationUse::default(),
+        &CacheExpiryUse::default(),
         &Pricing::default(),
     )
 }
@@ -1284,6 +1415,7 @@ pub fn analyze_with(
     model_mix: &ModelMixUse,
     hygiene: &ContextHygieneUse,
     delegation: &DelegationUse,
+    cache_expiry: &CacheExpiryUse,
     pricing: &Pricing,
 ) -> AdviceReport {
     let installed: Vec<&SkillStats> = report.skills.iter().filter(|s| s.in_inventory).collect();
@@ -2122,6 +2254,104 @@ pub fn analyze_with(
         findings.push((f, weight));
     }
 
+    // Requests after the cache expired: the context was written again at the write price.
+    if !cache_expiry.sessions.is_empty() {
+        let rows = &cache_expiry.sessions;
+        let tokens: u64 = rows.iter().map(|r| r.tokens).sum();
+        let measured = rows.iter().all(|r| r.measured);
+        let priced = rows.iter().any(|r| r.priced_requests > 0);
+        let usd: f64 = rows.iter().map(|r| r.usd).sum();
+        let unpriced: u64 = rows.iter().map(|r| r.requests - r.priced_requests).sum();
+        let minutes = |secs: u64| (secs as f64 / 60.0).round() as u64;
+        let count = |value: u64, one: &str, many: &str| {
+            format!("{} {}", n(value), if value == 1 { one } else { many })
+        };
+        let items: Vec<Item> = rows
+            .iter()
+            .take(TOP)
+            .map(|r| {
+                let (lo, hi) = (minutes(r.min_gap_secs), minutes(r.max_gap_secs));
+                let pauses = if lo == hi {
+                    format!("{lo} min")
+                } else {
+                    format!("{lo}\u{2013}{hi} min")
+                };
+                Item {
+                    name: r.id.clone(),
+                    tokens: Tokens {
+                        count: r.tokens,
+                        measured: r.measured,
+                    },
+                    requests: r.requests,
+                    detail: format!(
+                        "{} after {} of {pauses}, {} tokens written again, TTL {} min",
+                        count(r.requests, "request", "requests"),
+                        if r.requests == 1 { "a pause" } else { "pauses" },
+                        short_tokens(r.tokens),
+                        r.ttl.as_secs() / 60
+                    ),
+                    referenced_by: Vec::new(),
+                    session_id: Some(r.id.clone()),
+                }
+            })
+            .collect();
+        let total = Tokens {
+            count: tokens,
+            measured,
+        };
+        let mut f = finding(FindingKind::CacheExpiry, rows.len(), items, Some(total));
+        f.share_of_total_tokens = share(tokens, total_tokens.count);
+        f.impact = Impact {
+            saving: total,
+            saving_usd: priced.then_some(usd),
+            confidence: Confidence::Inferred,
+        };
+        f.notes.push(
+            "A request counts when it came more than the session's cache lifetime after the previous main-agent request and wrote more tokens than it read. The saving is those written tokens, in USD the difference between the write and the read price of the request's own model. It is inferred: the action shrinks the rewrite, it does not prove that it would not have happened."
+                .to_owned(),
+        );
+        f.notes.push(format!(
+            "The lifetime is {} minutes, or {} minutes for a session in which a request wrote tokens with the 1-hour lifetime. It is read from the client's own report where the client gives one (Claude Code) and assumed to be {} minutes elsewhere.",
+            CACHE_TTL_5M.as_secs() / 60,
+            CACHE_TTL_1H.as_secs() / 60,
+            CACHE_TTL_5M.as_secs() / 60
+        ));
+        if rows.iter().any(|r| r.ttl == CACHE_TTL_1H) {
+            f.notes.push(
+                "The price table has one cache-write price, that of the 5-minute lifetime. Writes with the 1-hour lifetime cost more, so the USD saving of such a session is a lower bound."
+                    .to_owned(),
+            );
+        }
+        if unpriced > 0 {
+            f.notes.push(format!(
+                "{} of the requests had no price for their model; their tokens are in the saving, not in the USD.",
+                n(unpriced)
+            ));
+        }
+        if cache_expiry.skipped_models > 0 {
+            f.notes.push(format!(
+                "Skipped, because the cache lifetime is not known: {} of models that are not Anthropic models.",
+                count(cache_expiry.skipped_models, "request", "requests")
+            ));
+        }
+        if cache_expiry.skipped_untimed > 0 {
+            f.notes.push(format!(
+                "Skipped, because the pause cannot be told: {} without a timestamp, or right after one without.",
+                count(cache_expiry.skipped_untimed, "request", "requests")
+            ));
+        }
+        f.notes.push(
+            "The Context size saving counts the volume of a large context, this finding the price difference of writing it again. Both can name the same session; their savings are not additive."
+                .to_owned(),
+        );
+        if !measured {
+            f.notes
+                .push("Some requests are estimated, not reported by the client.".to_owned());
+        }
+        let weight = tokens as f64 * (CACHE_WRITE_WEIGHT - CACHE_READ_WEIGHT);
+        findings.push((f, weight));
+    }
+
     // Work on a large context with almost no subagent requests. No saving: weight 0, Impact::none().
     let delegating: Vec<&DelegationSource> = delegation
         .sources
@@ -2284,6 +2514,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         )
     }
@@ -2980,6 +3211,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &pricing(),
         )
     }
@@ -3216,6 +3448,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         );
         let f = find(&a, FindingKind::ContextSize);
@@ -3302,6 +3535,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
@@ -3325,6 +3559,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
@@ -3340,6 +3575,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         );
         assert_eq!(
@@ -3397,6 +3633,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &p,
         );
         let f = find(&a, FindingKind::UnusedSkills);
@@ -3501,6 +3738,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             pricing,
         )
     }
@@ -3761,6 +3999,7 @@ mod tests {
             &model_mix_saving(sessions, &table),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::from_sessions(sessions, &table),
         )
     }
@@ -3938,6 +4177,7 @@ mod tests {
             &ModelMixUse::default(),
             &hygiene_saving(sessions, &table),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::from_sessions(sessions, &table),
         )
     }
@@ -4235,6 +4475,7 @@ mod tests {
             &ModelMixUse::default(),
             &hygiene_saving(&unpriced, &table),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::from_sessions(&unpriced, &table),
         );
         assert!(
@@ -4292,6 +4533,7 @@ mod tests {
             &ModelMixUse::default(),
             &hygiene,
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::from_sessions(&sessions, &table),
         );
         let size = find(&a, FindingKind::ContextSize);
@@ -4333,6 +4575,7 @@ mod tests {
             &ModelMixUse::default(),
             &hygiene_saving(&two, &table),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::from_sessions(&two, &table),
         );
         assert!(find_none(&a, FindingKind::ContextHygiene));
@@ -4372,6 +4615,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &delegation_use(sessions),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         )
     }
@@ -4464,5 +4708,208 @@ mod tests {
         assert_eq!(f.count, 1);
         assert_eq!(f.items.len(), 2);
         assert_eq!(f.items[0].name, "copilot-cli");
+    }
+
+    /// $3.75 cache write, $0.30 cache read: the difference is $3.45 per million tokens.
+    fn expiry_prices() -> PriceTable {
+        PriceTable::parse(
+            r#"{"claude-test": {"input": 3.0, "output": 15.0, "cache_write": 3.75, "cache_read": 0.3}}"#,
+        )
+        .unwrap()
+    }
+
+    /// One request: (seconds since the start or `None`, model, cache read, cache write, 1-hour write, subagent).
+    type Timed<'a> = (Option<i64>, &'a str, u64, u64, u64, bool);
+
+    fn timed(id: &str, reqs: &[Timed]) -> SessionEvents {
+        use crate::model::{Event, Session};
+        let start: jiff::Timestamp = "2026-10-03T12:00:00Z".parse().unwrap();
+        SessionEvents {
+            session: Session::new(id, Source::ClaudeCode),
+            events: reqs
+                .iter()
+                .map(
+                    |&(secs, model, cache_read, cache_write, cache_write_1h, subagent)| Event {
+                        at: secs.map(|s| start + jiff::SignedDuration::from_secs(s)),
+                        kind: EventKind::Usage(Usage {
+                            model: Some(model.into()),
+                            cache_read,
+                            cache_write,
+                            cache_write_1h,
+                            subagent,
+                            measured: true,
+                            ..Usage::default()
+                        }),
+                    },
+                )
+                .collect(),
+            warnings: Vec::new(),
+        }
+    }
+
+    /// Two main-agent requests of `claude-test`, the second after `gap` seconds with a rewritten context.
+    fn after_gap(gap: i64) -> SessionEvents {
+        timed(
+            "s",
+            &[
+                (Some(0), "claude-test", 0, 100_000, 0, false),
+                (Some(gap), "claude-test", 1_000, 100_000, 0, false),
+            ],
+        )
+    }
+
+    fn expiry_advice(sessions: &[SessionEvents]) -> AdviceReport {
+        analyze_with(
+            &report(vec![]),
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
+            &cache_expiry_use(sessions, &expiry_prices()),
+            &Pricing::default(),
+        )
+    }
+
+    #[test]
+    fn a_pause_longer_than_five_minutes_expires_the_cache_and_the_first_request_never_does() {
+        let below = cache_expiry_use(&[after_gap(299)], &expiry_prices());
+        let exactly = cache_expiry_use(&[after_gap(300)], &expiry_prices());
+        let above = cache_expiry_use(&[after_gap(301)], &expiry_prices());
+        assert!(below.sessions.is_empty() && exactly.sessions.is_empty());
+        let row = &above.sessions[0];
+        assert_eq!((row.requests, row.tokens), (1, 100_000));
+        assert_eq!(row.ttl, CACHE_TTL_5M);
+        assert_eq!((row.min_gap_secs, row.max_gap_secs), (301, 301));
+    }
+
+    #[test]
+    fn a_session_that_wrote_one_hour_tokens_has_a_one_hour_lifetime() {
+        let session = |gap: i64| {
+            timed(
+                "s",
+                &[
+                    (Some(0), "claude-test", 0, 100_000, 100_000, false),
+                    (Some(gap), "claude-test", 1_000, 100_000, 100_000, false),
+                ],
+            )
+        };
+        let thirty = cache_expiry_use(&[session(30 * 60)], &expiry_prices());
+        let seventy = cache_expiry_use(&[session(70 * 60)], &expiry_prices());
+        assert!(thirty.sessions.is_empty());
+        assert_eq!(seventy.sessions[0].ttl, CACHE_TTL_1H);
+        assert_eq!(seventy.sessions[0].requests, 1);
+    }
+
+    #[test]
+    fn a_request_that_mostly_read_the_cache_is_not_expired() {
+        let s = timed(
+            "s",
+            &[
+                (Some(0), "claude-test", 0, 100_000, 0, false),
+                (Some(3_600), "claude-test", 90_000, 90_000, 0, false),
+            ],
+        );
+        assert!(cache_expiry_use(&[s], &expiry_prices()).sessions.is_empty());
+    }
+
+    #[test]
+    fn other_models_and_requests_without_a_timestamp_are_skipped_and_counted() {
+        let s = timed(
+            "s",
+            &[
+                (Some(0), "claude-test", 0, 100_000, 0, false),
+                (Some(1_000), "gpt-test", 0, 100_000, 0, false),
+                (None, "claude-test", 0, 100_000, 0, false),
+                (Some(3_000), "claude-test", 0, 100_000, 0, false),
+            ],
+        );
+        let out = cache_expiry_use(&[s], &expiry_prices());
+        assert_eq!(out.skipped_models, 1);
+        // The request without a timestamp, and the one after it (its predecessor has none).
+        assert_eq!(out.skipped_untimed, 2);
+        assert!(out.sessions.is_empty());
+    }
+
+    #[test]
+    fn subagent_requests_are_ignored_and_do_not_reset_the_pause() {
+        let s = timed(
+            "s",
+            &[
+                (Some(0), "claude-test", 0, 100_000, 0, false),
+                (Some(400), "claude-test", 0, 50_000, 0, true),
+                (Some(500), "claude-test", 1_000, 100_000, 0, false),
+            ],
+        );
+        let row = cache_expiry_use(&[s], &expiry_prices()).sessions.remove(0);
+        // The main agent paused 500 s; the subagent request at 400 s neither counts nor shortens it.
+        assert_eq!(
+            (row.requests, row.tokens, row.min_gap_secs),
+            (1, 100_000, 500)
+        );
+    }
+
+    #[test]
+    fn the_finding_prices_the_difference_between_write_and_read_of_each_model() {
+        let s = timed(
+            "sess-1",
+            &[
+                (Some(0), "claude-test", 0, 200_000, 0, false),
+                (Some(420), "claude-test", 0, 200_000, 0, false),
+                (Some(420 + 5_700), "claude-test", 0, 100_000, 0, false),
+                (Some(420 + 5_700 + 10), "other-model", 0, 100_000, 0, false),
+            ],
+        );
+        let a = expiry_advice(&[s]);
+        let f = find(&a, FindingKind::CacheExpiry);
+        assert_eq!(f.count, 1);
+        assert_eq!(f.impact.saving, Tokens::measured(300_000));
+        assert_eq!(f.impact.confidence, Confidence::Inferred);
+        // (200,000 + 100,000) × ($3.75 - $0.30) / M = $1.035
+        assert!(close(f.impact.saving_usd, 1.035));
+        let item = &f.items[0];
+        assert_eq!(item.name, "sess-1");
+        assert_eq!(item.session_id.as_deref(), Some("sess-1"));
+        assert_eq!(item.requests, 2);
+        assert_eq!(
+            item.detail,
+            "2 requests after pauses of 7\u{2013}95 min, 300.0k tokens written again, TTL 5 min"
+        );
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("1 request of models that are not Anthropic"))
+        );
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("assumed to be 5 minutes elsewhere"))
+        );
+        assert!(!f.notes.iter().any(|n| n.contains("lower bound")));
+    }
+
+    #[test]
+    fn a_one_hour_session_says_that_its_saving_is_a_lower_bound() {
+        let s = timed(
+            "s",
+            &[
+                (Some(0), "claude-test", 0, 100_000, 100_000, false),
+                (Some(4_200), "claude-test", 0, 100_000, 100_000, false),
+            ],
+        );
+        let a = expiry_advice(&[s]);
+        let f = find(&a, FindingKind::CacheExpiry);
+        assert!(f.notes.iter().any(|n| n.contains("lower bound")));
+        assert!(f.items[0].detail.ends_with("TTL 60 min"));
+    }
+
+    #[test]
+    fn no_expired_request_no_cache_expiry_finding() {
+        assert!(find_none(
+            &expiry_advice(&[after_gap(299)]),
+            FindingKind::CacheExpiry
+        ));
     }
 }

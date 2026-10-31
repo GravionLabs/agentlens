@@ -523,6 +523,7 @@ fn usage_of(
         output: u64_of(tokens, "output"),
         cache_read: u64_of(cache, "read"),
         cache_write: u64_of(cache, "write"),
+        cache_write_1h: 0,
         reasoning: u64_of(tokens, "reasoning"),
         cost_usd: cost,
         measured: true,

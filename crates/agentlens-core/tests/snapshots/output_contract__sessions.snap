@@ -7,6 +7,16 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
   "data": [
     {
       "source": "claude-code",
+      "id": "cache_expiry",
+      "project": "/work/demo",
+      "model": "claude-opus-4-8",
+      "started_at": "2026-10-04T09:00:00Z",
+      "ended_at": "2026-10-04T09:32:00Z",
+      "requests": 3,
+      "peak_tokens": 20600
+    },
+    {
+      "source": "claude-code",
       "id": "near_limit",
       "project": "/work/demo",
       "model": "claude-test-1",

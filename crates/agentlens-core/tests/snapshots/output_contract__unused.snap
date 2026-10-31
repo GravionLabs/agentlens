@@ -5,7 +5,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
 {
   "schema_version": 2,
   "data": {
-    "sessions": 8,
+    "sessions": 9,
     "items": [
       {
         "kind": "skill",
@@ -18,9 +18,9 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "vscode-copilot"
         ],
         "uses": 1,
-        "requests": 30,
+        "requests": 33,
         "overhead_tokens": {
-          "count": 300,
+          "count": 330,
           "measured": false
         }
       },
@@ -35,9 +35,9 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "vscode-copilot"
         ],
         "uses": 2,
-        "requests": 30,
+        "requests": 33,
         "overhead_tokens": {
-          "count": 180,
+          "count": 198,
           "measured": false
         }
       },
@@ -52,9 +52,9 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "vscode-copilot"
         ],
         "uses": 0,
-        "requests": 30,
+        "requests": 33,
         "overhead_tokens": {
-          "count": 180,
+          "count": 198,
           "measured": false
         }
       },
@@ -66,9 +66,9 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "claude-code"
         ],
         "uses": 0,
-        "requests": 29,
+        "requests": 32,
         "overhead_tokens": {
-          "count": 145,
+          "count": 160,
           "measured": false
         }
       }

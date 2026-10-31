@@ -302,6 +302,10 @@ pub struct Usage {
     pub output: u64,
     pub cache_read: u64,
     pub cache_write: u64,
+    /// The part of `cache_write` written with the 1-hour cache lifetime (Claude Code reports the split);
+    /// 0 where the client does not say. Tells the CacheExpiry finding which lifetime a session had.
+    #[serde(default)]
+    pub cache_write_1h: u64,
     /// Informational; see the adapter for whether it is a part of `output` or separate.
     pub reasoning: u64,
     pub cost_usd: Option<f64>,
@@ -351,6 +355,7 @@ impl Default for Usage {
             output: 0,
             cache_read: 0,
             cache_write: 0,
+            cache_write_1h: 0,
             reasoning: 0,
             cost_usd: None,
             measured: true,

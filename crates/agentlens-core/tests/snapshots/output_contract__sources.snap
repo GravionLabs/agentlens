@@ -12,8 +12,8 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         "/home/user/.claude/projects"
       ],
       "note": null,
-      "sessions": 7,
-      "events": 74,
+      "sessions": 8,
+      "events": 78,
       "warnings": 0,
       "errors": []
     },
