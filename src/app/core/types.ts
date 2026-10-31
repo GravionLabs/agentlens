@@ -74,6 +74,19 @@ export interface SkillStats {
   follow_on: UsageSum;
   attributed: UsageSum;
   baseline: { requests: number; tokens: Tokens };
+  /** Signals of main-agent loads; hints, not proof. */
+  quality: QualitySignals;
+}
+
+export interface QualitySignals {
+  repeat_loads: number;
+  misfires: number;
+  compactions_soon: number;
+  follow_on_calls: number;
+  follow_on_errors: number;
+  baseline_calls: number;
+  baseline_errors: number;
+  follow_on_retry_loops: number;
 }
 
 export interface SessionContext {

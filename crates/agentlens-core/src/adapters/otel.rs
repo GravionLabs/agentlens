@@ -293,6 +293,7 @@ fn handle(r: &Record, sessions: &mut Sessions, skipped: &mut BTreeMap<String, u6
             };
             se.push(
                 at,
+                // `subagent` stays false: the spans do not mark loads inside a subagent.
                 EventKind::SkillInvoked(SkillInvoked::new(skill, trigger)),
             );
         }

@@ -1,0 +1,2 @@
+{"sessionId":"s1","cwd":"/work/demo","gitBranch":"feat/demo","timestamp":"2026-10-01T11:00:10Z","type":"user","message":{"role":"user","content":"look into it"},"isSidechain":true}
+{"sessionId":"s1","cwd":"/work/demo","gitBranch":"feat/demo","timestamp":"2026-10-01T11:00:11Z","type":"assistant","isSidechain":true,"requestId":"sr1","message":{"id":"sm1","role":"assistant","model":"claude-test-1","content":[{"type":"tool_use","id":"stS","name":"Skill","input":{"skill":"demo"}}]}}

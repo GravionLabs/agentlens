@@ -2257,6 +2257,7 @@ mod tests {
             carry: CarryCost::default(),
             follow_on: UsageSum::default(),
             attributed: UsageSum::default(),
+            quality: Default::default(),
             baseline: BaselineCost {
                 requests: listed.0,
                 tokens: Tokens::estimated(listed.1),

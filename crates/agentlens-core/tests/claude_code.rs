@@ -860,3 +860,25 @@ fn delegation_is_missing_where_subagents_ran_and_present_where_none_did() {
     );
     assert_eq!(d.sessions[0].id, "large_context_no_subagents");
 }
+
+#[test]
+fn skill_loads_are_flagged_when_they_happen_in_a_subagent_transcript() {
+    let home = TempHome::new();
+    home.copy_fixture("claude_code/skills.jsonl", &format!("{SLUG}/main.jsonl"));
+    home.copy_fixture(
+        "claude_code/subagent_skill.jsonl",
+        &format!("{SLUG}/main/subagents/agent-1.jsonl"),
+    );
+    let se = read_all(&home).remove(0);
+    let loads: Vec<_> = se
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::SkillInvoked(s) => Some((s.name.as_str(), s.trigger, s.subagent)),
+            _ => None,
+        })
+        .collect();
+    assert!(loads.contains(&("demo", SkillTrigger::Model, true)));
+    assert!(loads.contains(&("demo", SkillTrigger::Model, false)));
+    assert!(loads.contains(&("orch", SkillTrigger::User, false)));
+}

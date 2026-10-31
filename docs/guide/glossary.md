@@ -90,6 +90,14 @@ A skill is not only loaded by the client's skill tool or by typing its name: a m
 
 Once loaded, the skill text stays in the conversation and is re-sent with every following request until a compaction removes it. Carry is that repeated cost and always an estimate.
 
+### Repeat load
+
+The skill text was already in the context, so a second load puts the body in twice. It is a signal, not proof: the first load may have been out of reach of the model, or the user asked for it again.
+
+### Misfire
+
+A model-triggered load whose follow-on window ends at a user turn without a tool call or a use of the skill's files. A dispatch to another skill or a compaction counts as work, and a load at the end of a session is undecidable and not counted. It is a signal, not proof.
+
 ### Attributed
 
 Only available from clients that report it (OpenTelemetry). Measured.

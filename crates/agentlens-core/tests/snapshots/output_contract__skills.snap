@@ -121,6 +121,16 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
               "count": 300,
               "measured": false
             }
+          },
+          "quality": {
+            "repeat_loads": 0,
+            "misfires": 0,
+            "compactions_soon": 0,
+            "follow_on_calls": 0,
+            "follow_on_errors": 0,
+            "baseline_calls": 0,
+            "baseline_errors": 0,
+            "follow_on_retry_loops": 0
           }
         },
         {
@@ -179,6 +189,16 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
               "count": 180,
               "measured": false
             }
+          },
+          "quality": {
+            "repeat_loads": 0,
+            "misfires": 0,
+            "compactions_soon": 0,
+            "follow_on_calls": 0,
+            "follow_on_errors": 0,
+            "baseline_calls": 0,
+            "baseline_errors": 0,
+            "follow_on_retry_loops": 0
           }
         },
         {
@@ -238,6 +258,16 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
               "count": 0,
               "measured": false
             }
+          },
+          "quality": {
+            "repeat_loads": 0,
+            "misfires": 0,
+            "compactions_soon": 0,
+            "follow_on_calls": 0,
+            "follow_on_errors": 0,
+            "baseline_calls": 2,
+            "baseline_errors": 1,
+            "follow_on_retry_loops": 0
           }
         },
         {
@@ -296,6 +326,16 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
               "count": 180,
               "measured": false
             }
+          },
+          "quality": {
+            "repeat_loads": 0,
+            "misfires": 0,
+            "compactions_soon": 0,
+            "follow_on_calls": 0,
+            "follow_on_errors": 0,
+            "baseline_calls": 0,
+            "baseline_errors": 0,
+            "follow_on_retry_loops": 0
           }
         }
       ],
