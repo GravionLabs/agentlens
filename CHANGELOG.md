@@ -5,6 +5,29 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.14.0] — 2026-10-31
+
+### Bug Fixes
+- **advice**: Name Context size rows by project and session id, head the column Session (#491)
+- Count an MCP server installed twice once per request
+- Count each request once when several agent entries match
+
+
+### Features
+- Cost --without estimates the tokens and cost saved by removing an item (#342) (#492)
+- Cost --without estimates the tokens and cost saved by removing an item (#342)
+- A ModelMix finding, with the model on every timeline point (#345) (#493)
+- **core**: A ModelMix advice finding and the model on timeline points (#345)
+- **app**: Model mix finding, model in the timeline tooltip and switch marker (#345)
+- A ContextHygiene finding, with a count of /clear per session (#346) (#494)
+- **core**: A ContextHygiene advice finding and EventKind::Clear (#346)
+- **app**: Context hygiene finding in types, advice view, glossary and docs (#346)
+- A Delegation finding (#347) (#495)
+- **core**: A Delegation advice finding (#347)
+- **app**: Delegation finding in types, advice view, glossary and docs (#347)
+- What-if removal in the application and the MCP server (#343) (#496)
+
+
 ## [0.13.0] — 2026-10-30
 
 ### Features
