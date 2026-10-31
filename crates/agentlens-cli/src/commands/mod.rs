@@ -10,6 +10,7 @@ mod mcp_setup;
 mod report;
 mod scan;
 mod skills;
+mod tips;
 mod trend;
 mod unused;
 
@@ -52,6 +53,10 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Scan => scan::run(&registry, &env, &filter, &cli.source, display),
         Command::Skills => skills::run(&registry, &env, &filter, &cli.source, est, display),
         Command::Advise => advise::run(&registry, &env, &filter, &cli.source, est, display),
+        Command::Tips { limit } => {
+            let ctx = agentlens_core::api::Context { env, registry };
+            tips::run(&ctx, &filters, limit, display)
+        }
         Command::Compare { role } => {
             compare::run(&registry, &env, &filter, &cli.source, &role, est, display)
         }

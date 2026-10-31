@@ -71,6 +71,12 @@ pub enum Command {
     Skills,
     /// Show what to change to save tokens: unused skills, costly descriptions, large contexts
     Advise,
+    /// Show the few findings that pay most, with the targets and, where documented, a ready step
+    Tips {
+        /// How many tips to show
+        #[arg(long, default_value_t = 5)]
+        limit: usize,
+    },
     /// Show what the clients put into the context besides the conversation
     Context {
         /// Which kind of static context to show

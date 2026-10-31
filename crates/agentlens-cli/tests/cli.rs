@@ -2117,3 +2117,67 @@ fn trend_filters_by_source_session_and_keeps_prompts_out() {
         .expect("the fixture has a user prompt");
     assert!(!raw.contains(&prompt), "{raw}");
 }
+
+// ---- tips ----
+
+#[test]
+fn tips_lists_the_findings_that_pay_most_in_json_csv_and_a_table() {
+    let home = home();
+    let v = json(agentlens(&home).args(["tips", "--format", "json"]));
+    assert_eq!(v["threshold"], 0.005);
+    let tips = v["tips"].as_array().unwrap();
+    assert!(tips.len() <= 5);
+    let ranks: Vec<u64> = tips.iter().map(|t| t["rank"].as_u64().unwrap()).collect();
+    assert!(ranks.windows(2).all(|w| w[0] < w[1]), "{ranks:?}");
+    for t in tips {
+        assert!(t["headline"].as_str().unwrap().len() > 10);
+        assert!(t["targets"].as_array().unwrap().len() <= 3);
+    }
+
+    let unused = tips
+        .iter()
+        .find(|t| t["kind"] == "unused-skills")
+        .expect("the unused skill is a tip");
+    let step = &unused["targets"][0]["steps"][0];
+    assert_eq!(unused["targets"][0]["name"], "unused");
+    assert_eq!(step["client"], "claude-code");
+    assert!(step["file"].as_str().unwrap().ends_with("unused/SKILL.md"));
+    assert!(
+        step["change"]
+            .as_str()
+            .unwrap()
+            .contains("disable-model-invocation: true")
+    );
+
+    let one = json(agentlens(&home).args(["tips", "--limit", "1", "--format", "json"]));
+    assert!(one["tips"].as_array().unwrap().len() <= 1);
+
+    let out = agentlens(&home)
+        .args(["tips", "--format", "csv"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert_eq!(
+        String::from_utf8(out).unwrap().lines().next().unwrap(),
+        "rank,kind,target,saving_tokens,saving_usd,confidence,step"
+    );
+
+    agentlens(&home)
+        .arg("tips")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("step: "))
+        .stdout(predicate::str::contains("What to do:"))
+        .stdout(predicate::str::contains("Tips are the findings"));
+}
+
+#[test]
+fn tips_rejects_a_limit_that_is_no_number() {
+    let home = home();
+    agentlens(&home)
+        .args(["tips", "--limit", "many"])
+        .assert()
+        .failure();
+}
