@@ -22,6 +22,12 @@ The sidebar lists the views in three groups, Data, Optimize and Analyze, followe
 
 The [analyses](analyses.md) page explains what each one means.
 
+### Top tips
+
+The Advice view opens with **Top tips**: one card per change that would save at least 0.5 % of the period's cost, in rank order. A card shows the headline, the saving (`~$` with its share of the cost, or the tokens when no prices are known), the confidence (measured, estimated or inferred, with a link to the glossary), the action and the targets with "+N more" when the list is cut. Where the client documents the syntax, a target lists ready steps (client, file and change) with a **Copy** button that puts the file and the change on the clipboard and shows "Copied" for two seconds; if the clipboard is refused, the text is shown selected instead. The application never writes the file itself. **See the finding** scrolls to the finding below. Findings under the threshold are counted in one line and stay listed below; without any tip the view says so.
+
+The Sources view shows the top tip in a card above the source cards (headline, saving and a link to the Advice view). It shows nothing when there is no tip, and stays silent when the tips fail; the error appears on the Advice view.
+
 ## Filters and refresh
 
 The filter bar in the top bar sets the period, the sources and the project for every view. The application keeps the sessions it has read for a few minutes so that switching views is quick; **Refresh** in the top bar forgets them and reads the files again. On a narrow window the top bar folds Refresh into its menu.

@@ -6,10 +6,19 @@ import { provideRouter } from "@angular/router";
 import { HxCell, HxColumnHeader, HxDataTable } from "@gravionlabs/helix-ui";
 import { HelpLinkStub } from "../../ui/help-link.testing";
 import { Ipc } from "../../core/ipc";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { tokenFormat } from "../../core/token-format.service";
-import type { Finding } from "../../core/types";
-import { Advice, findingSaving, findingTitle, findingTotal, itemView } from "./advice";
+import type { Finding, Tip, TipsReport } from "../../core/types";
+import {
+  Advice,
+  findingSaving,
+  findingTitle,
+  findingTotal,
+  itemView,
+  noTipsText,
+  stepText,
+  tipSaving,
+} from "./advice";
 
 const finding = (over: Partial<Finding>): Finding => ({
   rank: 1,
@@ -120,12 +129,42 @@ describe("advice totals in rounded mode", () => {
 });
 
 let payload: unknown = null;
+let tipsPayload: TipsReport = {
+  period_cost_usd: null,
+  threshold: 0.005,
+  tips: [],
+  below_threshold: 0,
+};
 
 class FakeIpc extends Ipc {
-  override async invoke<T>(): Promise<T> {
-    return { schema_version: 2, data: payload, warnings: 0, errors: [] } as T;
+  override async invoke<T>(command: string): Promise<T> {
+    const data = command === "tips" ? tipsPayload : payload;
+    return { schema_version: 2, data, warnings: 0, errors: [] } as T;
   }
 }
+
+const tip = (over: Partial<Tip> = {}): Tip => ({
+  rank: 1,
+  kind: "unused-skills",
+  headline: "Remove 2 unused skills",
+  saving: { count: 1000, measured: false },
+  saving_usd: 1.234,
+  share: 0.0456,
+  confidence: "estimated",
+  action: "Delete the skill folders.",
+  targets: [
+    {
+      name: "alpha",
+      detail: "never used",
+      steps: [
+        { client: "Claude Code", file: ".claude/settings.json", change: '{"a":1}' },
+        { client: "OpenCode", file: null, change: "remove alpha" },
+      ],
+    },
+  ],
+  more: 3,
+  ...over,
+});
 
 async function render() {
   TestBed.overrideComponent(Advice, {
@@ -282,7 +321,7 @@ describe("Advice table on helix", () => {
       ],
     };
     const { el } = await render();
-    const titles = [...el.querySelectorAll("h3")].map((h) =>
+    const titles = [...el.querySelectorAll(".finding h3")].map((h) =>
       h.textContent!.replace(/\s+/g, " ").trim(),
     );
     expect(titles).toEqual([
@@ -305,5 +344,144 @@ describe("Advice table on helix", () => {
       "Explain Requests",
     ]);
     expect(links[0].getAttribute("href")).toBe("/glossary?term=token");
+  });
+});
+
+describe("tip helpers", () => {
+  it("show the saving with a tilde and the share, or the tokens without prices", () => {
+    expect(tipSaving(tip())).toBe("~$1.23 (4.6%)");
+    expect(tipSaving(tip({ share: null }))).toBe("~$1.23");
+    expect(tipSaving(tip({ saving_usd: null }))).toBe("~1,000 tokens");
+    expect(tipSaving(tip({ saving_usd: null, saving: { count: 5, measured: true } }))).toBe(
+      "5 tokens",
+    );
+  });
+
+  it("copy file, newline and change, or the change alone", () => {
+    expect(stepText({ client: "c", file: "a.json", change: "x" })).toBe("a.json\nx");
+    expect(stepText({ client: "c", file: null, change: "x" })).toBe("x");
+  });
+
+  it("explain an empty list with the threshold", () => {
+    expect(noTipsText(0.005)).toBe("No change would save more than 0.5% of the period's cost.");
+  });
+});
+
+describe("Advice tips", () => {
+  let written: string[];
+  let fail: boolean;
+  beforeAll(() => {
+    try {
+      TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+    } catch {
+      // already initialised by the other suite
+    }
+  });
+  beforeEach(() => {
+    written = [];
+    fail = false;
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: (t: string) => {
+          if (fail) return Promise.reject(new Error("denied"));
+          written.push(t);
+          return Promise.resolve();
+        },
+      },
+    });
+    payload = {
+      sessions: 1,
+      installed_skills: 1,
+      baseline_total: { count: 1, measured: true },
+      findings: [finding({ kind: "unused-skills" })],
+    };
+    tipsPayload = {
+      period_cost_usd: 50,
+      threshold: 0.005,
+      tips: [tip(), tip({ rank: 2, kind: "large-context", headline: "Second", more: 0 })],
+      below_threshold: 4,
+    };
+    TestBed.configureTestingModule({
+      providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    TestBed.resetTestingModule();
+  });
+
+  it("renders one card per tip in rank order with saving, confidence and more", async () => {
+    const { el } = await render();
+    const cards = [...el.querySelectorAll<HTMLElement>(".tip")];
+    expect(
+      cards.map((c) => c.querySelector("h4")!.textContent!.replace(/\s+/g, " ").trim()),
+    ).toEqual(["#1 Remove 2 unused skills", "#2 Second"]);
+    expect(cards[0].querySelector(".saving strong")!.textContent!.trim()).toBe("~$1.23 (4.6%)");
+    expect(cards[0].querySelector(".confidence")!.textContent).toContain("estimated");
+    expect(cards[0].querySelector("a.help")!.getAttribute("href")).toBe(
+      "/glossary?term=confidence",
+    );
+    expect(cards[0].textContent).toContain("Delete the skill folders.");
+    expect(cards[0].textContent).toContain("alpha");
+    expect(cards[0].textContent).toContain("+3 more");
+    expect(cards[1].textContent).not.toContain("more\n");
+    expect(cards[1].querySelector(".muted:not(.none)")?.textContent ?? "").not.toContain("+");
+    expect(el.querySelector(".below")!.textContent!.replace(/\s+/g, " ")).toContain(
+      "4 more findings save less than 0.5% each; they are listed below.",
+    );
+  });
+
+  it("copies file and change, then shows Copied for two seconds", async () => {
+    const { fixture, el } = await render();
+    vi.useFakeTimers();
+    const buttons = el.querySelectorAll<HTMLButtonElement>(".tip .copy");
+    buttons[0].click();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    expect(written).toEqual(['.claude/settings.json\n{"a":1}']);
+    expect(buttons[0].textContent!.trim()).toBe("Copied");
+    expect(buttons[1].textContent!.trim()).toBe("Copy");
+    await vi.advanceTimersByTimeAsync(2000);
+    fixture.detectChanges();
+    expect(buttons[0].textContent!.trim()).toBe("Copy");
+    buttons[1].click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(written[1]).toBe("remove alpha");
+  });
+
+  it("shows the text selected when the clipboard write fails", async () => {
+    fail = true;
+    const { fixture, el } = await render();
+    el.querySelector<HTMLButtonElement>(".tip .copy")!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const box = el.querySelector<HTMLTextAreaElement>(".manual")!;
+    expect(box.value).toBe('.claude/settings.json\n{"a":1}');
+    expect(el.querySelector(".tip .copy")!.textContent!.trim()).toBe("Copy");
+  });
+
+  it("scrolls to the finding of the tip", async () => {
+    const { el } = await render();
+    const target = el.querySelector<HTMLElement>("#finding-unused-skills")!;
+    expect(target).not.toBeNull();
+    const scroll = vi.fn();
+    target.scrollIntoView = scroll;
+    document.body.appendChild(el);
+    el.querySelector<HTMLAnchorElement>(".tip a.see")!.click();
+    expect(scroll).toHaveBeenCalled();
+    expect(el.querySelector(".tip a.see")!.getAttribute("href")).toBe("#finding-unused-skills");
+    el.remove();
+  });
+
+  it("says so when no change saves enough", async () => {
+    tipsPayload = { ...tipsPayload, tips: [], below_threshold: 0 };
+    const { el } = await render();
+    expect(el.querySelector(".none")!.textContent!.trim()).toBe(
+      "No change would save more than 0.5% of the period's cost.",
+    );
+    expect(el.querySelector(".below")).toBeNull();
+    expect(el.querySelectorAll(".finding")).toHaveLength(1);
   });
 });

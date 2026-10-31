@@ -1,0 +1,11 @@
+{
+  "schema_version": 2,
+  "data": {
+    "period_cost_usd": null,
+    "threshold": 0.005,
+    "tips": [],
+    "below_threshold": 2
+  },
+  "warnings": 2,
+  "errors": []
+}

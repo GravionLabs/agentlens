@@ -227,6 +227,10 @@ fn json_samples_for_the_frontend_are_up_to_date() {
             serde_json::to_string_pretty(&api::advice(&ctx, &all).unwrap()).unwrap(),
         ),
         (
+            "tips",
+            serde_json::to_string_pretty(&api::tips(&ctx, &all, 5).unwrap()).unwrap(),
+        ),
+        (
             "context",
             serde_json::to_string_pretty(&api::context(&ctx, &all).unwrap()).unwrap(),
         ),

@@ -1,12 +1,36 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed } from "@angular/core";
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  ElementRef,
+  inject,
+  Injector,
+  signal,
+} from "@angular/core";
 import { analysis } from "../../core/analysis";
-import { exactTokens, number, tokens, usd } from "../../core/format";
-import type { AdviceItem, AdviceReport, Finding, FindingKind } from "../../core/types";
+import { exactTokens, number, percent, tokens, usd } from "../../core/format";
+import type {
+  AdviceItem,
+  AdviceReport,
+  Finding,
+  FindingKind,
+  Tip,
+  TipStep,
+  TipsReport,
+} from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
 import { Status } from "../../ui/status";
-import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxButton,
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 const TITLES: Record<FindingKind, string> = {
   "unused-skills": "Unused skills",
@@ -76,9 +100,28 @@ export function findingSaving(f: Finding): string | null {
     : `Could save ${usd(saving_usd, true)} (${amount} tokens, ${confidence}).`;
 }
 
+/** “~$1.23 (4.5%)”; without prices the tokens, marked as an estimate when they are one. */
+export function tipSaving(t: Tip): string {
+  if (t.saving_usd === null) return `${tokens(t.saving.count, !t.saving.measured)} tokens`;
+  const share = t.share === null ? "" : ` (${percent(t.share)})`;
+  return `${usd(t.saving_usd, true)}${share}`;
+}
+
+/** What the copy button writes: the file, a newline and the change; the change alone without a file. */
+export function stepText(step: TipStep): string {
+  return step.file ? `${step.file}\n${step.change}` : step.change;
+}
+
+/** “No change would save more than 0.5% of the period's cost.” */
+export function noTipsText(threshold: number): string {
+  return `No change would save more than ${percent(threshold)} of the period's cost.`;
+}
+
+const COPIED_MS = 2000;
+
 @Component({
   selector: "app-advice",
-  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
+  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink, HxButton],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -103,6 +146,79 @@ export function findingSaving(f: Finding): string | null {
         [warnings]="res.value()?.warnings ?? 0"
         [errors]="res.value()?.errors ?? []"
       />
+      <app-status
+        [loading]="tipsRes.isLoading()"
+        [error]="tipsRes.error()"
+        [warnings]="0"
+        [errors]="tipsRes.hasValue() ? tipsRes.value().errors : []"
+      />
+      @if (tipsReport(); as t) {
+        <section class="tips" aria-label="Top tips">
+          <h3>Top tips</h3>
+          @for (tip of t.tips; track tip.rank) {
+            <article class="card tip">
+              <h4>
+                <span class="rank">#{{ tip.rank }}</span> {{ tip.headline }}
+              </h4>
+              <p class="saving">
+                <strong [class.est]="tip.saving_usd === null && !tip.saving.measured">{{
+                  tipSaving(tip)
+                }}</strong>
+                <span class="confidence"
+                  >{{ tip.confidence }}<app-help-link term="confidence" label="Confidence"
+                /></span>
+              </p>
+              <p class="action">{{ tip.action }}</p>
+              @for (target of tip.targets; track $index; let ti = $index) {
+                <div class="target">
+                  <p>
+                    <strong>{{ target.name }}</strong>
+                    <span class="muted">{{ target.detail }}</span>
+                  </p>
+                  @for (step of target.steps; track $index; let si = $index) {
+                    <div class="step">
+                      <span class="client">{{ step.client }}</span>
+                      @if (step.file) {
+                        <code class="file">{{ step.file }}</code>
+                      }
+                      <code class="change">{{ step.change }}</code>
+                      <button
+                        hx-button
+                        type="button"
+                        variant="text"
+                        size="small"
+                        class="copy"
+                        (click)="copy(tip.rank + '-' + ti + '-' + si, step)"
+                      >
+                        {{ copied() === tip.rank + "-" + ti + "-" + si ? "Copied" : "Copy" }}
+                      </button>
+                      @if (failed() === tip.rank + "-" + ti + "-" + si) {
+                        <textarea class="manual" readonly rows="3" [value]="text(step)"></textarea>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+              @if (tip.more > 0) {
+                <p class="muted">+{{ tip.more }} more</p>
+              }
+              <p>
+                <a href="#finding-{{ tip.kind }}" class="see" (click)="see($event, tip.kind)"
+                  >See the finding</a
+                >
+              </p>
+            </article>
+          } @empty {
+            <p class="muted none">{{ noTips(t.threshold) }}</p>
+          }
+          @if (t.below_threshold > 0) {
+            <p class="muted below">
+              {{ t.below_threshold }} more findings save less than {{ pct(t.threshold) }} each; they
+              are listed below.
+            </p>
+          }
+        </section>
+      }
       @if (report(); as r) {
         <p class="lead">
           {{ r.sessions }} sessions, {{ r.installed_skills }} installed skills; their names and
@@ -115,7 +231,7 @@ export function findingSaving(f: Finding): string | null {
           tokens in the period.
         </p>
         @for (f of r.findings; track f.kind) {
-          <section class="finding">
+          <section class="finding" [attr.id]="'finding-' + f.kind">
             <h3>
               <span class="rank">{{ f.rank }}.</span> {{ title(f.kind) }} ({{ f.count }})
             </h3>
@@ -170,6 +286,51 @@ export function findingSaving(f: Finding): string | null {
     .lead {
       margin: 8px 0 12px;
     }
+    .tips h3 {
+      margin: 12px 0 8px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin: 0 0 10px;
+    }
+    .card h4 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+    }
+    .confidence {
+      margin-left: 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .target {
+      margin: 6px 0;
+    }
+    .target p {
+      margin: 2px 0;
+    }
+    .step {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 2px 0 2px 12px;
+    }
+    .client {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    code {
+      font-family: ui-monospace, monospace;
+      font-size: 0.85rem;
+      word-break: break-all;
+    }
+    .manual {
+      width: 100%;
+      font-family: ui-monospace, monospace;
+    }
     .finding {
       margin: 18px 0 24px;
     }
@@ -196,6 +357,48 @@ export function findingSaving(f: Finding): string | null {
 export class Advice {
   protected readonly res = analysis<AdviceReport>("advice");
   protected readonly report = computed(() => this.res.value()?.data ?? null);
+  protected readonly tipsRes = analysis<TipsReport>("tips");
+  protected readonly tipsReport = computed(() =>
+    this.tipsRes.hasValue() ? this.tipsRes.value().data : null,
+  );
+  protected readonly tipSaving = tipSaving;
+  protected readonly text = stepText;
+  protected readonly noTips = noTipsText;
+  protected readonly pct = percent;
+  protected readonly copied = signal<string | null>(null);
+  protected readonly failed = signal<string | null>(null);
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  private timer: ReturnType<typeof setTimeout> | undefined;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => clearTimeout(this.timer));
+  }
+
+  /** Writes the step to the clipboard and shows “Copied” for two seconds; a failed write shows the text selected. */
+  protected async copy(key: string, step: TipStep): Promise<void> {
+    clearTimeout(this.timer);
+    try {
+      await navigator.clipboard.writeText(stepText(step));
+    } catch {
+      this.copied.set(null);
+      this.failed.set(key);
+      afterNextRender(
+        () => this.host.nativeElement.querySelector<HTMLTextAreaElement>(".manual")?.select(),
+        { injector: this.injector },
+      );
+      return;
+    }
+    this.failed.set(null);
+    this.copied.set(key);
+    this.timer = setTimeout(() => this.copied.set(null), COPIED_MS);
+  }
+
+  protected see(event: Event, kind: FindingKind): void {
+    event.preventDefault();
+    document.getElementById(`finding-${kind}`)?.scrollIntoView({ block: "start" });
+  }
   protected readonly tokens = tokens;
   protected readonly exact = exactTokens;
   protected readonly title = findingTitle;
