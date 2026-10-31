@@ -274,6 +274,9 @@ pub struct SkillInvoked {
     pub content_bytes: Option<u64>,
     /// Estimated tokens of that content (never measured), if known.
     pub content_tokens: Option<u64>,
+    /// The load happened in a subagent, not in the main agent.
+    #[serde(default)]
+    pub subagent: bool,
 }
 
 impl SkillInvoked {
@@ -284,6 +287,7 @@ impl SkillInvoked {
             path: None,
             content_bytes: None,
             content_tokens: None,
+            subagent: false,
         }
     }
 }

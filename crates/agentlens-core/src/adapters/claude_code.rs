@@ -710,10 +710,9 @@ impl Parser<'_> {
             if name == "Skill"
                 && let Some(skill) = str_of(input, "skill")
             {
-                let i = self.push(
-                    at,
-                    EventKind::SkillInvoked(SkillInvoked::new(skill, SkillTrigger::Model)),
-                );
+                let mut load = SkillInvoked::new(skill, SkillTrigger::Model);
+                load.subagent = subagent;
+                let i = self.push(at, EventKind::SkillInvoked(load));
                 if let Some(id) = tool_id {
                     self.skill_idx.insert(id, i);
                 }
@@ -801,10 +800,9 @@ impl Parser<'_> {
                 }
             }
             if !BUILTIN_COMMANDS.contains(&command) {
-                let i = self.push(
-                    at,
-                    EventKind::SkillInvoked(SkillInvoked::new(command, SkillTrigger::User)),
-                );
+                let mut load = SkillInvoked::new(command, SkillTrigger::User);
+                load.subagent = subagent;
+                let i = self.push(at, EventKind::SkillInvoked(load));
                 self.pending_slash = Some(i);
             }
             return;

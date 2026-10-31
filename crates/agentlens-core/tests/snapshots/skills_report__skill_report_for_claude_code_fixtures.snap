@@ -99,6 +99,16 @@ expression: report
           "count": 18,
           "measured": false
         }
+      },
+      "quality": {
+        "repeat_loads": 0,
+        "misfires": 1,
+        "compactions_soon": 0,
+        "follow_on_calls": 0,
+        "follow_on_errors": 0,
+        "baseline_calls": 1,
+        "baseline_errors": 0,
+        "follow_on_retry_loops": 0
       }
     },
     {
@@ -163,6 +173,16 @@ expression: report
           "count": 18,
           "measured": false
         }
+      },
+      "quality": {
+        "repeat_loads": 0,
+        "misfires": 0,
+        "compactions_soon": 0,
+        "follow_on_calls": 0,
+        "follow_on_errors": 0,
+        "baseline_calls": 1,
+        "baseline_errors": 0,
+        "follow_on_retry_loops": 0
       }
     },
     {
@@ -221,6 +241,16 @@ expression: report
           "count": 21,
           "measured": false
         }
+      },
+      "quality": {
+        "repeat_loads": 0,
+        "misfires": 0,
+        "compactions_soon": 0,
+        "follow_on_calls": 0,
+        "follow_on_errors": 0,
+        "baseline_calls": 0,
+        "baseline_errors": 0,
+        "follow_on_retry_loops": 0
       }
     }
   ],

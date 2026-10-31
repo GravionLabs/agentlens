@@ -25,6 +25,19 @@ Two columns are often zero, and that is normal: `user` is zero when you let the 
 
 Clients that attribute usage to a skill itself (Claude Code through an [OpenTelemetry export](../telemetry.md)) add an `attributed` column with the measured tokens of those requests. The **follow-on** columns count what happened after the skill until the next user turn, skill or compaction.
 
+The `quality` object of every skill holds signals of how the work went after its loads. They count loads of the main agent only (loads inside a subagent get no signals until every subagent run has its own identity) and are signals, not proof: they show where to look, not that a skill is bad.
+
+| Signal | Meaning |
+| :-- | :-- |
+| `repeat_loads` | loads of a skill that the main agent had already loaded in the same session with no compaction in between (any trigger: the body is in the context twice) |
+| `misfires` | model loads whose follow-on window ends at a user turn and holds no tool call and no file use of the skill; a window that ends at another skill load (a dispatch) or at a compaction is work, and a window that ends with the session is undecidable and not counted |
+| `compactions_soon` | loads whose follow-on window ends at a compaction |
+| `follow_on_calls`, `follow_on_errors` | all tool calls in the follow-on windows and those that failed (an unknown outcome is no error) |
+| `baseline_calls`, `baseline_errors` | the tool calls of the same sessions outside the skill's follow-on windows, to compare the error rate after the skill with the rest of its sessions |
+| `follow_on_retry_loops` | retry loops (see **Retry loops** below) whose first call lies inside a follow-on window |
+
+A skill that only the user started is one with `triggers.user` above zero and `triggers.model` zero.
+
 ## Advice
 
 ```sh

@@ -358,6 +358,7 @@ fn parse_session(
                     Some("agent-invoked") => SkillTrigger::Model,
                     _ => SkillTrigger::User,
                 };
+                // `subagent` stays false: the source does not mark loads inside a subagent.
                 let mut ev = SkillInvoked::new(name, trigger);
                 ev.path = str_of(data, "path").map(PathBuf::from);
                 ev.content_bytes = data

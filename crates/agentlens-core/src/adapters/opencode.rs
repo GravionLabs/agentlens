@@ -618,7 +618,7 @@ fn read_session(store: &Store, row: &SessionRow, run: Option<RunLink>, se: &mut 
     {
         let msg = messages.get(&message_id);
         match str_of(&part, "type") {
-            Some("tool") => tool_part(&part, se),
+            Some("tool") => tool_part(&part, subagent, se),
             Some("step-finish") => {
                 let model = msg.and_then(|m| m.model.clone());
                 let usage = usage_of(
@@ -665,7 +665,7 @@ fn message_info(m: &Raw) -> MessageInfo {
     }
 }
 
-fn tool_part(part: &Value, se: &mut SessionEvents) {
+fn tool_part(part: &Value, subagent: bool, se: &mut SessionEvents) {
     let Some(name) = str_of(part, "tool") else {
         return;
     };
@@ -700,6 +700,7 @@ fn tool_part(part: &Value, se: &mut SessionEvents) {
         && let Some(skill) = str_of(input, "name")
     {
         let mut ev = SkillInvoked::new(skill, SkillTrigger::Model);
+        ev.subagent = subagent;
         ev.path = state
             .get("metadata")
             .and_then(|m| str_of(m, "dir"))
