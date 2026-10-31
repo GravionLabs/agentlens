@@ -44,6 +44,16 @@ async fn advice(
     blocking(&ctx, move |c| api::advice(c, &filters)).await
 }
 
+/// The top changes to make, ready to apply (`limit` defaults to 5).
+#[tauri::command]
+async fn tips(
+    ctx: Shared<'_>,
+    filters: Filters,
+    limit: Option<usize>,
+) -> Result<Answer<agentlens_core::analyzers::tips::TipsReport>, String> {
+    blocking(&ctx, move |c| api::tips(c, &filters, limit.unwrap_or(5))).await
+}
+
 #[tauri::command]
 async fn skills(ctx: Shared<'_>, filters: Filters) -> Result<Answer<api::SkillsData>, String> {
     blocking(&ctx, move |c| api::skills(c, &filters)).await
@@ -283,6 +293,7 @@ pub fn run() {
             overview,
             skills,
             advice,
+            tips,
             context,
             unused,
             flow,

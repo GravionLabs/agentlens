@@ -4,6 +4,7 @@ import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { RouterLink } from "@angular/router";
 import { Ipc } from "../../core/ipc";
 import samples from "../../core/samples/overview.json";
 import { Overview } from "./overview";
@@ -16,15 +17,22 @@ class HeaderStub {
 
 let payload: unknown = samples;
 
+let tipsPayload: unknown = { data: { tips: [] }, warnings: 0, errors: [] };
+let tipsFail = false;
+
 class FakeIpc extends Ipc {
-  override async invoke<T>(): Promise<T> {
+  override async invoke<T>(command: string): Promise<T> {
+    if (command === "tips") {
+      if (tipsFail) throw new Error("boom");
+      return tipsPayload as T;
+    }
     return payload as T;
   }
 }
 
 async function render() {
   TestBed.overrideComponent(Overview, {
-    set: { imports: [HeaderStub], schemas: [NO_ERRORS_SCHEMA] },
+    set: { imports: [HeaderStub, RouterLink], schemas: [NO_ERRORS_SCHEMA] },
   });
   TestBed.configureTestingModule({
     providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
@@ -41,6 +49,8 @@ beforeAll(() => {
 });
 afterEach(() => {
   payload = samples;
+  tipsFail = false;
+  tipsPayload = { data: { tips: [] }, warnings: 0, errors: [] };
   TestBed.resetTestingModule();
   document.querySelectorAll(".cdk-overlay-container").forEach((e) => e.remove());
 });
@@ -77,5 +87,36 @@ describe("Overview", () => {
     const el = await render();
     expect(el.querySelectorAll(".card")).toHaveLength(0);
     expect(el.querySelector("h2")?.textContent?.trim()).toBe("Sources");
+  });
+
+  it("shows the top tip with a link to the Advice view", async () => {
+    tipsPayload = {
+      data: {
+        tips: [
+          {
+            headline: "Remove 2 unused skills",
+            saving_usd: 1.234,
+            share: 0.05,
+            saving: { count: 9, measured: false },
+          },
+        ],
+      },
+      warnings: 0,
+      errors: [],
+    };
+    const el = await render();
+    const card = el.querySelector(".top-tip")!;
+    expect(card.textContent).toContain("Remove 2 unused skills");
+    expect(card.textContent).toContain("~$1.23");
+    expect(card.querySelector("a")!.getAttribute("href")).toBe("/advice");
+  });
+
+  it("shows no tip card without a tip, and stays silent when the tips fail", async () => {
+    expect((await render()).querySelector(".top-tip")).toBeNull();
+    TestBed.resetTestingModule();
+    tipsFail = true;
+    const el = await render();
+    expect(el.querySelector(".top-tip")).toBeNull();
+    expect(el.querySelectorAll(".card h3")).toHaveLength(4);
   });
 });

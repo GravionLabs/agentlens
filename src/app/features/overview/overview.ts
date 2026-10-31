@@ -1,17 +1,19 @@
+import { RouterLink } from "@angular/router";
+import { tipSaving } from "../advice/advice";
 import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
 import { analysis, trendAnalysis } from "../../core/analysis";
 import { FiltersService } from "../../core/filters.service";
 import { trendNote } from "../../core/delta";
 import { number, sourceLabel } from "../../core/format";
-import type { SourceOverview } from "../../core/types";
+import type { SourceOverview, TipsReport } from "../../core/types";
 import { trendStat } from "../../ui/stat-cards";
 import { TrendCards } from "../../ui/trend-cards";
 import { Status } from "../../ui/status";
 
 @Component({
   selector: "app-overview",
-  imports: [PageHeader, Status, TrendCards],
+  imports: [PageHeader, Status, TrendCards, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="view">
@@ -38,6 +40,14 @@ import { Status } from "../../ui/status";
           [loading]="trend.isLoading()"
           [error]="trend.error()"
         />
+      }
+      @if (topTip(); as tip) {
+        <article class="card top-tip">
+          <h3>Top tip</h3>
+          <p>{{ tip.headline }}</p>
+          <p class="big">{{ saving(tip) }}</p>
+          <p><a routerLink="/advice">See the tips</a></p>
+        </article>
       }
       <div class="cards">
         @for (s of sources(); track s.source) {
@@ -83,6 +93,12 @@ import { Status } from "../../ui/status";
       margin: 0 0 6px;
       font-size: 1rem;
     }
+    .top-tip {
+      margin-top: 12px;
+    }
+    .top-tip p {
+      margin: 4px 0;
+    }
     .missing {
       opacity: 0.65;
     }
@@ -113,6 +129,12 @@ import { Status } from "../../ui/status";
 })
 export class Overview {
   protected readonly res = analysis<SourceOverview[]>("overview");
+  // The Overview stays silent when the tips fail; the Advice view shows the error.
+  private readonly tips = analysis<TipsReport>("tips", () => ({ limit: 1 }));
+  protected readonly topTip = computed(() =>
+    this.tips.hasValue() ? (this.tips.value().data.tips[0] ?? null) : null,
+  );
+  protected readonly saving = tipSaving;
   protected readonly sources = computed(() => this.res.value()?.data ?? []);
   protected readonly compare = inject(FiltersService).compare;
   protected readonly trend = trendAnalysis();

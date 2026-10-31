@@ -11,6 +11,7 @@ import type {
   SessionSummary,
   SkillsData,
   SourceOverview,
+  TipsReport,
   Timeline,
   TrendReport,
   UnusedReport,
@@ -26,6 +27,7 @@ import overview from "./samples/overview.json";
 import sessions from "./samples/sessions.json";
 import skills from "./samples/skills.json";
 import timeline from "./samples/timeline.json";
+import tips from "./samples/tips.json";
 import trend from "./samples/trend.json";
 import unused from "./samples/unused.json";
 
@@ -37,6 +39,7 @@ describe("samples from the backend", () => {
       overview as unknown as Answer<SourceOverview[]>,
       skills as unknown as Answer<SkillsData>,
       advice as unknown as Answer<AdviceReport>,
+      tips as unknown as Answer<TipsReport>,
       context as unknown as Answer<ContextReport>,
       unused as unknown as Answer<UnusedReport>,
       flow as unknown as Answer<FlowData>,

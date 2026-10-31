@@ -68,16 +68,16 @@
       },
       "estimated_usd": {
         "before": 0.0,
-        "after": 0.0,
-        "change": 0.0,
+        "after": 0.0005416071428571429,
+        "change": 0.0005416071428571429,
         "change_pct": null,
         "measured": false
       },
       "unpriced_requests": {
         "before": 0.03333333333333333,
-        "after": 0.21428571428571427,
-        "change": 0.18095238095238095,
-        "change_pct": 542.8571428571429,
+        "after": 0.0,
+        "change": -0.03333333333333333,
+        "change_pct": -100.0,
         "measured": true
       }
     },

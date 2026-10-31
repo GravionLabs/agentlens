@@ -25,6 +25,7 @@ const SAMPLES: Record<string, () => Promise<{ default: unknown }>> = {
   overview: () => import("./samples/overview.json"),
   skills: () => import("./samples/skills.json"),
   advice: () => import("./samples/advice.json"),
+  tips: () => import("./samples/tips.json"),
   context: () => import("./samples/context.json"),
   unused: () => import("./samples/unused.json"),
   flow: () => import("./samples/flow.json"),
