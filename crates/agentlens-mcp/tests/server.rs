@@ -304,6 +304,28 @@ fn a_relative_until_counts_back_from_now() {
 }
 
 #[test]
+fn the_cost_tool_prices_out_the_items_of_without() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    let result = client.call(
+        "cost",
+        json!({"by": "model", "without": ["skill:demo", "skill:nothing"]}),
+    );
+    assert_eq!(result["isError"], false, "{result}");
+    let without = &result["structuredContent"]["data"]["without"];
+    assert_eq!(without["rows"][0]["item"], "demo", "{without}");
+    assert_eq!(without["rows"][0]["kind"], "skill");
+    assert_eq!(without["rows"][0]["tokens"]["measured"], false);
+    assert_eq!(
+        without["warnings"].as_array().unwrap().len(),
+        1,
+        "{without}"
+    );
+    let bad = client.call("cost", json!({"without": ["nonsense"]}));
+    assert_eq!(bad["isError"], true, "{bad}");
+}
+
+#[test]
 fn until_not_after_since_is_an_error_the_agent_can_read() {
     let home = home();
     let mut client = Client::start(home.path());
@@ -424,6 +446,10 @@ fn the_optimize_prompt_tells_an_agent_how_to_analyze_a_skill_setup() {
         "ranked by what each could have saved",
         "An `inferred` saving rests on an assumption",
         "working habits too",
+        "`without`",
+        "`skill:NAME`",
+        "`mcp-server:NAME`",
+        "is an estimate",
     ] {
         assert!(text.contains(needle), "{needle} missing in {text}");
     }

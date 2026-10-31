@@ -15,6 +15,7 @@ use crate::analyzers::advice::AdviceReport;
 use crate::analyzers::compare::CompareReport;
 use crate::analyzers::context::ContextReport;
 use crate::analyzers::cost::{CostReport, Grouping, WhatIfReport};
+use crate::analyzers::cost_without::{self, WithoutReport};
 use crate::analyzers::efficiency::{CacheBy, EfficiencyReport};
 use crate::analyzers::flow::{ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::SkillReport;
@@ -414,14 +415,18 @@ fn load_prices(ctx: &Context) -> Result<PriceTable, String> {
 pub struct CostData {
     pub report: CostReport,
     pub what_if: Option<WhatIfReport>,
+    /// Set if `without` named items.
+    pub without: Option<WithoutReport>,
 }
 
-/// `by` is `model`, `project`, `branch`, `issue` or `session`; `what_if` is a model id prefix.
+/// `by` is `model`, `project`, `branch`, `issue` or `session`; `what_if` is a model id prefix;
+/// `without` lists `KIND:NAME` items whose listing is priced out of the requests.
 pub fn cost(
     ctx: &Context,
     f: &Filters,
     by: &str,
     what_if: Option<&str>,
+    without: &[String],
 ) -> Result<Answer<CostData>, String> {
     let group = match by {
         "model" => Grouping::Model,
@@ -439,6 +444,7 @@ pub fn cost(
     {
         return Err(format!("no price for the what-if model `{model}`"));
     }
+    let without = cost_without::parse_items(without)?;
     let run = pipeline::cost_run(
         &ctx.registry,
         &ctx.env,
@@ -448,10 +454,12 @@ pub fn cost(
         &prices,
         group,
         what_if,
+        &without,
     );
     let data = CostData {
         report: run.report,
         what_if: run.what_if,
+        without: run.without,
     };
     answer(data, run.warnings, run.errors)
 }
@@ -524,6 +532,8 @@ pub struct ExportOptions {
     pub by: Option<String>,
     /// The what-if model of the cost view.
     pub what_if: Option<String>,
+    /// The `KIND:NAME` items of the cost view's `without`.
+    pub without: Vec<String>,
     /// The unused view lists items that have been used too, like `--all`.
     pub all: Option<bool>,
     /// The tab of the flow view (`growth`, `errors` or `hooks`) or the table of the efficiency
@@ -658,10 +668,11 @@ pub fn export(
         }
         ("cost", "csv") => {
             let by = options.by.as_deref().unwrap_or("model");
-            let a = cost(ctx, f, by, options.what_if.as_deref())?;
-            let content = match &a.data.what_if {
-                Some(w) => csv_export::what_if(w),
-                None => csv_export::cost(&a.data.report.rows, by),
+            let a = cost(ctx, f, by, options.what_if.as_deref(), &options.without)?;
+            let content = match (&a.data.without, &a.data.what_if) {
+                (Some(w), _) => csv_export::without(w),
+                (None, Some(w)) => csv_export::what_if(w),
+                (None, None) => csv_export::cost(&a.data.report.rows, by),
             };
             csv_file(view, content, a.warnings, a.errors)
         }
@@ -693,7 +704,11 @@ pub fn export(
         ("compare", "json") => exported(view, format, compare(ctx, f)?),
         ("cost", "json") => {
             let by = options.by.as_deref().unwrap_or("model");
-            exported(view, format, cost(ctx, f, by, options.what_if.as_deref())?)
+            exported(
+                view,
+                format,
+                cost(ctx, f, by, options.what_if.as_deref(), &options.without)?,
+            )
         }
         ("efficiency", "json") => {
             let by = options.by.as_deref().unwrap_or("session");
@@ -739,7 +754,7 @@ mod tests {
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(&file, "{ nope").unwrap();
         assert!(
-            cost(&ctx, &Filters::default(), "model", None).is_err(),
+            cost(&ctx, &Filters::default(), "model", None, &[]).is_err(),
             "cost fails hard"
         );
         let a = advice(&ctx, &Filters::default()).expect("advice falls back to the bundled prices");
@@ -890,6 +905,31 @@ mod tests {
         let roles = run(Some("roles")).unwrap().content;
         assert!(roles.starts_with("role,kind,runs,"), "{roles}");
         assert_eq!(run(Some("nope")).unwrap_err(), "unknown section `nope`");
+    }
+
+    #[test]
+    fn cost_csv_export_takes_the_without_table_when_it_is_set() {
+        let (_dir, ctx) = old_session_context();
+        let f = Filters::default();
+        let run = |without: &[&str]| {
+            export(
+                &ctx,
+                "cost",
+                "csv",
+                &f,
+                &ExportOptions {
+                    without: without.iter().map(|s| (*s).to_owned()).collect(),
+                    what_if: Some("claude-haiku-4-5".into()),
+                    ..ExportOptions::default()
+                },
+            )
+        };
+        let csv = run(&["skill:nope"]).unwrap().content;
+        assert!(csv.starts_with("item,kind,installations,"), "{csv}");
+        let plain = run(&[]).unwrap().content;
+        assert!(plain.starts_with("model,requests,actual_usd,"), "{plain}");
+        let err = run(&["nope"]).unwrap_err();
+        assert!(err.contains("KIND:NAME"), "{err}");
     }
 
     #[test]

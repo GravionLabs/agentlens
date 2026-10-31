@@ -12,7 +12,7 @@
 | `context`              | static context: tool listings, MCP instructions, instruction files, agent and skill listings     |
 | `unused`               | installed skills, agents and MCP servers nobody used, and what they cost while idle               |
 | `flow`                 | context growth and compactions, tool errors and retry loops, hooks and permission waits           |
-| `cost`                 | USD per model, project, branch, issue or session, measured and estimated apart; `what_if` compares a model |
+| `cost`                 | USD per model, project, branch, issue or session, measured and estimated apart; `what_if` compares a model, `without` (`skill:NAME`, `agent:NAME`, `mcp-server:NAME`) estimates what removing items saves |
 | `efficiency`           | prompt cache hit rate and the subagents' share                                                    |
 | `compare`              | the agents side by side over the same sessions                                                    |
 | `trend`                | what changed: the period next to a comparison window (`against`, `"SINCE..UNTIL"`; default the window right before), with the change of every figure |
@@ -24,7 +24,7 @@ Every tool takes the filter of the CLI (`since`, `until`, `sources`, `project`, 
 
 Besides the tools the server offers two things that make an analysis easier for an agent:
 
-- **The prompt `optimize-skills`** tells the agent how to analyze a skill setup: call `advice` first, read the glossary where a field is unclear, look closer with the other tools, trust measured numbers and say when a conclusion rests on an estimate, call a skill unused only if it was neither loaded nor used through its files, and change nothing without asking. It takes an optional `since` (default `30d`). Clients that list prompts show it as a command, in Claude Code as `/mcp__agentlens__optimize-skills`.
+- **The prompt `optimize-skills`** tells the agent how to analyze a skill setup: call `advice` first, read the glossary where a field is unclear, look closer with the other tools, trust measured numbers and say when a conclusion rests on an estimate, call a skill unused only if it was neither loaded nor used through its files, price out the top findings about skills, agents and MCP servers with `cost` and `without` (an estimate, said as such), and change nothing without asking. It takes an optional `since` (default `30d`). Clients that list prompts show it as a command, in Claude Code as `/mcp__agentlens__optimize-skills`.
 - **The resource `agentlens://glossary`** is the [glossary](glossary.md) in Markdown, made from the same source as the application's Glossary view, so a field name in a result (`load`, `carry`, `baseline`, `follow_on`, `file_uses`) can be looked up where the data is instead of guessed. The tool descriptions point to it.
 
 ## Registering it in a client

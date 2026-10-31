@@ -24,7 +24,8 @@ use support::TempHome;
 fn setup() -> (TempHome, Context) {
     let home = TempHome::new();
     // A Claude Code session with context items, one in which skill folders are used, one with a typed
-    // skill command, one with a retry loop, and a Copilot CLI session with its store.
+    // skill command, one with a retry loop, three that carried their context on (one opened by a /clear,
+    // one compacted twice, one near the limit), and a Copilot CLI session with its store.
     home.copy_fixture(
         "claude_code/context.jsonl",
         ".claude/projects/-work-demo/context.jsonl",
@@ -41,6 +42,12 @@ fn setup() -> (TempHome, Context) {
         "claude_code/retry_loop.jsonl",
         ".claude/projects/-work-demo/retry_loop.jsonl",
     );
+    for fixture in ["clear_at_start", "two_compactions", "near_limit"] {
+        home.copy_fixture(
+            &format!("claude_code/{fixture}.jsonl"),
+            &format!(".claude/projects/-work-demo/{fixture}.jsonl"),
+        );
+    }
     home.copy_fixture(
         "copilot_cli/with_store.jsonl",
         ".copilot/session-state/cp-1/events.jsonl",
@@ -113,17 +120,39 @@ fn the_json_of_every_analysis_keeps_its_shape() {
     snap("flow", text(&home, &api::flow(&ctx, &all()).unwrap()));
     snap(
         "cost",
-        text(&home, &api::cost(&ctx, &all(), "model", None).unwrap()),
+        text(&home, &api::cost(&ctx, &all(), "model", None, &[]).unwrap()),
     );
     snap(
         "cost_by_session",
-        text(&home, &api::cost(&ctx, &all(), "session", None).unwrap()),
+        text(
+            &home,
+            &api::cost(&ctx, &all(), "session", None, &[]).unwrap(),
+        ),
     );
     snap(
         "cost_what_if",
         text(
             &home,
-            &api::cost(&ctx, &all(), "project", Some("claude-haiku-4-5")).unwrap(),
+            &api::cost(&ctx, &all(), "project", Some("claude-haiku-4-5"), &[]).unwrap(),
+        ),
+    );
+    snap(
+        "cost_without",
+        text(
+            &home,
+            &api::cost(
+                &ctx,
+                &all(),
+                "model",
+                Some("claude-haiku-4-5"),
+                &[
+                    "skill:demo".to_owned(),
+                    "agent:reviewer".to_owned(),
+                    "mcp-server:claude.ai Claude Docs".to_owned(),
+                    "skill:no-such-skill".to_owned(),
+                ],
+            )
+            .unwrap(),
         ),
     );
     snap(

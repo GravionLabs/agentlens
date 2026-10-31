@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::analyzers::context::ContextReport;
+use crate::analyzers::efficiency::{self, CacheBy, SubagentShare};
 use crate::analyzers::flow;
 use crate::analyzers::skills::{LARGE_CONTEXT_TOKENS, SkillReport, SkillStats};
 use crate::analyzers::unused::{calls_server, norm};
@@ -33,6 +34,35 @@ pub const CACHE_READ_WEIGHT: f64 = 0.1;
 pub const TOP: usize = 10;
 /// A skill needs this many requests after it for its average context size to mean something.
 pub const MIN_FOLLOW_ON_REQUESTS: u64 = 20;
+/// A request is small for the ModelMix finding when it wrote fewer output tokens than this ...
+pub const SMALL_OUTPUT_TOKENS: u64 = 500;
+/// ... and sent fewer input tokens (input, cache read and cache write) than this. Together they keep it
+/// below the requests of the Context size finding.
+pub const SMALL_CONTEXT_TOKENS: u64 = 50_000;
+/// The ModelMix finding needs at least this many small requests on the costliest model of a client.
+pub const MIN_MODEL_MIX_REQUESTS: u64 = 20;
+/// The ModelMix finding needs a saving of at least this share of the period's cost (0.05 is 5 %).
+pub const MIN_MODEL_MIX_SHARE: f64 = 0.05;
+/// A session compacted at least this many times carried its context on through several tasks
+/// (ContextHygiene).
+pub const MANY_COMPACTIONS: usize = 2;
+/// The ContextHygiene finding needs at least this many flagged sessions ...
+pub const MIN_HYGIENE_SESSIONS: usize = 3;
+/// ... and a saving of at least this share of the period's cost (0.05 is 5 %); of the period's tokens
+/// when the period has no price at all.
+pub const MIN_HYGIENE_SHARE: f64 = 0.05;
+/// A session of a client that records no `/clear` counts as a fresh start (an estimate) when it began at
+/// most this many seconds after another session of the same client, project and branch ended.
+pub const CLEAR_PROXY_SECONDS: i64 = 60;
+/// The clients whose adapters record subagent requests. Only they can show "almost no delegation": for
+/// the others a share of zero means the client does not say, not that the user never delegates. A fixed
+/// list on purpose: a data-driven rule would leave out exactly the user who never delegates.
+pub const DELEGATING_SOURCES: [Source; 3] =
+    [Source::ClaudeCode, Source::OpenCode, Source::CopilotCli];
+/// The Delegation finding needs a subagent share below this share of a client's requests (0.05 is 5 %) ...
+pub const DELEGATION_MAX_SHARE: f64 = 0.05;
+/// ... and at least this many main-agent requests with [`LARGE_CONTEXT_TOKENS`] of input in that client.
+pub const MIN_DELEGATION_REQUESTS: u64 = 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -55,6 +85,13 @@ pub enum FindingKind {
     ContextSize,
     /// The same failing tool call repeated: every retry sends the whole context again.
     RetryLoops,
+    /// Small requests on the costliest model that the next cheaper model, already in use, could have answered.
+    ModelMix,
+    /// Sessions that carried their context on after the task was done: near the limit without a
+    /// compaction, or compacted again and again.
+    ContextHygiene,
+    /// Work on a large context with almost no subagent requests: reading and research stay in the main context.
+    Delegation,
 }
 
 impl FindingKind {
@@ -88,6 +125,15 @@ impl FindingKind {
             FindingKind::RetryLoops => {
                 "Three or more identical tool calls in a row whose first two failed. Each retry sends the whole context again, and the call fails for the same reason until the cause is fixed."
             }
+            FindingKind::ModelMix => {
+                "Short answers on a large model cost the same input as long ones. These requests were small (little output, a small context) and ran on the costliest model of the client, although a cheaper model was in use as well."
+            }
+            FindingKind::ContextHygiene => {
+                "Context that is carried on after the task is done is paid on every request. These sessions came near the limit of the context window without a compaction, or were compacted again and again instead of starting fresh."
+            }
+            FindingKind::Delegation => {
+                "Research and long reads that happen in the main context are carried on every later request; a subagent reads them in its own context and returns a summary. These clients ran many requests on a large context and almost none by subagents. No saving is estimated: what a subagent would have kept out of the main context cannot be counted from the requests."
+            }
         }
     }
 
@@ -120,6 +166,15 @@ impl FindingKind {
             }
             FindingKind::RetryLoops => {
                 "Read the tool error and fix the cause, such as a missing file, a wrong path, a permission or a hook. When a hook failed inside the loop, check the hook configuration first."
+            }
+            FindingKind::ModelMix => {
+                "Pick the model per task (`/model` in Claude Code, the model picker of the other clients) and give subagents a cheaper model."
+            }
+            FindingKind::ContextHygiene => {
+                "Clear the context between tasks (`/clear` in Claude Code, a new session in the other clients), compact before the limit (`/compact`), and keep sessions short."
+            }
+            FindingKind::Delegation => {
+                "Delegate file searches, log reading and reviews to subagents, and keep the main context for decisions."
             }
         }
     }
@@ -287,60 +342,277 @@ impl ContextSaving {
     pub fn tokens(&self) -> u64 {
         self.input + self.cache_read + self.cache_write
     }
+
+    /// What is left after taking away `other`, a part of the same requests.
+    fn without(&self, other: &ContextSaving) -> ContextSaving {
+        ContextSaving {
+            input: self.input.saturating_sub(other.input),
+            cache_read: self.cache_read.saturating_sub(other.cache_read),
+            cache_write: self.cache_write.saturating_sub(other.cache_write),
+            requests: self.requests.saturating_sub(other.requests),
+            usd: (self.usd - other.usd).max(0.0),
+            priced_requests: self.priced_requests.saturating_sub(other.priced_requests),
+            unpriced_requests: self
+                .unpriced_requests
+                .saturating_sub(other.unpriced_requests),
+            unpriced_input: self.unpriced_input.saturating_sub(other.unpriced_input),
+            unpriced_cache_read: self
+                .unpriced_cache_read
+                .saturating_sub(other.unpriced_cache_read),
+            unpriced_cache_write: self
+                .unpriced_cache_write
+                .saturating_sub(other.unpriced_cache_write),
+        }
+    }
 }
 
 /// The saving of the Context size finding, from the requests the skill report does not keep.
 ///
-/// When ContextHygiene (#346) lands, it subtracts what that finding already counts, so that nothing is
-/// counted twice.
+/// [`analyze_with`] takes away the requests that the ContextHygiene finding counts when it shows that
+/// finding ([`ContextHygieneUse::overlap`]), so that nothing is counted twice.
 pub fn context_saving(sessions: &[SessionEvents], prices: &PriceTable) -> ContextSaving {
     let mut out = ContextSaving::default();
     for se in sessions {
-        let mut first: Option<u64> = None;
-        for u in se.events.iter().filter_map(|e| match &e.kind {
-            EventKind::Usage(u) if !u.subagent => Some(u),
-            _ => None,
-        }) {
-            let total = u.total_input();
-            let start = *first.get_or_insert(total);
-            if total < LARGE_CONTEXT_TOKENS {
-                continue;
+        add_growth_saving(&mut out, se, prices, LARGE_CONTEXT_TOKENS);
+    }
+    out
+}
+
+/// Adds to `out` the saving of one session: on every main-agent request with at least `min` tokens of
+/// input, the input above the size of the session's first main-agent request, split in the request's own
+/// input : cache read : cache write ratio and priced with its own model. Returns the saved tokens and
+/// whether all requests behind them were measured.
+fn add_growth_saving(
+    out: &mut ContextSaving,
+    se: &SessionEvents,
+    prices: &PriceTable,
+    min: u64,
+) -> (u64, bool) {
+    let mut tokens = 0;
+    let mut measured = true;
+    let mut first: Option<u64> = None;
+    for u in se.events.iter().filter_map(|e| match &e.kind {
+        EventKind::Usage(u) if !u.subagent => Some(u),
+        _ => None,
+    }) {
+        let total = u.total_input();
+        let start = *first.get_or_insert(total);
+        if total < min {
+            continue;
+        }
+        out.requests += 1;
+        let saved = total.saturating_sub(start);
+        if saved == 0 {
+            continue;
+        }
+        tokens += saved;
+        measured &= u.measured;
+        let part = |class: u64| (u128::from(saved) * u128::from(class) / u128::from(total)) as u64;
+        let (input, cache_write) = (part(u.input), part(u.cache_write));
+        let saved_usage = Usage {
+            model: u.model.clone(),
+            input,
+            cache_write,
+            cache_read: saved - input - cache_write,
+            ..Usage::default()
+        };
+        out.input += saved_usage.input;
+        out.cache_read += saved_usage.cache_read;
+        out.cache_write += saved_usage.cache_write;
+        match u
+            .model
+            .as_deref()
+            .and_then(|m| prices.compute(m, &saved_usage))
+        {
+            Some(usd) => {
+                out.usd += usd;
+                out.priced_requests += 1;
             }
-            out.requests += 1;
-            let saved = total.saturating_sub(start);
-            if saved == 0 {
-                continue;
-            }
-            let part =
-                |class: u64| (u128::from(saved) * u128::from(class) / u128::from(total)) as u64;
-            let (input, cache_write) = (part(u.input), part(u.cache_write));
-            let saved_usage = Usage {
-                model: u.model.clone(),
-                input,
-                cache_write,
-                cache_read: saved - input - cache_write,
-                ..Usage::default()
-            };
-            out.input += saved_usage.input;
-            out.cache_read += saved_usage.cache_read;
-            out.cache_write += saved_usage.cache_write;
-            match u
-                .model
-                .as_deref()
-                .and_then(|m| prices.compute(m, &saved_usage))
-            {
-                Some(usd) => {
-                    out.usd += usd;
-                    out.priced_requests += 1;
-                }
-                None => {
-                    out.unpriced_requests += 1;
-                    out.unpriced_input += saved_usage.input;
-                    out.unpriced_cache_read += saved_usage.cache_read;
-                    out.unpriced_cache_write += saved_usage.cache_write;
-                }
+            None => {
+                out.unpriced_requests += 1;
+                out.unpriced_input += saved_usage.input;
+                out.unpriced_cache_read += saved_usage.cache_read;
+                out.unpriced_cache_write += saved_usage.cache_write;
             }
         }
+    }
+    (tokens, measured)
+}
+
+/// One session the ContextHygiene finding flags, with its evidence.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct HygieneSession {
+    pub source: Option<Source>,
+    pub session: String,
+    pub project: Option<PathBuf>,
+    /// Main-agent requests.
+    pub requests: u64,
+    /// The context of the first and of the largest main-agent request.
+    pub first_tokens: u64,
+    pub peak_tokens: u64,
+    pub compactions: u64,
+    /// The average context right before a compaction; `None` without one.
+    pub before_compaction: Option<u64>,
+    /// The limit the session was compared with (see [`flow::SessionGrowth`]), if one is known.
+    pub window: Option<u64>,
+    pub near_limit: bool,
+    /// Fresh starts: recorded `/clear` events (measured), or 1 if the proxy saw one (estimated).
+    pub clears: u64,
+    pub clears_measured: bool,
+    /// The saving of this session (see [`hygiene_saving`]) and whether its requests were measured.
+    pub saved: u64,
+    pub measured: bool,
+}
+
+/// The input of the ContextHygiene finding.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ContextHygieneUse {
+    /// The flagged sessions, largest peak first.
+    pub sessions: Vec<HygieneSession>,
+    /// The saving over all main-agent requests of the flagged sessions (`requests` counts them all).
+    pub saving: ContextSaving,
+    /// The part of [`context_saving`] that lies in the flagged sessions: what the Context size finding
+    /// leaves out when this finding is shown.
+    pub overlap: ContextSaving,
+    /// What all requests of the period cost, for the share of the saving: the reported cost, else the
+    /// computed one; requests without a price are not in it.
+    pub period_usd: f64,
+    /// Sessions of the period that started fresh: after a recorded `/clear`, and by the proxy.
+    pub fresh_measured: u64,
+    pub fresh_estimated: u64,
+}
+
+/// Clients that record a `/clear` as [`EventKind::Clear`]; the others count with the proxy.
+fn records_clear(source: Source) -> bool {
+    source == Source::ClaudeCode
+}
+
+/// The fresh starts of every session, `(count, measured)`: the recorded [`EventKind::Clear`] events of a
+/// client that records them, else 1 when the session began at most [`CLEAR_PROXY_SECONDS`] after another
+/// session of the same client, project and branch ended (an estimate). The same branch on purpose: an
+/// unattended queue starts a fresh session per task on another branch, and that is no `/clear`.
+fn fresh_starts(sessions: &[SessionEvents]) -> Vec<(u64, bool)> {
+    type Key<'a> = (Source, Option<&'a std::path::Path>, Option<&'a str>);
+    fn key(se: &SessionEvents) -> Key<'_> {
+        (
+            se.session.source,
+            se.session.project_dir.as_deref(),
+            se.session.branch.as_deref(),
+        )
+    }
+    // Per key of the proxy: the end of each session (in milliseconds) and its index, sorted.
+    let mut ends: BTreeMap<Key, Vec<(i64, usize)>> = BTreeMap::new();
+    for (i, se) in sessions.iter().enumerate() {
+        if records_clear(se.session.source) {
+            continue;
+        }
+        if let Some(end) = se.session.ended_at {
+            ends.entry(key(se))
+                .or_default()
+                .push((end.as_millisecond(), i));
+        }
+    }
+    for v in ends.values_mut() {
+        v.sort_unstable();
+    }
+    sessions
+        .iter()
+        .enumerate()
+        .map(|(i, se)| {
+            if records_clear(se.session.source) {
+                let clears = se
+                    .events
+                    .iter()
+                    .filter(|e| matches!(e.kind, EventKind::Clear))
+                    .count() as u64;
+                return (clears, true);
+            }
+            let Some(start) = se.session.started_at.map(|t| t.as_millisecond()) else {
+                return (0, false);
+            };
+            let window = CLEAR_PROXY_SECONDS * 1_000;
+            let after = ends.get(&key(se)).is_some_and(|v| {
+                let from = v.partition_point(|&(end, _)| end < start - window);
+                v[from..]
+                    .iter()
+                    .take_while(|&&(end, _)| end <= start)
+                    .any(|&(_, j)| j != i)
+            });
+            (u64::from(after), false)
+        })
+        .collect()
+}
+
+/// The input of the ContextHygiene finding.
+///
+/// A session is flagged when it reached the near-limit flag of [`flow::SessionGrowth`] without a
+/// compaction, or has at least [`MANY_COMPACTIONS`] compactions. The saving is, on every main-agent
+/// request of a flagged session, the input above the size of the session's first main-agent request (the
+/// quantity of [`context_saving`] without its threshold), priced per request with its own model.
+pub fn hygiene_saving(sessions: &[SessionEvents], prices: &PriceTable) -> ContextHygieneUse {
+    let mut out = ContextHygieneUse::default();
+    let fresh = fresh_starts(sessions);
+    for &(count, measured) in &fresh {
+        if count > 0 {
+            if measured {
+                out.fresh_measured += 1;
+            } else {
+                out.fresh_estimated += 1;
+            }
+        }
+    }
+    for se in sessions {
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            let mut usage = u.clone();
+            if usage.model.is_none() {
+                usage.model = se.session.model.clone();
+            }
+            if let Some(c) = prices.cost(&usage) {
+                out.period_usd += c.usd;
+            }
+        }
+    }
+    let index: std::collections::HashMap<(Source, &str), usize> = sessions
+        .iter()
+        .enumerate()
+        .map(|(i, se)| ((se.session.source, se.session.id.as_str()), i))
+        .collect();
+    for g in flow::growth(sessions).sessions {
+        let compactions = g.compactions.len();
+        let flagged = (g.near_limit && compactions == 0) || compactions >= MANY_COMPACTIONS;
+        let Some(&i) = index.get(&(g.source, g.session.as_str())) else {
+            continue;
+        };
+        if !flagged {
+            continue;
+        }
+        let se = &sessions[i];
+        let (saved, measured) = add_growth_saving(&mut out.saving, se, prices, 0);
+        add_growth_saving(&mut out.overlap, se, prices, LARGE_CONTEXT_TOKENS);
+        let (clears, clears_measured) = fresh[i];
+        out.sessions.push(HygieneSession {
+            source: Some(g.source),
+            session: g.session,
+            project: g.project,
+            requests: g.requests,
+            first_tokens: g.first_tokens,
+            peak_tokens: g.peak_tokens,
+            compactions: compactions as u64,
+            before_compaction: g
+                .compactions
+                .iter()
+                .sum::<u64>()
+                .checked_div(compactions as u64),
+            window: g.window,
+            near_limit: g.near_limit,
+            clears,
+            clears_measured,
+            saved,
+            measured,
+        });
     }
     out
 }
@@ -503,6 +775,250 @@ pub fn retry_saving(sessions: &[SessionEvents], prices: &PriceTable) -> RetryLoo
     }
 }
 
+/// One client in the input of the Delegation finding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DelegationSource {
+    /// The client's requests and subagent requests, as the efficiency analysis counts them.
+    pub share: SubagentShare,
+    /// Main-agent requests with at least [`LARGE_CONTEXT_TOKENS`] of input.
+    pub large_requests: u64,
+    /// Whether every request of the client was measured.
+    pub measured: bool,
+}
+
+impl DelegationSource {
+    /// Subagent requests over all requests, 0 without requests.
+    pub fn subagent_share(&self) -> f64 {
+        share(self.share.subagent_requests, self.share.requests).unwrap_or(0.0)
+    }
+
+    fn qualifies(&self) -> bool {
+        DELEGATING_SOURCES.contains(&self.share.source)
+            && self.large_requests >= MIN_DELEGATION_REQUESTS
+            && self.subagent_share() < DELEGATION_MAX_SHARE
+    }
+}
+
+/// One session in the input of the Delegation finding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DelegationSession {
+    pub id: String,
+    pub source: Source,
+    pub project: Option<PathBuf>,
+    pub large_requests: u64,
+    pub subagent_requests: u64,
+    pub measured: bool,
+}
+
+/// The input of the Delegation finding.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct DelegationUse {
+    /// Per client, ordered by client.
+    pub sources: Vec<DelegationSource>,
+    /// Sessions with at least one large-context main-agent request, most of them first.
+    pub sessions: Vec<DelegationSession>,
+    /// All requests of the period and those that were main-agent requests on a large context.
+    pub requests: u64,
+    pub large_requests: u64,
+}
+
+/// The input of the Delegation finding: per client the subagent share of [`efficiency::analyze`] and the
+/// main-agent requests with at least [`LARGE_CONTEXT_TOKENS`] of input, and the same per session.
+pub fn delegation_use(sessions: &[SessionEvents]) -> DelegationUse {
+    let shares = efficiency::analyze(sessions, &PriceTable::default(), CacheBy::Source).subagents;
+    let mut out = DelegationUse::default();
+    let mut large: BTreeMap<Source, (u64, bool)> = BTreeMap::new();
+    for se in sessions {
+        let mut row = DelegationSession {
+            id: se.session.id.clone(),
+            source: se.session.source,
+            project: se.session.project_dir.clone(),
+            large_requests: 0,
+            subagent_requests: 0,
+            measured: true,
+        };
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            out.requests += 1;
+            let entry = large.entry(row.source).or_insert((0, true));
+            entry.1 &= u.measured;
+            row.measured &= u.measured;
+            if u.subagent {
+                row.subagent_requests += 1;
+            } else if u.total_input() >= LARGE_CONTEXT_TOKENS {
+                row.large_requests += 1;
+                entry.0 += 1;
+                out.large_requests += 1;
+            }
+        }
+        if row.large_requests > 0 {
+            out.sessions.push(row);
+        }
+    }
+    out.sources = shares
+        .into_iter()
+        .map(|share| {
+            let (large_requests, measured) = large.get(&share.source).copied().unwrap_or((0, true));
+            DelegationSource {
+                share,
+                large_requests,
+                measured,
+            }
+        })
+        .collect();
+    out.sessions.sort_by(|a, b| {
+        b.large_requests
+            .cmp(&a.large_requests)
+            .then_with(|| a.source.id().cmp(b.source.id()))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    out
+}
+
+/// The small requests of the costliest model of one client, and what the next cheaper model would have cost.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ModelMixRow {
+    pub source: Option<Source>,
+    /// The model with the highest list input price that ran at this client.
+    pub model: String,
+    /// The next lower list price among the models that ran at this client.
+    pub cheaper: String,
+    /// All requests of `model`, main agent and subagents.
+    pub requests: u64,
+    /// Those with `output < SMALL_OUTPUT_TOKENS` and `total_input() < SMALL_CONTEXT_TOKENS`.
+    pub small_requests: u64,
+    /// Of the small requests, those a subagent made.
+    pub subagent_requests: u64,
+    /// The input of the small requests split by token class.
+    pub input_tokens: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
+    /// `false` if one of the small requests was estimated, not reported.
+    pub measured: bool,
+    /// The saving in USD: the cost on `model` minus the cost on `cheaper`, summed over the small requests.
+    pub usd: f64,
+}
+
+impl ModelMixRow {
+    pub fn tokens(&self) -> u64 {
+        self.input_tokens + self.cache_read + self.cache_write
+    }
+}
+
+/// The input of the ModelMix finding: one row per client with a pair of models.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ModelMixUse {
+    pub rows: Vec<ModelMixRow>,
+    /// What all requests of the period cost, for the share of the saving: the reported cost, else the
+    /// computed one; requests without a price are not in it.
+    pub period_usd: f64,
+    /// Small requests of models without a price (or without any model): they are on no pair, so they
+    /// are left out of the saving; counted here so that a note can say so.
+    pub unpriced_requests: u64,
+}
+
+/// The costliest entry (ties: the first by name) of `models`, optionally only below a price.
+fn priciest(models: &BTreeMap<String, f64>, below: Option<f64>) -> Option<(&String, f64)> {
+    let mut best: Option<(&String, f64)> = None;
+    for (m, &p) in models {
+        if below.is_some_and(|b| p >= b) {
+            continue;
+        }
+        if best.is_none_or(|(_, bp)| p > bp) {
+            best = Some((m, p));
+        }
+    }
+    best
+}
+
+/// The input of the ModelMix finding.
+///
+/// Per client, the costliest model is the priced model with the highest list input price among those that
+/// ran in the period, the cheaper one the next lower list price among the priced models that ran there; a
+/// client with one priced model has no pair. A request's model is `Usage.model`, else the session's. The
+/// saving of a small request is `PriceTable::compute(costliest) - PriceTable::compute(cheaper)` on its own
+/// tokens.
+pub fn model_mix_saving(sessions: &[SessionEvents], prices: &PriceTable) -> ModelMixUse {
+    let model_of =
+        |se: &SessionEvents, u: &Usage| u.model.clone().or_else(|| se.session.model.clone());
+    let list_price = |m: &str| prices.rates(m, 0).map(|r| r.input);
+    let mut out = ModelMixUse::default();
+    // Per client: the priced models that ran, with their list input price.
+    let mut ran: BTreeMap<Source, BTreeMap<String, f64>> = BTreeMap::new();
+    for se in sessions {
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            let mut usage = u.clone();
+            usage.model = model_of(se, u);
+            if let Some(m) = &usage.model
+                && let Some(p) = list_price(m)
+            {
+                ran.entry(se.session.source)
+                    .or_default()
+                    .insert(m.clone(), p);
+            }
+            if let Some(c) = prices.cost(&usage) {
+                out.period_usd += c.usd;
+            }
+        }
+    }
+    let mut pairs: BTreeMap<Source, (String, String)> = BTreeMap::new();
+    for (source, models) in &ran {
+        if let Some((top, price)) = priciest(models, None)
+            && let Some((cheaper, _)) = priciest(models, Some(price))
+        {
+            pairs.insert(*source, (top.clone(), cheaper.clone()));
+        }
+    }
+    let mut rows: BTreeMap<Source, ModelMixRow> = BTreeMap::new();
+    for se in sessions {
+        let source = se.session.source;
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            let small = u.output < SMALL_OUTPUT_TOKENS && u.total_input() < SMALL_CONTEXT_TOKENS;
+            let model = model_of(se, u);
+            if model.as_deref().and_then(list_price).is_none() {
+                out.unpriced_requests += u64::from(small);
+                continue;
+            }
+            let Some((top, cheaper)) = pairs.get(&source) else {
+                continue;
+            };
+            if model.as_deref() != Some(top.as_str()) {
+                continue;
+            }
+            let row = rows.entry(source).or_insert_with(|| ModelMixRow {
+                source: Some(source),
+                model: top.clone(),
+                cheaper: cheaper.clone(),
+                measured: true,
+                ..ModelMixRow::default()
+            });
+            row.requests += 1;
+            if !small {
+                continue;
+            }
+            row.small_requests += 1;
+            row.subagent_requests += u64::from(u.subagent);
+            row.measured &= u.measured;
+            row.input_tokens += u.input;
+            row.cache_read += u.cache_read;
+            row.cache_write += u.cache_write;
+            if let (Some(now), Some(then)) = (prices.compute(top, u), prices.compute(cheaper, u)) {
+                row.usd += now - then;
+            }
+        }
+    }
+    out.rows = rows.into_values().collect();
+    out
+}
+
 /// One skill in a finding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
@@ -516,6 +1032,28 @@ pub struct Item {
     /// For an unused skill: the installed agents, commands and skills whose files name it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub referenced_by: Vec<Reference>,
+    /// For a session (context size): the full session id, which `--session` takes. `name` is the
+    /// recognizable label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
+/// A recognizable name for a session: the project folder and the start of the id.
+fn session_label(project: Option<&std::path::Path>, id: &str) -> String {
+    let short: String = id.chars().take(8).collect();
+    let folder = project
+        .map(|p| p.to_string_lossy().into_owned())
+        .and_then(|p| {
+            p.trim_end_matches(['/', '\\'])
+                .rsplit(['/', '\\'])
+                .next()
+                .filter(|f| !f.is_empty())
+                .map(str::to_owned)
+        });
+    match folder {
+        Some(f) => format!("{f} · {short}"),
+        None => format!("(no project) · {short}"),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -619,6 +1157,9 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         &[],
         &ContextSaving::default(),
         &RetryLoopUse::default(),
+        &ModelMixUse::default(),
+        &ContextHygieneUse::default(),
+        &DelegationUse::default(),
         &Pricing::default(),
     )
 }
@@ -733,12 +1274,16 @@ pub fn mcp_servers(context: &ContextReport, sessions: &[SessionEvents]) -> Vec<M
 /// Like [`analyze`], and marks the unused skills that an agent, a command or a skill names, adds the MCP
 /// servers, and gives every finding its impact, priced with `pricing` (the Context size finding with
 /// the prices of `context`). The findings come ranked by that impact.
+#[allow(clippy::too_many_arguments)]
 pub fn analyze_with(
     report: &SkillReport,
     references: &References,
     mcp: &[McpServerUse],
     context: &ContextSaving,
     retries: &RetryLoopUse,
+    model_mix: &ModelMixUse,
+    hygiene: &ContextHygieneUse,
+    delegation: &DelegationUse,
     pricing: &Pricing,
 ) -> AdviceReport {
     let installed: Vec<&SkillStats> = report.skills.iter().filter(|s| s.in_inventory).collect();
@@ -839,6 +1384,7 @@ pub fn analyze_with(
                     detail
                 },
                 referenced_by: references.get(&s.name).cloned().unwrap_or_default(),
+                session_id: None,
             })
             .collect();
         let total = sum(&items);
@@ -891,6 +1437,7 @@ pub fn analyze_with(
                     times(s.file_uses)
                 ),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let total = Tokens {
@@ -945,6 +1492,7 @@ pub fn analyze_with(
                     n(saving(s))
                 ),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let mut f = finding(
@@ -985,6 +1533,7 @@ pub fn analyze_with(
                 requests: u64::from(s.invocations),
                 detail: format!("loaded {}", times(s.invocations)),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let mut f = finding(FindingKind::UsedButNotInstalled, items.len(), items, None);
@@ -1022,6 +1571,7 @@ pub fn analyze_with(
                     n(s.carry.requests)
                 ),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let carry_total = Tokens::estimated(bodies.iter().map(|s| s.carry.tokens.count).sum());
@@ -1098,6 +1648,7 @@ pub fn analyze_with(
                     n(s.follow_on.requests)
                 ),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let mut f = finding(FindingKind::LargeContext, heavy.len(), items, None);
@@ -1132,6 +1683,7 @@ pub fn analyze_with(
                     n(per_call(m))
                 ),
                 referenced_by: Vec::new(),
+                session_id: None,
             })
             .collect();
         let total = Tokens {
@@ -1165,6 +1717,29 @@ pub fn analyze_with(
         findings.push((f, weight));
     }
 
+    // Whether the ContextHygiene finding is shown: it decides whether Context size leaves out the requests
+    // of its sessions.
+    let hygiene_saved = hygiene.saving.tokens();
+    let hygiene_unpriced = Split {
+        input: hygiene.saving.unpriced_input as f64,
+        cache_read: hygiene.saving.unpriced_cache_read as f64,
+        cache_write: hygiene.saving.unpriced_cache_write as f64,
+    };
+    let hygiene_usd = (hygiene.saving.priced_requests > 0 || pricing.is_priced())
+        .then(|| hygiene.saving.usd + pricing.usd(&hygiene_unpriced).unwrap_or(0.0));
+    let hygiene_share = match hygiene_usd {
+        Some(usd) if hygiene.period_usd > 0.0 => usd / hygiene.period_usd,
+        _ => share(hygiene_saved, total_tokens.count).unwrap_or(0.0),
+    };
+    let show_hygiene = hygiene.sessions.len() >= MIN_HYGIENE_SESSIONS
+        && hygiene_saved > 0
+        && hygiene_share >= MIN_HYGIENE_SHARE;
+    let context = if show_hygiene {
+        context.without(&hygiene.overlap)
+    } else {
+        *context
+    };
+
     // The scale of it all: the context of every request, not the skills.
     let totals = &report.totals;
     if totals.requests > 0 {
@@ -1173,7 +1748,7 @@ pub fn analyze_with(
             .largest_sessions
             .iter()
             .map(|c| Item {
-                name: c.id.clone(),
+                name: session_label(c.project.as_deref(), &c.id),
                 tokens: Tokens {
                     count: c.average_context,
                     measured: totals.measured,
@@ -1185,6 +1760,7 @@ pub fn analyze_with(
                     n(c.requests)
                 ),
                 referenced_by: Vec::new(),
+                session_id: Some(c.id.clone()),
             })
             .collect();
         let mut f = finding(
@@ -1237,6 +1813,12 @@ pub fn analyze_with(
             "The saving assumes that the work on requests of at least {} tokens could have run in a fresh session, at the size of the session's first request; it is inferred.",
             n(LARGE_CONTEXT_TOKENS)
         ));
+        if show_hygiene && hygiene.overlap.requests > 0 {
+            f.notes.push(format!(
+                "{} of those requests lie in the sessions of the Context hygiene finding; they are left out here, that finding counts them.",
+                n(hygiene.overlap.requests)
+            ));
+        }
         if saved > 0 && context.unpriced_requests > 0 {
             f.notes.push(if pricing.is_priced() {
                 format!(
@@ -1298,6 +1880,7 @@ pub fn analyze_with(
                     requests: r.requests,
                     detail,
                     referenced_by: Vec::new(),
+                    session_id: None,
                 }
             })
             .collect();
@@ -1357,10 +1940,262 @@ pub fn analyze_with(
         findings.push((f, split.weight()));
     }
 
+    // Small requests on the costliest model of a client, next to the cheaper model it also ran.
+    let mut mix: Vec<&ModelMixRow> = model_mix
+        .rows
+        .iter()
+        .filter(|r| r.small_requests >= MIN_MODEL_MIX_REQUESTS)
+        .collect();
+    let mix_usd: f64 = mix.iter().map(|r| r.usd).sum();
+    if !mix.is_empty() && mix_usd > 0.0 && mix_usd >= MIN_MODEL_MIX_SHARE * model_mix.period_usd {
+        mix.sort_by(|a, b| b.usd.total_cmp(&a.usd).then_with(|| a.model.cmp(&b.model)));
+        let pct = |part: u64, whole: u64| share(part, whole).unwrap_or(0.0) * 100.0;
+        let items: Vec<Item> = mix
+            .iter()
+            .take(TOP)
+            .map(|r| Item {
+                name: r.model.clone(),
+                tokens: Tokens {
+                    count: r.tokens(),
+                    measured: r.measured,
+                },
+                requests: r.small_requests,
+                detail: format!(
+                    "{} of {} requests small ({:.1}%), {:.1}% of them by subagents; ~${:.2} saved on {}",
+                    n(r.small_requests),
+                    n(r.requests),
+                    pct(r.small_requests, r.requests),
+                    pct(r.subagent_requests, r.small_requests),
+                    r.usd,
+                    r.cheaper
+                ),
+                referenced_by: Vec::new(),
+                session_id: None,
+            })
+            .collect();
+        let tokens: u64 = mix.iter().map(|r| r.tokens()).sum();
+        let measured = mix.iter().all(|r| r.measured);
+        let mut f = finding(
+            FindingKind::ModelMix,
+            mix.len(),
+            items,
+            Some(Tokens {
+                count: tokens,
+                measured,
+            }),
+        );
+        f.share_of_total_tokens = share(tokens, total_tokens.count);
+        f.impact = Impact {
+            saving: Tokens::estimated(0),
+            saving_usd: Some(mix_usd),
+            confidence: Confidence::Inferred,
+        };
+        f.notes.push(format!(
+            "A request is small with fewer than {} output tokens and fewer than {} tokens of input. The saving is what the same tokens would have cost on the next cheaper model that ran in the same client, {:.1}% of the period's cost (~${:.2}); it assumes that model could have answered them, so it is inferred. A model switch saves cost, not tokens.",
+            n(SMALL_OUTPUT_TOKENS),
+            n(SMALL_CONTEXT_TOKENS),
+            mix_usd / model_mix.period_usd * 100.0,
+            model_mix.period_usd
+        ));
+        if !measured {
+            f.notes
+                .push("Some requests are estimated, not reported by the client.".to_owned());
+        }
+        if model_mix.unpriced_requests > 0 {
+            f.notes.push(format!(
+                "{} small requests had no price for their model; they are not in the saving.",
+                n(model_mix.unpriced_requests)
+            ));
+        }
+        findings.push((f, 0.0));
+    }
+
+    // Sessions that carried their context on: the input above their start on every request.
+    if show_hygiene {
+        let mut rows: Vec<&HygieneSession> = hygiene.sessions.iter().collect();
+        rows.sort_by(|a, b| {
+            b.saved
+                .cmp(&a.saved)
+                .then_with(|| a.session.cmp(&b.session))
+        });
+        let count = |value: u64, one: &str, many: &str| {
+            format!("{} {}", n(value), if value == 1 { one } else { many })
+        };
+        let items: Vec<Item> = rows
+            .iter()
+            .take(TOP)
+            .map(|h| {
+                let limit = if h.near_limit {
+                    "near the limit"
+                } else if h.window.is_some() {
+                    "not near the limit"
+                } else {
+                    "limit unknown"
+                };
+                let start = match h.before_compaction {
+                    Some(before) => format!(
+                        "{} tokens before a compaction against {} at the start",
+                        n(before),
+                        n(h.first_tokens)
+                    ),
+                    None => format!("{} tokens at the start", n(h.first_tokens)),
+                };
+                Item {
+                    name: session_label(h.project.as_deref(), &h.session),
+                    tokens: Tokens {
+                        count: h.saved,
+                        measured: h.measured,
+                    },
+                    requests: h.requests,
+                    detail: format!(
+                        "{}, peak {} tokens, {}, {}{}, {limit}; {start}",
+                        count(h.requests, "request", "requests"),
+                        n(h.peak_tokens),
+                        count(h.compactions, "compaction", "compactions"),
+                        if h.clears_measured { "" } else { "~" },
+                        count(h.clears, "clear", "clears"),
+                    ),
+                    referenced_by: Vec::new(),
+                    session_id: Some(h.session.clone()),
+                }
+            })
+            .collect();
+        let measured = rows.iter().all(|h| h.measured);
+        let total = Tokens {
+            count: hygiene_saved,
+            measured,
+        };
+        let mut f = finding(FindingKind::ContextHygiene, rows.len(), items, Some(total));
+        f.share_of_total_tokens = share(hygiene_saved, total_tokens.count);
+        f.impact = Impact {
+            saving: Tokens::estimated(hygiene_saved),
+            saving_usd: hygiene_usd,
+            confidence: Confidence::Inferred,
+        };
+        f.notes.push(format!(
+            "A session is listed when it came near the limit of its context window without a compaction, or was compacted at least {MANY_COMPACTIONS} times."
+        ));
+        f.notes.push(match hygiene_usd {
+            Some(usd) if hygiene.period_usd > 0.0 => format!(
+                "The saving is, on every main-agent request of these sessions, the input above the size of the session's first request: {:.1}% of the period's cost (~${:.2} of ~${:.2}). It assumes that the work could have started fresh at that size, so it is inferred.",
+                hygiene_share * 100.0,
+                usd,
+                hygiene.period_usd
+            ),
+            _ => format!(
+                "The saving is, on every main-agent request of these sessions, the input above the size of the session's first request: {:.1}% of the period's tokens (no price known). It assumes that the work could have started fresh at that size, so it is inferred.",
+                hygiene_share * 100.0
+            ),
+        });
+        f.notes.push(format!(
+            "Fresh starts in the period: {} after a recorded /clear (Claude Code), ~{} by the proxy for the clients that record none (a session that began at most {CLEAR_PROXY_SECONDS} seconds after another of the same client, project and branch ended).",
+            n(hygiene.fresh_measured),
+            n(hygiene.fresh_estimated)
+        ));
+        f.notes.push(
+            "The requests of these sessions are left out of the Context size saving, so the two savings add up."
+                .to_owned(),
+        );
+        if !measured {
+            f.notes
+                .push("Some requests are estimated, not reported by the client.".to_owned());
+        }
+        if hygiene.saving.unpriced_requests > 0 {
+            f.notes.push(if pricing.is_priced() {
+                format!(
+                    "{} of the requests with a saving had no price for their model; they are priced at the period's average price per token class.",
+                    n(hygiene.saving.unpriced_requests)
+                )
+            } else {
+                format!(
+                    "{} of the requests with a saving had no price for their model; their tokens are in the saving, not in the USD.",
+                    n(hygiene.saving.unpriced_requests)
+                )
+            });
+        }
+        let weight = Split {
+            input: hygiene.saving.input as f64,
+            cache_read: hygiene.saving.cache_read as f64,
+            cache_write: hygiene.saving.cache_write as f64,
+        }
+        .weight();
+        findings.push((f, weight));
+    }
+
+    // Work on a large context with almost no subagent requests. No saving: weight 0, Impact::none().
+    let delegating: Vec<&DelegationSource> = delegation
+        .sources
+        .iter()
+        .filter(|s| s.qualifies())
+        .collect();
+    if !delegating.is_empty() {
+        let pct = |part: u64, whole: u64| share(part, whole).unwrap_or(0.0) * 100.0;
+        let mut items: Vec<Item> = delegating
+            .iter()
+            .map(|s| Item {
+                name: s.share.source.id().to_owned(),
+                tokens: Tokens {
+                    count: s.share.tokens,
+                    measured: s.measured,
+                },
+                requests: s.share.requests,
+                detail: format!(
+                    "{} requests, {} on a large context, {} by subagents ({:.1}%)",
+                    n(s.share.requests),
+                    n(s.large_requests),
+                    n(s.share.subagent_requests),
+                    s.subagent_share() * 100.0
+                ),
+                referenced_by: Vec::new(),
+                session_id: None,
+            })
+            .collect();
+        let sources = items.len();
+        items.extend(
+            delegation
+                .sessions
+                .iter()
+                .filter(|s| delegating.iter().any(|d| d.share.source == s.source))
+                .take(TOP)
+                .map(|s| Item {
+                    name: session_label(s.project.as_deref(), &s.id),
+                    tokens: Tokens {
+                        count: 0,
+                        measured: s.measured,
+                    },
+                    requests: s.large_requests,
+                    detail: format!(
+                        "{} on a large context, {} by subagents",
+                        n(s.large_requests),
+                        n(s.subagent_requests)
+                    ),
+                    referenced_by: Vec::new(),
+                    session_id: Some(s.id.clone()),
+                }),
+        );
+        let mut f = finding(FindingKind::Delegation, sources, items, None);
+        f.notes.push(format!(
+            "{:.1}% of the period's requests ({} of {}) were main-agent requests on a large context (at least {} tokens of input).",
+            pct(delegation.large_requests, delegation.requests),
+            n(delegation.large_requests),
+            n(delegation.requests),
+            n(LARGE_CONTEXT_TOKENS)
+        ));
+        f.notes.push(format!(
+            "Shown for a client with a subagent share below {:.0}% and at least {} main-agent requests on a large context. The first rows are the clients, then the sessions with the most large-context requests. No saving is estimated.",
+            DELEGATION_MAX_SHARE * 100.0,
+            n(MIN_DELEGATION_REQUESTS)
+        ));
+        findings.push((f, 0.0));
+    }
+
     // Ranked by the USD saving, then by the weighted tokens, then in the order above; findings without
     // a saving last, in the order above (the sort is stable).
     findings.sort_by(|(a, wa), (b, wb)| {
-        let (sa, sb) = (a.impact.saving.count > 0, b.impact.saving.count > 0);
+        let has = |f: &Finding| {
+            f.impact.saving.count > 0 || f.impact.saving_usd.is_some_and(|usd| usd > 0.0)
+        };
+        let (sa, sb) = (has(a), has(b));
         sb.cmp(&sa).then_with(|| {
             if !(sa && sb) {
                 return std::cmp::Ordering::Equal;
@@ -1445,6 +2280,9 @@ mod tests {
             mcp,
             &ContextSaving::default(),
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::default(),
         )
     }
@@ -1594,13 +2432,50 @@ mod tests {
         let c = find(&a, FindingKind::ContextSize);
         assert_eq!(c.total, Some(Tokens::measured(900_000)));
         assert_eq!(c.share_of_total_tokens, Some(0.9));
-        assert_eq!(c.items[0].name, "s1");
+        assert_eq!(c.items[0].name, "(no project) · s1");
+        assert_eq!(c.items[0].session_id.as_deref(), Some("s1"));
         assert!(c.items[0].tokens.measured);
         assert_eq!(c.count, 3, "the sessions analyzed, not the ones listed");
         assert!(c.notes[0].contains("9,000 tokens"), "{:?}", c.notes);
         assert!(c.notes[0].contains("25.0%"), "{:?}", c.notes);
         assert!(c.notes[0].contains("10.0%"), "{:?}", c.notes);
         assert!(c.action.contains("fresh session"));
+    }
+
+    #[test]
+    fn context_size_names_a_session_by_project_folder_and_id_start() {
+        use crate::analyzers::skills::{PeriodTotals, SessionContext};
+        let session = |id: &str, project: Option<&str>| SessionContext {
+            id: id.into(),
+            project: project.map(Into::into),
+            requests: 10,
+            average_context: 9_000,
+        };
+        let mut r = report(vec![skill("idle", true, 0, 0, (10, 100))]);
+        r.totals = PeriodTotals {
+            requests: 30,
+            tokens: 100_000,
+            context_tokens: 90_000,
+            measured: true,
+            largest_sessions: vec![
+                session(
+                    "cad3c7a2-f626-4332-b1af-29291ebd5c7b",
+                    Some("/work/demo/shop/"),
+                ),
+                session("0123456789", Some("C:\\work\\api")),
+                session("abcdef12-0000", None),
+            ],
+            ..PeriodTotals::default()
+        };
+        let a = analyze(&r);
+        let c = find(&a, FindingKind::ContextSize);
+        assert_eq!(c.items[0].name, "shop · cad3c7a2");
+        assert_eq!(
+            c.items[0].session_id.as_deref(),
+            Some("cad3c7a2-f626-4332-b1af-29291ebd5c7b")
+        );
+        assert_eq!(c.items[1].name, "api · 01234567");
+        assert_eq!(c.items[2].name, "(no project) · abcdef12");
     }
 
     #[test]
@@ -2101,6 +2976,9 @@ mod tests {
             mcp,
             context,
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &pricing(),
         )
     }
@@ -2334,6 +3212,9 @@ mod tests {
             &[],
             &c,
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::default(),
         );
         let f = find(&a, FindingKind::ContextSize);
@@ -2417,6 +3298,9 @@ mod tests {
             &[],
             &context,
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::default(),
         );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
@@ -2437,6 +3321,9 @@ mod tests {
             &[],
             &write,
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::default(),
         );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
@@ -2449,6 +3336,9 @@ mod tests {
                 ..ContextSaving::default()
             },
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &Pricing::default(),
         );
         assert_eq!(
@@ -2503,6 +3393,9 @@ mod tests {
             &[],
             &ContextSaving::default(),
             &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             &p,
         );
         let f = find(&a, FindingKind::UnusedSkills);
@@ -2604,6 +3497,9 @@ mod tests {
             &[],
             &ContextSaving::default(),
             &retry_saving(sessions, &prices()),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
             pricing,
         )
     }
@@ -2839,5 +3735,733 @@ mod tests {
             find(&a, FindingKind::RetryLoops).total,
             Some(Tokens::estimated(200))
         );
+    }
+
+    /// $5 input / $0.5 cache read for `big`, $1 / $0.1 for `small`, `mid` in between.
+    fn mix_prices() -> PriceTable {
+        PriceTable::parse(
+            r#"{
+                "big": {"input": 5.0, "output": 25.0, "cache_write": 6.0, "cache_read": 0.5},
+                "mid": {"input": 3.0, "output": 15.0, "cache_write": 3.5, "cache_read": 0.3},
+                "small": {"input": 1.0, "output": 5.0, "cache_write": 1.25, "cache_read": 0.1}
+            }"#,
+        )
+        .unwrap()
+    }
+
+    fn mix_advice(sessions: &[SessionEvents]) -> AdviceReport {
+        let table = mix_prices();
+        analyze_with(
+            &report(vec![]),
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &RetryLoopUse::default(),
+            &model_mix_saving(sessions, &table),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
+            &Pricing::from_sessions(sessions, &table),
+        )
+    }
+
+    /// `count` small requests of 1,000 input tokens on `model`, the first `subagents` of them by subagents.
+    fn small(model: &'static str, count: usize, subagents: usize) -> Vec<Req<'static>> {
+        (0..count)
+            .map(|i| (model, 1_000, 0, 0, i < subagents))
+            .collect()
+    }
+
+    #[test]
+    fn small_requests_on_the_costliest_model_are_priced_on_the_next_cheaper_one() {
+        let mut reqs = small("big", 20, 5);
+        reqs.push(("big", 60_000, 0, 0, false)); // large: not small
+        reqs.push(("small", 1_000, 0, 0, false));
+        reqs.push(("mid", 1_000, 0, 0, false)); // the next lower price is mid, not small
+        let a = mix_advice(&[requests("s", &reqs)]);
+        let f = find(&a, FindingKind::ModelMix);
+        // 20 requests × 1,000 input × ($5 - $3) per million = $0.04.
+        assert!(
+            close(f.impact.saving_usd, 0.04),
+            "{:?}",
+            f.impact.saving_usd
+        );
+        assert_eq!(f.impact.confidence, Confidence::Inferred);
+        assert_eq!(f.items[0].name, "big");
+        assert_eq!((f.items[0].requests, f.items[0].tokens.count), (20, 20_000));
+        let detail = &f.items[0].detail;
+        assert!(detail.contains("20 of 21 requests small"), "{detail}");
+        assert!(detail.contains("25.0% of them by subagents"), "{detail}");
+        assert!(detail.ends_with("saved on mid"), "{detail}");
+        assert_eq!(f.total, Some(Tokens::measured(20_000)));
+        assert!(f.notes.iter().any(|n| n.contains("inferred")));
+    }
+
+    #[test]
+    fn a_single_model_is_no_finding() {
+        let a = mix_advice(&[requests("s", &small("big", 40, 0))]);
+        assert!(find_none(&a, FindingKind::ModelMix));
+    }
+
+    #[test]
+    fn fewer_than_the_minimum_of_small_requests_is_no_finding() {
+        let mut reqs = small("big", 19, 0);
+        reqs.push(("mid", 1_000, 0, 0, false));
+        assert!(find_none(
+            &mix_advice(&[requests("s", &reqs)]),
+            FindingKind::ModelMix
+        ));
+        reqs.push(("big", 1_000, 0, 0, false));
+        assert!(!find_none(
+            &mix_advice(&[requests("s", &reqs)]),
+            FindingKind::ModelMix
+        ));
+    }
+
+    #[test]
+    fn a_saving_below_five_percent_of_the_cost_is_no_finding() {
+        // The saving is $0.04; one large request of 10M tokens costs $50.
+        let mut reqs = small("big", 20, 0);
+        reqs.push(("mid", 1_000, 0, 0, false));
+        reqs.push(("big", 10_000_000, 0, 0, false));
+        assert!(find_none(
+            &mix_advice(&[requests("s", &reqs)]),
+            FindingKind::ModelMix
+        ));
+    }
+
+    #[test]
+    fn requests_without_a_price_are_left_out_and_noted() {
+        let mut reqs = small("big", 20, 0);
+        reqs.push(("mid", 1_000, 0, 0, false));
+        reqs.extend(small("mystery", 3, 0));
+        let sessions = [requests("s", &reqs)];
+        let m = model_mix_saving(&sessions, &mix_prices());
+        assert_eq!((m.unpriced_requests, m.rows[0].small_requests), (3, 20));
+        let a = mix_advice(&sessions);
+        let f = find(&a, FindingKind::ModelMix);
+        assert!(close(f.impact.saving_usd, 0.04));
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("3 small requests had no price"))
+        );
+    }
+
+    #[test]
+    fn the_pair_is_chosen_per_client() {
+        use crate::model::Session;
+        let mut other = requests("o", &small("small", 30, 0));
+        other.session = Session::new("o", Source::CopilotCli);
+        // Claude Code has big and mid, Copilot CLI only small: one finding row, for Claude Code.
+        let mut reqs = small("big", 20, 0);
+        reqs.push(("mid", 1_000, 0, 0, false));
+        let m = model_mix_saving(&[requests("s", &reqs), other], &mix_prices());
+        assert_eq!(m.rows.len(), 1);
+        assert_eq!(m.rows[0].source, Some(Source::ClaudeCode));
+    }
+
+    // ---- context hygiene ----
+
+    /// One event of a session built for the context hygiene tests.
+    enum Hy {
+        /// A main-agent request of this many tokens, all cache read.
+        Req(u64),
+        /// A subagent request of this many tokens.
+        Sub(u64),
+        Compact,
+    }
+
+    /// $2 input, $10 output, $2.50 cache write, $0.10 cache read for every `claude-h…` model, whose
+    /// documented window is 200,000 tokens.
+    fn hygiene_prices() -> PriceTable {
+        PriceTable::parse(
+            r#"{"claude-h": {"input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.1}}"#,
+        )
+        .unwrap()
+    }
+
+    fn hy(id: &str, source: Source, model: &str, events: &[Hy]) -> SessionEvents {
+        use crate::model::{Event, Session};
+        SessionEvents {
+            session: Session::new(id, source),
+            events: events
+                .iter()
+                .map(|e| Event {
+                    at: None,
+                    kind: match *e {
+                        Hy::Req(tokens) | Hy::Sub(tokens) => EventKind::Usage(Usage {
+                            model: Some(model.into()),
+                            cache_read: tokens,
+                            subagent: matches!(e, Hy::Sub(_)),
+                            measured: true,
+                            ..Usage::default()
+                        }),
+                        Hy::Compact => EventKind::Compaction,
+                    },
+                })
+                .collect(),
+            warnings: Vec::new(),
+        }
+    }
+
+    /// A session with two compactions: 10,000, 50,000, C, 20,000, 60,000, C, 30,000. The saving is
+    /// 40,000 + 10,000 + 50,000 + 20,000 = 120,000 tokens of cache read.
+    fn compacted(id: &str) -> SessionEvents {
+        use Hy::*;
+        hy(
+            id,
+            Source::ClaudeCode,
+            "claude-h1",
+            &[
+                Req(10_000),
+                Req(50_000),
+                Compact,
+                Req(20_000),
+                Req(60_000),
+                Compact,
+                Req(30_000),
+            ],
+        )
+    }
+
+    fn hygiene_advice(sessions: &[SessionEvents]) -> AdviceReport {
+        let table = hygiene_prices();
+        let mut r = report(vec![]);
+        r.totals.tokens = 1_000_000;
+        analyze_with(
+            &r,
+            &References::new(),
+            &[],
+            &context_saving(sessions, &table),
+            &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &hygiene_saving(sessions, &table),
+            &DelegationUse::default(),
+            &Pricing::from_sessions(sessions, &table),
+        )
+    }
+
+    fn flagged(sessions: &[SessionEvents]) -> Vec<String> {
+        hygiene_saving(sessions, &hygiene_prices())
+            .sessions
+            .into_iter()
+            .map(|h| h.session)
+            .collect()
+    }
+
+    #[test]
+    fn two_compactions_flag_a_session_and_one_does_not() {
+        use Hy::*;
+        let once = hy(
+            "once",
+            Source::ClaudeCode,
+            "claude-h1",
+            &[Req(10_000), Req(90_000), Compact, Req(20_000)],
+        );
+        assert_eq!(flagged(&[compacted("twice"), once]), ["twice"]);
+        let h = hygiene_saving(&[compacted("twice")], &hygiene_prices());
+        let s = &h.sessions[0];
+        assert_eq!(
+            (s.requests, s.first_tokens, s.peak_tokens, s.compactions),
+            (5, 10_000, 60_000, 2)
+        );
+        assert_eq!(s.before_compaction, Some(55_000), "(50,000 + 60,000) / 2");
+        assert!(!s.near_limit);
+        assert_eq!((s.saved, s.measured), (120_000, true));
+        assert_eq!(h.saving.cache_read, 120_000);
+        assert_eq!(h.saving.requests, 5, "every main-agent request");
+        // 120,000 × $0.10 per M.
+        assert!(close(Some(h.saving.usd), 0.012), "{}", h.saving.usd);
+    }
+
+    #[test]
+    fn near_the_limit_without_a_compaction_is_flagged_and_with_one_it_is_not() {
+        use Hy::*;
+        let near = hy(
+            "near",
+            Source::ClaudeCode,
+            "claude-h1",
+            &[Req(20_000), Req(120_000), Req(185_000), Sub(150_000)],
+        );
+        let near_compacted = hy(
+            "near-compacted",
+            Source::ClaudeCode,
+            "claude-h1",
+            &[Req(20_000), Req(185_000), Compact, Req(30_000)],
+        );
+        let far = hy(
+            "far",
+            Source::ClaudeCode,
+            "claude-h1",
+            &[Req(20_000), Req(100_000)],
+        );
+        let h = hygiene_saving(&[near, near_compacted, far], &hygiene_prices());
+        let ids: Vec<&str> = h.sessions.iter().map(|s| s.session.as_str()).collect();
+        assert_eq!(ids, ["near"]);
+        let s = &h.sessions[0];
+        assert!(s.near_limit);
+        assert_eq!((s.compactions, s.before_compaction), (0, None));
+        assert_eq!(s.window, Some(200_000));
+        // 100,000 + 165,000; the subagent's request is not the main context.
+        assert_eq!(s.saved, 265_000);
+        assert_eq!(s.requests, 3);
+    }
+
+    #[test]
+    fn the_finding_lists_the_flagged_sessions_with_their_evidence() {
+        use Hy::*;
+        let mut cleared = compacted("cleared");
+        cleared.events.insert(
+            0,
+            crate::model::Event {
+                at: None,
+                kind: EventKind::Clear,
+            },
+        );
+        cleared.session.project_dir = Some("/work/demo".into());
+        let near = hy(
+            "near",
+            Source::ClaudeCode,
+            "claude-h1",
+            &[Req(20_000), Req(185_000)],
+        );
+        let a = hygiene_advice(&[cleared, compacted("plain"), near]);
+        let f = find(&a, FindingKind::ContextHygiene);
+        assert_eq!(f.count, 3);
+        let names: Vec<&str> = f.items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "(no project) · near",
+                "demo · cleared",
+                "(no project) · plain"
+            ],
+            "largest saving first, then by id"
+        );
+        assert_eq!(
+            f.items[0].detail,
+            "2 requests, peak 185,000 tokens, 0 compactions, 0 clears, near the limit; 20,000 tokens at the start"
+        );
+        assert_eq!(
+            f.items[1].detail,
+            "5 requests, peak 60,000 tokens, 2 compactions, 1 clear, not near the limit; 55,000 tokens before a compaction against 10,000 at the start"
+        );
+        assert_eq!(f.items[1].session_id.as_deref(), Some("cleared"));
+        assert_eq!(f.items[1].tokens, Tokens::measured(120_000));
+        assert_eq!(f.total, Some(Tokens::measured(165_000 + 240_000)));
+        assert_eq!(f.share_of_total_tokens, Some(0.405));
+        assert_eq!(f.impact.saving, Tokens::estimated(405_000));
+        assert_eq!(f.impact.confidence, Confidence::Inferred);
+        // 405,000 × $0.10 per M.
+        assert!(close(f.impact.saving_usd, 0.0405), "{:?}", f.impact);
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("1 after a recorded /clear (Claude Code), ~0 by the proxy")),
+            "{:?}",
+            f.notes
+        );
+        assert!(f.notes.iter().any(|n| n.contains("% of the period's cost")));
+        assert!(f.action.contains("/clear"));
+    }
+
+    fn at(time: &str) -> Option<jiff::Timestamp> {
+        Some(format!("2026-10-03T{time}Z").parse().unwrap())
+    }
+
+    /// An OpenCode session in `/work/demo` on `branch`, from `start` to `end`, with two compactions.
+    fn proxied(id: &str, branch: &str, start: &str, end: &str) -> SessionEvents {
+        let mut se = compacted(id);
+        se.session.source = Source::OpenCode;
+        se.session.project_dir = Some("/work/demo".into());
+        se.session.branch = Some(branch.into());
+        se.session.started_at = at(start);
+        se.session.ended_at = at(end);
+        se
+    }
+
+    fn clears_of(sessions: &[SessionEvents]) -> Vec<(String, u64, bool)> {
+        hygiene_saving(sessions, &hygiene_prices())
+            .sessions
+            .into_iter()
+            .map(|h| (h.session, h.clears, h.clears_measured))
+            .collect::<Vec<_>>()
+    }
+
+    #[test]
+    fn the_proxy_counts_a_session_that_starts_right_after_another_on_the_same_branch() {
+        let clears = clears_of(&[
+            proxied("first", "feat/a", "10:00:00", "10:20:00"),
+            // 30 seconds after `first` ended, same branch: a fresh start, estimated.
+            proxied("same-branch", "feat/a", "10:20:30", "10:40:00"),
+            // A queue: right after, but on another branch.
+            proxied("other-branch", "feat/b", "10:40:10", "11:00:00"),
+            // 61 seconds after `other-branch` ended, on its branch.
+            proxied("too-late", "feat/b", "11:01:01", "11:20:00"),
+        ]);
+        let get = |id: &str| {
+            clears
+                .iter()
+                .find(|c| c.0 == id)
+                .map(|c| (c.1, c.2))
+                .unwrap()
+        };
+        assert_eq!(get("same-branch"), (1, false));
+        assert_eq!(get("other-branch"), (0, false));
+        assert_eq!(get("too-late"), (0, false));
+        assert_eq!(get("first"), (0, false));
+        let h = hygiene_saving(
+            &[
+                proxied("first", "feat/a", "10:00:00", "10:20:00"),
+                proxied("same-branch", "feat/a", "10:20:30", "10:40:00"),
+            ],
+            &hygiene_prices(),
+        );
+        assert_eq!((h.fresh_measured, h.fresh_estimated), (0, 1));
+    }
+
+    #[test]
+    fn the_proxy_is_not_applied_where_the_client_records_a_clear() {
+        let mut first = proxied("first", "feat/a", "10:00:00", "10:20:00");
+        let mut next = proxied("next", "feat/a", "10:20:30", "10:40:00");
+        first.session.source = Source::ClaudeCode;
+        next.session.source = Source::ClaudeCode;
+        assert_eq!(
+            clears_of(&[first.clone(), next.clone()])
+                .iter()
+                .map(|c| (c.1, c.2))
+                .collect::<Vec<_>>(),
+            [(0, true), (0, true)],
+            "no recorded clear, no proxy"
+        );
+        next.events.insert(
+            0,
+            crate::model::Event {
+                at: at("10:20:30"),
+                kind: EventKind::Clear,
+            },
+        );
+        let h = hygiene_saving(&[first, next], &hygiene_prices());
+        let next = h.sessions.iter().find(|s| s.session == "next").unwrap();
+        assert_eq!((next.clears, next.clears_measured), (1, true));
+        assert_eq!((h.fresh_measured, h.fresh_estimated), (1, 0));
+    }
+
+    #[test]
+    fn an_estimated_clear_carries_a_tilde() {
+        let a = hygiene_advice(&[
+            proxied("a", "feat/a", "10:00:00", "10:20:00"),
+            proxied("b", "feat/a", "10:20:30", "10:40:00"),
+            proxied("c", "feat/c", "12:00:00", "12:20:00"),
+        ]);
+        let f = find(&a, FindingKind::ContextHygiene);
+        let b = f.items.iter().find(|i| i.name == "demo · b").unwrap();
+        assert!(
+            b.detail.contains("2 compactions, ~1 clear,"),
+            "{}",
+            b.detail
+        );
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("0 after a recorded /clear (Claude Code), ~1 by the proxy")),
+            "{:?}",
+            f.notes
+        );
+    }
+
+    #[test]
+    fn fewer_than_three_flagged_sessions_are_no_finding() {
+        let a = hygiene_advice(&[compacted("a"), compacted("b")]);
+        assert!(find_none(&a, FindingKind::ContextHygiene));
+        let a = hygiene_advice(&[compacted("a"), compacted("b"), compacted("c")]);
+        assert!(!find_none(&a, FindingKind::ContextHygiene));
+    }
+
+    #[test]
+    fn a_saving_below_five_percent_of_the_period_cost_is_no_finding() {
+        // Three flagged sessions save 360,000 cache read tokens, $0.036; a request of 10M input costs $20.
+        // Another model, so that the compactions of the others give it no observed window.
+        let mut big = hy("big", Source::ClaudeCode, "claude-h2", &[]);
+        big.events.push(crate::model::Event {
+            at: None,
+            kind: EventKind::Usage(Usage {
+                model: Some("claude-h2".into()),
+                input: 10_000_000,
+                measured: true,
+                ..Usage::default()
+            }),
+        });
+        let sessions = [compacted("a"), compacted("b"), compacted("c"), big];
+        let h = hygiene_saving(&sessions, &hygiene_prices());
+        assert_eq!(h.sessions.len(), 3);
+        assert!(h.period_usd > 20.0);
+        assert!(find_none(
+            &hygiene_advice(&sessions),
+            FindingKind::ContextHygiene
+        ));
+        // Without any price the share is taken of the period's tokens: 360,000 of 1,000,000.
+        let unpriced: Vec<SessionEvents> = ["a", "b", "c"]
+            .iter()
+            .map(|id| {
+                let mut se = compacted(id);
+                for e in &mut se.events {
+                    if let EventKind::Usage(u) = &mut e.kind {
+                        u.model = Some("mystery".into());
+                    }
+                }
+                se
+            })
+            .collect();
+        let a = hygiene_advice(&unpriced);
+        let f = find(&a, FindingKind::ContextHygiene);
+        assert_eq!(f.impact.saving_usd, None);
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("36.0% of the period's tokens (no price known)"))
+        );
+        assert!(f.notes.iter().any(|n| n.contains("not in the USD")));
+        let mut r = report(vec![]);
+        r.totals.tokens = 100_000_000;
+        let table = hygiene_prices();
+        let a = analyze_with(
+            &r,
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &hygiene_saving(&unpriced, &table),
+            &DelegationUse::default(),
+            &Pricing::from_sessions(&unpriced, &table),
+        );
+        assert!(
+            find_none(&a, FindingKind::ContextHygiene),
+            "0.36% of the tokens"
+        );
+    }
+
+    #[test]
+    fn context_size_leaves_out_the_requests_of_the_flagged_sessions() {
+        use Hy::*;
+        // Three flagged sessions with requests of at least 200,000 tokens (the observed compaction window
+        // replaces the documented one), and one session that is not flagged.
+        let large = |id: &str| {
+            hy(
+                id,
+                Source::ClaudeCode,
+                "claude-h1",
+                &[
+                    Req(50_000),
+                    Req(250_000),
+                    Compact,
+                    Req(60_000),
+                    Req(300_000),
+                    Compact,
+                    Req(70_000),
+                ],
+            )
+        };
+        let calm = hy(
+            "calm",
+            Source::ClaudeCode,
+            "claude-h1",
+            &[Req(100_000), Req(220_000), Req(240_000)],
+        );
+        let sessions = [large("a"), large("b"), large("c"), calm.clone()];
+        let table = hygiene_prices();
+        let hygiene = hygiene_saving(&sessions, &table);
+        assert_eq!(flagged(&sessions), ["a", "b", "c"]);
+        let all = context_saving(&sessions, &table);
+        let only_calm = context_saving(std::slice::from_ref(&calm), &table);
+        let in_flagged = context_saving(&sessions[..3], &table);
+        assert_eq!(hygiene.overlap, in_flagged);
+        assert_eq!(all.requests, only_calm.requests + in_flagged.requests);
+
+        let mut r = report(vec![]);
+        r.totals.requests = 18;
+        r.totals.tokens = 10_000_000;
+        let a = analyze_with(
+            &r,
+            &References::new(),
+            &[],
+            &all,
+            &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &hygiene,
+            &DelegationUse::default(),
+            &Pricing::from_sessions(&sessions, &table),
+        );
+        let size = find(&a, FindingKind::ContextSize);
+        let hyg = find(&a, FindingKind::ContextHygiene);
+        // Context size keeps the calm session only: 120,000 + 140,000.
+        assert_eq!(size.impact.saving, Tokens::estimated(only_calm.tokens()));
+        assert_eq!(only_calm.tokens(), 260_000);
+        // ContextHygiene counts every request of a, b and c: 3 × (200,000 + 10,000 + 250,000 + 20,000).
+        assert_eq!(hyg.impact.saving, Tokens::estimated(3 * 480_000));
+        // No request in both: each session's requests are in exactly one of the two savings.
+        let flagged_ids: Vec<&str> = hyg
+            .items
+            .iter()
+            .filter_map(|i| i.session_id.as_deref())
+            .collect();
+        for se in &sessions {
+            let in_hygiene = flagged_ids.contains(&se.session.id.as_str());
+            let in_size =
+                !in_hygiene && context_saving(std::slice::from_ref(se), &table).requests > 0;
+            assert!(in_hygiene != in_size, "{} is in one finding", se.session.id);
+        }
+        assert!(
+            size.notes.iter().any(|n| n.starts_with(
+                "6 of those requests lie in the sessions of the Context hygiene finding"
+            )),
+            "{:?}",
+            size.notes
+        );
+        assert!(close(size.impact.saving_usd, only_calm.usd));
+
+        // Without the finding (two flagged sessions only) Context size keeps all of them.
+        let two = [large("a"), large("b"), calm];
+        let a = analyze_with(
+            &r,
+            &References::new(),
+            &[],
+            &context_saving(&two, &table),
+            &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &hygiene_saving(&two, &table),
+            &DelegationUse::default(),
+            &Pricing::from_sessions(&two, &table),
+        );
+        assert!(find_none(&a, FindingKind::ContextHygiene));
+        assert_eq!(
+            find(&a, FindingKind::ContextSize).impact.saving.count,
+            context_saving(&two, &table).tokens()
+        );
+    }
+    // ---- delegation ----
+
+    /// A session of `source` with `large` main-agent requests of 250,000 input tokens, `small` main-agent
+    /// requests of 1,000 and `sub` subagent requests of 250,000.
+    fn delegating(
+        id: &str,
+        source: Source,
+        large: usize,
+        small: usize,
+        sub: usize,
+    ) -> SessionEvents {
+        let mut se = requests(id, &[]);
+        se.session.source = source;
+        let mut reqs: Vec<Req> = Vec::new();
+        reqs.extend((0..large).map(|_| ("test-model", 250_000, 0, 0, false)));
+        reqs.extend((0..small).map(|_| ("test-model", 1_000, 0, 0, false)));
+        reqs.extend((0..sub).map(|_| ("test-model", 250_000, 0, 0, true)));
+        se.events = requests(id, &reqs).events;
+        se
+    }
+
+    fn delegation_advice(sessions: &[SessionEvents]) -> AdviceReport {
+        analyze_with(
+            &report(vec![]),
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &delegation_use(sessions),
+            &Pricing::default(),
+        )
+    }
+
+    #[test]
+    fn large_context_without_subagents_is_a_delegation_finding_without_a_saving() {
+        let a = delegation_advice(&[
+            delegating("a", Source::ClaudeCode, 20, 20, 0),
+            delegating("b", Source::ClaudeCode, 25, 0, 0),
+        ]);
+        let f = find(&a, FindingKind::Delegation);
+        assert_eq!(f.count, 1, "one client");
+        assert_eq!(f.impact, Impact::none());
+        assert!(f.explanation.contains("No saving is estimated"));
+        assert_eq!(
+            f.items[0].detail,
+            "65 requests, 45 on a large context, 0 by subagents (0.0%)"
+        );
+        // Sessions follow the clients, most large-context requests first.
+        assert_eq!(f.items[1].session_id.as_deref(), Some("b"));
+        assert_eq!(f.items[1].detail, "25 on a large context, 0 by subagents");
+        assert_eq!(f.items[2].session_id.as_deref(), Some("a"));
+        assert!(f.notes[0].starts_with("69.2% of the period's requests (45 of 65)"));
+    }
+
+    #[test]
+    fn the_sessions_are_the_top_ten() {
+        let sessions: Vec<SessionEvents> = (0..12)
+            .map(|i| delegating(&format!("s{i:02}"), Source::OpenCode, 20 + i, 0, 0))
+            .collect();
+        let f = delegation_advice(&sessions);
+        let f = find(&f, FindingKind::Delegation);
+        assert_eq!(f.items.len(), 1 + TOP);
+        assert_eq!(f.items[1].session_id.as_deref(), Some("s11"));
+    }
+
+    #[test]
+    fn no_delegation_finding_where_subagents_ran() {
+        // 1 of 41 requests by a subagent is 2.4 %: below 5 %, a finding. The fixture-like session
+        // with 3 subagent requests of 43 is 7 %: none.
+        let low = delegation_advice(&[delegating("a", Source::ClaudeCode, 40, 0, 1)]);
+        assert!(!find_none(&low, FindingKind::Delegation));
+        let high = delegation_advice(&[delegating("a", Source::ClaudeCode, 40, 0, 3)]);
+        assert!(find_none(&high, FindingKind::Delegation));
+    }
+
+    #[test]
+    fn a_share_just_above_five_percent_is_no_finding() {
+        let shown = |small, sub| {
+            let a = delegation_advice(&[delegating("a", Source::ClaudeCode, 20, small, sub)]);
+            !find_none(&a, FindingKind::Delegation)
+        };
+        assert!(!shown(17, 2), "2 of 39 is 5.13 %");
+        assert!(!shown(18, 2), "2 of 40 is exactly 5 %, which is not below");
+        assert!(shown(19, 2), "2 of 41 is 4.88 %");
+    }
+
+    #[test]
+    fn fewer_than_twenty_large_context_requests_is_no_finding() {
+        let a = delegation_advice(&[delegating("a", Source::ClaudeCode, 19, 100, 0)]);
+        assert!(find_none(&a, FindingKind::Delegation));
+        let a = delegation_advice(&[
+            delegating("a", Source::ClaudeCode, 10, 0, 0),
+            delegating("b", Source::ClaudeCode, 10, 0, 0),
+        ]);
+        assert!(
+            !find_none(&a, FindingKind::Delegation),
+            "the minimum counts per client, not per session"
+        );
+    }
+
+    #[test]
+    fn subagent_requests_do_not_count_as_large_context_main_agent_requests() {
+        let a = delegation_advice(&[delegating("a", Source::ClaudeCode, 19, 0, 1)]);
+        assert!(find_none(&a, FindingKind::Delegation));
+    }
+
+    #[test]
+    fn a_client_outside_the_list_is_no_finding() {
+        for source in [Source::VsCodeCopilot, Source::Otel] {
+            let a = delegation_advice(&[delegating("a", source, 50, 0, 0)]);
+            assert!(find_none(&a, FindingKind::Delegation), "{source:?}");
+        }
+        // Next to a client of the list, it is not shown in the rows.
+        let a = delegation_advice(&[
+            delegating("a", Source::CopilotCli, 30, 0, 0),
+            delegating("b", Source::Otel, 50, 0, 0),
+        ]);
+        let f = find(&a, FindingKind::Delegation);
+        assert_eq!(f.count, 1);
+        assert_eq!(f.items.len(), 2);
+        assert_eq!(f.items[0].name, "copilot-cli");
     }
 }

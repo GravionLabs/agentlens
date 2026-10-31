@@ -18,11 +18,15 @@ const TITLES: Record<FindingKind, string> = {
   "costly-mcp-servers": "Costly MCP servers",
   "context-size": "Context size",
   "retry-loops": "Retry loops",
+  "model-mix": "Model mix",
+  delegation: "Delegation",
+  "context-hygiene": "Context hygiene",
 };
 
 /** An advice item with the sortable token count and the estimate flag next to the display text. */
 export interface ItemView {
   name: string;
+  sessionId: string | null;
   tokens: number;
   tokensText: string;
   estimated: boolean;
@@ -33,6 +37,7 @@ export interface ItemView {
 export function itemView(i: AdviceItem): ItemView {
   return {
     name: i.name,
+    sessionId: i.session_id ?? null,
     tokens: i.tokens.count,
     tokensText: tokens(i.tokens.count, !i.tokens.measured),
     estimated: !i.tokens.measured,
@@ -124,7 +129,7 @@ export function findingSaving(f: Finding): string | null {
             }
             <hx-data-table
               [value]="views(f.items)"
-              [columns]="columns"
+              [columns]="columnsFor(f.kind)"
               emptyMessage="Nothing to show."
               [ariaLabel]="title(f.kind)"
             >
@@ -134,6 +139,9 @@ export function findingSaving(f: Finding): string | null {
               <ng-template hxColumnHeader="requests"
                 ><app-help-link term="request" label="Requests"
               /></ng-template>
+              <ng-template hxCell="name" let-row>
+                <span [attr.title]="row.sessionId">{{ row.name }}</span>
+              </ng-template>
               <ng-template hxCell="tokens" let-row>
                 <span [class.est]="row.estimated" [attr.title]="exact(row.tokens)">{{
                   row.tokensText
@@ -196,22 +204,30 @@ export class Advice {
   protected readonly n = number;
   protected readonly views = (items: AdviceItem[]): ItemView[] => items.map(itemView);
 
-  protected readonly columns: HxColumn[] = [
-    { field: "name", header: "Skill", sortable: true },
-    {
-      field: "tokens",
-      header: "Tokens",
-      title: termTitle("token"),
-      align: "right",
-      sortable: true,
-    },
-    {
-      field: "requests",
-      header: "Requests",
-      title: termTitle("request"),
-      align: "right",
-      sortable: true,
-    },
-    { field: "detail", header: "Detail", sortable: true },
-  ];
+  protected readonly columnsFor = (kind: FindingKind): HxColumn[] =>
+    kind === "context-size" || kind === "context-hygiene" ? this.sessionColumns : this.skillColumns;
+
+  private readonly sessionColumns: HxColumn[] = this.makeColumns("Session");
+  private readonly skillColumns: HxColumn[] = this.makeColumns("Skill");
+
+  private makeColumns(first: string): HxColumn[] {
+    return [
+      { field: "name", header: first, sortable: true },
+      {
+        field: "tokens",
+        header: "Tokens",
+        title: termTitle("token"),
+        align: "right",
+        sortable: true,
+      },
+      {
+        field: "requests",
+        header: "Requests",
+        title: termTitle("request"),
+        align: "right",
+        sortable: true,
+      },
+      { field: "detail", header: "Detail", sortable: true },
+    ];
+  }
 }

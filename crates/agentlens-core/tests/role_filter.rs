@@ -40,14 +40,14 @@ fn roles(r: &[&str]) -> Filters {
 }
 
 fn cost_requests(ctx: &Context, f: &Filters) -> u64 {
-    let a = api::cost(ctx, f, "session", None).unwrap();
+    let a = api::cost(ctx, f, "session", None, &[]).unwrap();
     a.data.report.sessions.iter().map(|s| s.requests).sum()
 }
 
 #[test]
 fn no_role_keeps_every_session() {
     let (_h, ctx) = setup();
-    let all = api::cost(&ctx, &Filters::default(), "session", None).unwrap();
+    let all = api::cost(&ctx, &Filters::default(), "session", None, &[]).unwrap();
     assert_eq!(all.data.report.sessions.len(), 2);
 }
 
@@ -55,7 +55,7 @@ fn no_role_keeps_every_session() {
 fn a_role_keeps_the_session_that_started_it_with_all_its_requests() {
     let (_h, ctx) = setup();
     let all = cost_requests(&ctx, &Filters::default());
-    let with_runs = api::cost(&ctx, &roles(&["Implement"]), "session", None).unwrap();
+    let with_runs = api::cost(&ctx, &roles(&["Implement"]), "session", None, &[]).unwrap();
     assert_eq!(with_runs.data.report.sessions.len(), 1);
     let kept: u64 = with_runs
         .data

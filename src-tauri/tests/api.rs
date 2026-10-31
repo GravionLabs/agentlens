@@ -139,14 +139,28 @@ fn skills_context_and_flow_return_the_report_types_of_the_core() {
 #[test]
 fn cost_efficiency_and_compare_group_as_asked() {
     let (_dir, ctx) = setup();
-    let cost = api::cost(&ctx, &Filters::default(), "project", None).unwrap();
+    let cost = api::cost(&ctx, &Filters::default(), "project", None, &[]).unwrap();
     assert!(cost.data.report.rows.iter().any(|r| r.key == "/work/demo"));
     assert!(cost.data.what_if.is_none());
-    let err = api::cost(&ctx, &Filters::default(), "model", Some("no-such-model")).unwrap_err();
+    let err = api::cost(
+        &ctx,
+        &Filters::default(),
+        "model",
+        Some("no-such-model"),
+        &[],
+    )
+    .unwrap_err();
     assert!(err.contains("no price for the what-if model"));
-    let err = api::cost(&ctx, &Filters::default(), "weekday", None).unwrap_err();
+    let err = api::cost(&ctx, &Filters::default(), "weekday", None, &[]).unwrap_err();
     assert!(err.contains("unknown grouping"));
-    let what_if = api::cost(&ctx, &Filters::default(), "model", Some("claude-haiku-4-5")).unwrap();
+    let what_if = api::cost(
+        &ctx,
+        &Filters::default(),
+        "model",
+        Some("claude-haiku-4-5"),
+        &[],
+    )
+    .unwrap();
     assert_eq!(what_if.data.what_if.unwrap().target, "claude-haiku-4-5");
 
     let eff = api::efficiency(&ctx, &claude(), "session").unwrap();
@@ -227,7 +241,14 @@ fn json_samples_for_the_frontend_are_up_to_date() {
         (
             "cost",
             serde_json::to_string_pretty(
-                &api::cost(&ctx, &all, "model", Some("claude-haiku-4-5")).unwrap(),
+                &api::cost(
+                    &ctx,
+                    &all,
+                    "model",
+                    Some("claude-haiku-4-5"),
+                    &["skill:demo".to_owned()],
+                )
+                .unwrap(),
             )
             .unwrap(),
         ),
@@ -336,7 +357,7 @@ fn exports_are_the_json_the_cli_prints_and_the_report_file() {
         ..ExportOptions::default()
     };
     let cost = api::export(&ctx, "cost", "json", &claude(), &by_project).unwrap();
-    let shown = api::cost(&ctx, &claude(), "project", None).unwrap();
+    let shown = api::cost(&ctx, &claude(), "project", None, &[]).unwrap();
     assert_eq!(
         serde_json::from_str::<Value>(&cost.content).unwrap(),
         json(&shown.data)

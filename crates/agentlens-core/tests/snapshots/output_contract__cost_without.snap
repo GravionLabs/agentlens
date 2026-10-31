@@ -1,0 +1,130 @@
+---
+source: crates/agentlens-core/tests/output_contract.rs
+description: "A change here changes the CLI JSON, the MCP results and the application: review it as a decision about compatibility (see the top of tests/output_contract.rs)."
+---
+{
+  "schema_version": 2,
+  "data": {
+    "report": {
+      "rows": [
+        {
+          "key": "claude-test-1",
+          "requests": 29,
+          "input": 5740,
+          "output": 880,
+          "cache_read": 304800,
+          "cache_write": 41850,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 29,
+          "premium_requests": 0.0
+        },
+        {
+          "key": "model-a",
+          "requests": 1,
+          "input": 99999,
+          "output": 9999,
+          "cache_read": 0,
+          "cache_write": 0,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.0,
+          "unpriced_requests": 1,
+          "premium_requests": 1.0
+        }
+      ],
+      "total": {
+        "key": "total",
+        "requests": 30,
+        "input": 105739,
+        "output": 10879,
+        "cache_read": 304800,
+        "cache_write": 41850,
+        "measured_usd": 0.0,
+        "estimated_usd": 0.0,
+        "unpriced_requests": 30,
+        "premium_requests": 1.0
+      },
+      "unpriced_models": {
+        "claude-test-1": 29,
+        "model-a": 1
+      }
+    },
+    "what_if": {
+      "target": "claude-haiku-4-5",
+      "rows": [
+        {
+          "model": "claude-test-1",
+          "requests": 0,
+          "actual_usd": 0.0,
+          "what_if_usd": 0.0,
+          "excluded_requests": 29
+        },
+        {
+          "model": "model-a",
+          "requests": 0,
+          "actual_usd": 0.0,
+          "what_if_usd": 0.0,
+          "excluded_requests": 1
+        }
+      ],
+      "total": {
+        "model": "total",
+        "requests": 0,
+        "actual_usd": 0.0,
+        "what_if_usd": 0.0,
+        "excluded_requests": 30
+      }
+    },
+    "without": {
+      "rows": [
+        {
+          "item": "demo",
+          "kind": "skill",
+          "installations": 1,
+          "requests": 30,
+          "tokens": {
+            "count": 180,
+            "measured": false
+          },
+          "cost_usd": 0.0,
+          "unpriced_requests": 30,
+          "detail": "1 installation, 30 requests"
+        },
+        {
+          "item": "reviewer",
+          "kind": "agent",
+          "installations": 1,
+          "requests": 29,
+          "tokens": {
+            "count": 145,
+            "measured": false
+          },
+          "cost_usd": 0.0,
+          "unpriced_requests": 29,
+          "detail": "1 installation, 29 requests"
+        }
+      ],
+      "total": {
+        "requests": 59,
+        "tokens": {
+          "count": 325,
+          "measured": false
+        },
+        "cost_usd": 0.0,
+        "unpriced_requests": 59
+      },
+      "notes": [
+        "Estimated: the tokens come from the sizes of the listings, not from the client.",
+        "Assumes the same requests and the same cache mix: each token is priced at the effective input price per token of the request it sits in.",
+        "Counts the listing only (for a skill also its load and what it carried); the results of MCP tool calls and the work of subagent runs are not removed.",
+        "Requests without a price (59) are counted apart, not priced."
+      ],
+      "warnings": [
+        "nothing installed matches `mcp-server:claude.ai Claude Docs`",
+        "nothing installed matches `skill:no-such-skill`"
+      ]
+    }
+  },
+  "warnings": 4,
+  "errors": []
+}

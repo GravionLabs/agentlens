@@ -181,6 +181,18 @@ struct Acc {
     sessions: BTreeSet<String>,
     projects: BTreeSet<PathBuf>,
     all_loads_measured: bool,
+    shares: Vec<RequestShare>,
+}
+
+/// Tokens a skill adds to one request (baseline, load or carry), for pricing the request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RequestShare {
+    /// Index of the session in the analyzed slice.
+    pub session: usize,
+    /// Index of the `Usage` event in the events of that session; `None` for a load that no
+    /// request followed.
+    pub event: Option<usize>,
+    pub tokens: u64,
 }
 
 pub fn analyze(
@@ -188,6 +200,16 @@ pub fn analyze(
     sessions: &[SessionEvents],
     estimator: &dyn TokenEstimator,
 ) -> SkillReport {
+    analyze_traced(inventory, sessions, estimator).0
+}
+
+/// [`analyze`], plus per skill the requests behind its baseline, load and carry tokens. The shares
+/// add up to [`SkillStats::overhead_tokens`].
+pub fn analyze_traced(
+    inventory: &Inventory,
+    sessions: &[SessionEvents],
+    estimator: &dyn TokenEstimator,
+) -> (SkillReport, BTreeMap<String, Vec<RequestShare>>) {
     let mut report = SkillReport::default();
     let mut accs: BTreeMap<String, Acc> = BTreeMap::new();
     let mut ignored: BTreeMap<String, u32> = BTreeMap::new();
@@ -207,7 +229,7 @@ pub fn analyze(
     let mut all_measured = true;
     let mut listing_measured = true;
     let mut session_contexts: Vec<SessionContext> = Vec::new();
-    for se in sessions {
+    for (si, se) in sessions.iter().enumerate() {
         report.sessions += 1;
         let (mut session_requests, mut session_context) = (0u64, 0u64);
         let mut has_listing = false;
@@ -271,7 +293,7 @@ pub fn analyze(
             let acc = accs
                 .entry(skill.name.clone())
                 .or_insert_with(|| Acc::new(&skill.name, false, Vec::new()));
-            acc.record(se, i, e.at, skill, inventory, estimator);
+            acc.record(si, se, i, e.at, skill, inventory, estimator);
         }
 
         // Tool calls that read or run files in the folder of an installed skill: use without loading.
@@ -315,7 +337,7 @@ pub fn analyze(
             .iter()
             .filter(|s| &s.name == name)
             .collect();
-        acc.stats.baseline = baseline(&entries, sessions);
+        acc.stats.baseline = baseline(&entries, sessions, &mut acc.shares);
     }
 
     report.totals.measured = report.totals.requests > 0 && all_measured;
@@ -327,12 +349,16 @@ pub fn analyze(
     });
     session_contexts.truncate(LARGEST_SESSIONS);
     report.totals.largest_sessions = session_contexts;
+    let shares = accs
+        .iter()
+        .map(|(name, acc)| (name.clone(), acc.shares.clone()))
+        .collect();
     report.skills = accs.into_values().map(Acc::finish).collect();
     report.ignored_commands = ignored
         .into_iter()
         .map(|(name, count)| IgnoredCommand { name, count })
         .collect();
-    report
+    (report, shares)
 }
 
 impl Acc {
@@ -364,11 +390,14 @@ impl Acc {
             sessions: BTreeSet::new(),
             projects: BTreeSet::new(),
             all_loads_measured: true,
+            shares: Vec::new(),
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn record(
         &mut self,
+        si: usize,
         se: &SessionEvents,
         i: usize,
         at: Option<Timestamp>,
@@ -411,11 +440,18 @@ impl Acc {
             .rposition(|e| matches!(e.kind, EventKind::Compaction))
             .map_or(0, |p| p + 1);
         let before = main_usage(window_start..i).next_back();
-        let mut after = main_usage(i + 1..window_end);
+        let mut after =
+            se.events[i + 1..window_end]
+                .iter()
+                .enumerate()
+                .filter_map(|(k, e)| match &e.kind {
+                    EventKind::Usage(u) if !u.subagent => Some((i + 1 + k, u)),
+                    _ => None,
+                });
         let first_after = after.next();
 
         // Load: measured growth of the request size, else estimated from size.
-        let measured = match (before, first_after) {
+        let measured = match (before, first_after.map(|(_, u)| u)) {
             (Some(b), Some(a)) => {
                 Some(a.total_input().saturating_sub(b.total_input())).filter(|d| *d > 0)
             }
@@ -438,7 +474,17 @@ impl Acc {
         self.all_loads_measured &= load.measured;
 
         // Carry: every request after the first one that saw the content.
-        for u in after {
+        self.shares.push(RequestShare {
+            session: si,
+            event: first_after.map(|(k, _)| k),
+            tokens: load.count,
+        });
+        for (k, u) in after {
+            self.shares.push(RequestShare {
+                session: si,
+                event: Some(k),
+                tokens: load.count,
+            });
             let total = u.total_input();
             let cached = if total == 0 {
                 0
@@ -479,10 +525,14 @@ impl Acc {
 /// Listing tokens × the requests of every session in which the skill is listed.
 /// Per session the first visible copy (sorted by file) decides the listing size.
 /// The result is measured only if every listing size that went into it was.
-fn baseline(entries: &[&SkillEntry], sessions: &[SessionEvents]) -> BaselineCost {
+fn baseline(
+    entries: &[&SkillEntry],
+    sessions: &[SessionEvents],
+    shares: &mut Vec<RequestShare>,
+) -> BaselineCost {
     let (mut requests, mut tokens) = (0u64, 0u64);
     let (mut counted, mut all_measured) = (false, true);
-    for se in sessions {
+    for (si, se) in sessions.iter().enumerate() {
         let visible = entries.iter().find(|entry| {
             entry.locations.iter().any(|loc| {
                 loc.kind.clients().contains(&se.session.source)
@@ -500,6 +550,15 @@ fn baseline(entries: &[&SkillEntry], sessions: &[SessionEvents]) -> BaselineCost
                 .iter()
                 .filter(|e| matches!(e.kind, EventKind::Usage(_)))
                 .count() as u64;
+            for (k, e) in se.events.iter().enumerate() {
+                if matches!(e.kind, EventKind::Usage(_)) {
+                    shares.push(RequestShare {
+                        session: si,
+                        event: Some(k),
+                        tokens: entry.baseline_tokens.count,
+                    });
+                }
+            }
             requests += n;
             tokens += entry.baseline_tokens.count * n;
             counted = true;

@@ -115,7 +115,10 @@ export type FindingKind =
   | "large-context"
   | "costly-mcp-servers"
   | "context-size"
-  | "retry-loops";
+  | "retry-loops"
+  | "model-mix"
+  | "delegation"
+  | "context-hygiene";
 
 export interface Reference {
   kind: "agent" | "command" | "skill";
@@ -125,6 +128,8 @@ export interface Reference {
 export interface AdviceItem {
   /** Unused skills only: the agents, commands and skills whose files name it. */
   referenced_by?: Reference[];
+  /** Context size: `name` is a label (project folder and id start); this is the full session id. */
+  session_id?: string;
   name: string;
   tokens: Tokens;
   requests: number;
@@ -354,6 +359,32 @@ export interface WhatIfRow {
   excluded_requests: number;
 }
 
+export interface WithoutRow {
+  item: string;
+  kind: "skill" | "agent" | "mcp-server";
+  installations: number;
+  requests: number;
+  /** Always an estimate. */
+  tokens: Tokens;
+  cost_usd: number;
+  /** Requests that carried tokens of the item but have no price. */
+  unpriced_requests: number;
+  detail: string;
+}
+
+export interface WithoutReport {
+  rows: WithoutRow[];
+  total: {
+    requests: number;
+    tokens: Tokens;
+    cost_usd: number;
+    unpriced_requests: number;
+  };
+  notes: string[];
+  /** Items that matched nothing installed. */
+  warnings: string[];
+}
+
 export interface SessionCost {
   source: SourceId;
   session: string;
@@ -385,6 +416,8 @@ export interface CostData {
     sessions?: SessionCost[];
   };
   what_if: { target: string; rows: WhatIfRow[]; total: WhatIfRow } | null;
+  /** Set when `without` named items. */
+  without: WithoutReport | null;
 }
 
 export interface CacheRow {
@@ -474,6 +507,8 @@ export interface TimelinePoint {
   output_tokens: number;
   cost_usd: number | null;
   cost_estimated: boolean;
+  /** The request's model, else the session's. */
+  model?: string | null;
 }
 
 export type MarkerKind =
@@ -481,7 +516,8 @@ export type MarkerKind =
   | { type: "compaction" }
   | { type: "tool-error"; tool: string }
   | { type: "hook-failed"; hook: string }
-  | { type: "permission-prompt"; wait_ms: number | null };
+  | { type: "permission-prompt"; wait_ms: number | null }
+  | { type: "model-switch"; from: string; to: string };
 
 export interface TimelineMarker {
   request: number;

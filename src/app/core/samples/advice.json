@@ -132,22 +132,24 @@
         "share_of_total_tokens": 0.9113043940373595,
         "items": [
           {
-            "name": "cp-1",
+            "name": "demo · cp-1",
             "tokens": {
               "count": 99999,
               "measured": true
             },
             "requests": 1,
-            "detail": "99,999 tokens per request on average over 1 requests"
+            "detail": "99,999 tokens per request on average over 1 requests",
+            "session_id": "cp-1"
           },
           {
-            "name": "context",
+            "name": "demo · context",
             "tokens": {
               "count": 963,
               "measured": true
             },
             "requests": 3,
-            "detail": "963 tokens per request on average over 3 requests"
+            "detail": "963 tokens per request on average over 3 requests",
+            "session_id": "context"
           }
         ],
         "notes": [

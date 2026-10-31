@@ -9,7 +9,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       "current": {
         "since": "2026-10-01T00:00:00Z",
         "until": "2026-10-15T00:00:00Z",
-        "sessions": 4
+        "sessions": 7
       },
       "against": {
         "since": "2026-07-01T00:00:00Z",
@@ -21,16 +21,16 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
     "volume": {
       "sessions": {
         "before": 0.03333333333333333,
-        "after": 0.2857142857142857,
-        "change": 0.2523809523809524,
-        "change_pct": 757.1428571428571,
+        "after": 0.5,
+        "change": 0.4666666666666667,
+        "change_pct": 1400.0,
         "measured": true
       },
       "requests": {
         "before": 0.03333333333333333,
-        "after": 1.0,
-        "change": 0.9666666666666667,
-        "change_pct": 2900.0,
+        "after": 2.0714285714285716,
+        "change": 2.0380952380952384,
+        "change_pct": 6114.285714285716,
         "measured": true
       },
       "subagent_requests": {
@@ -42,16 +42,16 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       },
       "tokens": {
         "before": 3666.6,
-        "after": 965.7142857142857,
-        "change": -2700.885714285714,
-        "change_pct": -73.66185878704287,
+        "after": 25233.571428571428,
+        "change": 21566.97142857143,
+        "change_pct": 588.2008244305741,
         "measured": true
       },
       "context_tokens": {
         "before": 3333.3,
-        "after": 956.4285714285714,
-        "change": -2376.8714285714286,
-        "change_pct": -71.30685592570212,
+        "after": 25170.714285714286,
+        "change": 21837.414285714287,
+        "change_pct": 655.1289798612272,
         "measured": true
       },
       "large_context_requests": {
@@ -79,16 +79,16 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       },
       "unpriced_requests": {
         "before": 0.03333333333333333,
-        "after": 1.0,
-        "change": 0.9666666666666667,
-        "change_pct": 2900.0,
+        "after": 2.0714285714285716,
+        "change": 2.0380952380952384,
+        "change_pct": 6114.285714285716,
         "measured": true
       }
     },
     "efficiency": {
       "cache_hit_rate": {
         "before": null,
-        "after": 0.806572068707991,
+        "after": 0.8649507647776611,
         "change": null,
         "change_pct": null,
         "measured": true
@@ -137,8 +137,8 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         },
         "overhead_tokens": {
           "before": 0.0,
-          "after": 15.714285714285714,
-          "change": 15.714285714285714,
+          "after": 26.428571428571427,
+          "change": 26.428571428571427,
           "change_pct": null,
           "measured": false
         }

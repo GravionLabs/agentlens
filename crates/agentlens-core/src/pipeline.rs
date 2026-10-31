@@ -8,6 +8,7 @@ use crate::analyzers::advice::{self, AdviceReport};
 use crate::analyzers::compare::{self, CompareReport};
 use crate::analyzers::context::{self, ContextReport};
 use crate::analyzers::cost::{self, CostReport, Grouping, WhatIfReport};
+use crate::analyzers::cost_without::{self, ItemSpec, WithoutReport};
 use crate::analyzers::efficiency::{self, CacheBy, EfficiencyReport};
 use crate::analyzers::flow::{self, ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::{self, SkillReport};
@@ -19,7 +20,7 @@ use crate::instructions;
 use crate::inventory::{self, Inventory};
 use crate::model::{SessionEvents, Source};
 use crate::references;
-use crate::tokens::TokenEstimator;
+use crate::tokens::{CharsPerToken, TokenEstimator};
 use crate::worktree::WorktreeResolver;
 
 /// What one source holds on this machine.
@@ -116,6 +117,9 @@ pub fn advice_run(
     let mcp = advice::mcp_servers(&context_report, &sessions);
     let context_saving = advice::context_saving(&sessions, prices);
     let retries = advice::retry_saving(&sessions, prices);
+    let model_mix = advice::model_mix_saving(&sessions, prices);
+    let hygiene = advice::hygiene_saving(&sessions, prices);
+    let delegation = advice::delegation_use(&sessions);
     let pricing = advice::Pricing::from_sessions(&sessions, prices);
     AdviceRun {
         report: advice::analyze_with(
@@ -124,6 +128,9 @@ pub fn advice_run(
             &mcp,
             &context_saving,
             &retries,
+            &model_mix,
+            &hygiene,
+            &delegation,
             &pricing,
         ),
         warnings: run.warnings + catalog.warnings.len() as u64 + instructions.warnings.len() as u64,
@@ -351,6 +358,8 @@ pub struct CostRun {
     pub report: CostReport,
     /// Set if a what-if model was requested.
     pub what_if: Option<WhatIfReport>,
+    /// Set if items to remove were named.
+    pub without: Option<WithoutReport>,
     pub warnings: u64,
     pub errors: Vec<String>,
 }
@@ -366,6 +375,7 @@ pub fn cost_run(
     prices: &crate::prices::PriceTable,
     group: Grouping,
     what_if: Option<&str>,
+    without: &[ItemSpec],
 ) -> CostRun {
     let mut sessions: Vec<SessionEvents> = Vec::new();
     let mut errors = Vec::new();
@@ -376,10 +386,27 @@ pub fn cost_run(
         }
     }
     retain_roles(&mut sessions, roles);
+    let mut warnings: u64 = sessions.iter().map(|s| s.warnings.len() as u64).sum();
+    let without = (!without.is_empty()).then(|| {
+        let estimator = CharsPerToken;
+        let projects: BTreeSet<PathBuf> = sessions
+            .iter()
+            .filter_map(|s| s.session.project_dir.clone())
+            .collect();
+        let projects: Vec<PathBuf> = projects.into_iter().collect();
+        let inventory = inventory::scan(&inventory::locations(env, &projects), &estimator);
+        let catalog = catalog::scan(env, &projects, &estimator);
+        warnings += inventory.warnings.len() as u64 + catalog.warnings.len() as u64;
+        let report =
+            cost_without::analyze(&sessions, prices, without, &inventory, &catalog, &estimator);
+        warnings += report.warnings.len() as u64;
+        report
+    });
     CostRun {
-        warnings: sessions.iter().map(|s| s.warnings.len() as u64).sum(),
+        warnings,
         report: cost::analyze(&sessions, prices, group),
         what_if: what_if.map(|m| cost::what_if(&sessions, prices, m)),
+        without,
         errors,
     }
 }

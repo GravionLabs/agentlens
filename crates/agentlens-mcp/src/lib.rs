@@ -95,6 +95,10 @@ pub struct CostQuery {
     pub by: Option<String>,
     /// A model id prefix: what the usage would have cost with that model.
     pub what_if: Option<String>,
+    /// Items to take out, as `skill:NAME`, `agent:NAME` or `mcp-server:NAME`: the estimated tokens and
+    /// cost their listing adds to the requests (`without` in the result). Empty: none.
+    #[serde(default)]
+    pub without: Vec<String>,
     /// Only sessions that started a run of one of these roles: the keys of the `roles` table of the
     /// efficiency tool (forked skill name, else workflow phase, else agent type). Empty: all sessions.
     pub role: Option<Vec<String>>,
@@ -248,7 +252,8 @@ impl AgentLensServer {
         let f = q.query.filters_with_roles(&q.role);
         let by = q.by.unwrap_or_else(|| "model".into());
         let what_if = q.what_if;
-        self.run(move |c| api::cost(c, &f, &by, what_if.as_deref()))
+        let without = q.without;
+        self.run(move |c| api::cost(c, &f, &by, what_if.as_deref(), &without))
             .await
     }
 
@@ -327,7 +332,8 @@ impl AgentLensServer {
             "Analyze how my coding agents use skills and what that costs in tokens, with the agentlens tools, and propose concrete changes. Look at the last {since} (pass it as `since`).\n\n\
 1. Call `advice` first. Its findings are computed from the numbers, not guessed, and come ranked by what each could have saved in the period (`rank`, `impact.saving`, `impact.saving_usd`, an estimate from the price table): explain them in plain language in that order. The advice covers working habits too (a large context, retry loops after failing tool calls), not only skills.\n\
 2. If a field is unclear (load, carry, baseline, follow-on, file uses, overhead), read the resource {GLOSSARY_URI} instead of guessing.\n\
-3. Look closer at anything surprising with the other tools: `skills` for one skill, `unused` for agents and MCP servers, `context` for instruction files and tool definitions, `sessions` and `timeline` for a long session, `trend` for what changed against the period before (cost, tokens, cache hit rate, skill overhead).\n\n\
+3. Look closer at anything surprising with the other tools: `skills` for one skill, `unused` for agents and MCP servers, `context` for instruction files and tool definitions, `sessions` and `timeline` for a long session, `trend` for what changed against the period before (cost, tokens, cache hit rate, skill overhead).\n\
+4. For the top findings about skills, agents and MCP servers, call `cost` with `without` (a list of `skill:NAME`, `agent:NAME`, `mcp-server:NAME`) to see the tokens and cost the listing of the item added to the requests of the period. The result is an estimate: say so, and do not promise it as a saving.\n\n\
 Rules for the conclusions:\n\
 - Trust a number without a tilde (`measured: true`); say so when a conclusion rests on an estimate (`~`, `measured: false`).\n\
 - `impact.confidence` says how sure a saving is: `measured`, `estimated`, or `inferred`. An `inferred` saving rests on an assumption (for the context size: that the work could have run in a fresh session); say so.\n\
