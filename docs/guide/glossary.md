@@ -148,6 +148,14 @@ A request is small with fewer than 500 output tokens and fewer than 50,000 token
 
 Research and long reads in the main context are carried on every later request; a subagent reads them in its own context and returns a summary. The finding appears for Claude Code, OpenCode and Copilot CLI when a client has a subagent share below 5% of its requests and at least 20 main-agent requests with 200,000 tokens of input or more. No saving is estimated.
 
+### Cache expiry
+
+The provider keeps a prompt cache entry only for a while after its last use (the TTL). After a longer pause the whole context is written to the cache again at the write price instead of being read at the read price. The Cache expiry finding counts main-agent requests of Anthropic models that came later than the session's TTL after the previous main-agent request and wrote more tokens than they read; the saving is an inferred lower bound. It overlaps with Context size, so the two savings are not additive.
+
+### TTL
+
+Anthropic's default is 5 minutes; a client can ask for 1 hour. Claude Code reports the tokens written with the 1-hour lifetime, so a session in which any request did is read as 60 minutes; every other session, and every other client, is assumed to have 5 minutes.
+
 ## Efficiency
 
 ### Role

@@ -737,6 +737,10 @@ impl Parser<'_> {
             output: u64_of(usage, "output_tokens"),
             cache_read: u64_of(usage, "cache_read_input_tokens"),
             cache_write: u64_of(usage, "cache_creation_input_tokens"),
+            // Claude Code splits the write by lifetime; a record without the split wrote 5-minute tokens.
+            cache_write_1h: usage
+                .get("cache_creation")
+                .map_or(0, |c| u64_of(c, "ephemeral_1h_input_tokens")),
             reasoning: usage
                 .get("output_tokens_details")
                 .map_or(0, |d| u64_of(d, "thinking_tokens")),
@@ -756,6 +760,7 @@ impl Parser<'_> {
             old.output = old.output.max(new.output);
             old.cache_read = old.cache_read.max(new.cache_read);
             old.cache_write = old.cache_write.max(new.cache_write);
+            old.cache_write_1h = old.cache_write_1h.max(new.cache_write_1h);
             old.reasoning = old.reasoning.max(new.reasoning);
             return;
         }

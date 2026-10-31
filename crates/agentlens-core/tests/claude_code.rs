@@ -882,3 +882,34 @@ fn skill_loads_are_flagged_when_they_happen_in_a_subagent_transcript() {
     assert!(loads.contains(&("demo", SkillTrigger::Model, false)));
     assert!(loads.contains(&("orch", SkillTrigger::User, false)));
 }
+
+#[test]
+fn the_one_hour_part_of_a_cache_write_is_read_and_missing_means_zero() {
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/cache_1h.jsonl",
+        &format!("{SLUG}/cache_1h.jsonl"),
+    );
+    let se = read_all(&home).remove(0);
+    let u = usages(&se);
+    assert_eq!(u.len(), 2);
+    assert_eq!((u[0].cache_write, u[0].cache_write_1h), (20_000, 18_000));
+    assert_eq!((u[1].cache_write, u[1].cache_write_1h), (500, 0));
+}
+
+#[test]
+fn a_pause_longer_than_the_cache_lifetime_is_found_in_a_fixture_session() {
+    use agentlens_core::analyzers::advice::cache_expiry_use;
+    use agentlens_core::prices::PriceTable;
+    let home = TempHome::new();
+    home.copy_fixture(
+        "claude_code/cache_expiry.jsonl",
+        &format!("{SLUG}/cache_expiry.jsonl"),
+    );
+    let out = cache_expiry_use(&read_all(&home), &PriceTable::bundled());
+    let row = &out.sessions[0];
+    assert_eq!((row.requests, row.tokens), (1, 20_500));
+    assert_eq!((row.min_gap_secs, row.max_gap_secs), (1_800, 1_800));
+    // 20,500 tokens × ($6.25 - $0.50) per million
+    assert!((row.usd - 0.117875).abs() < 1e-9);
+}

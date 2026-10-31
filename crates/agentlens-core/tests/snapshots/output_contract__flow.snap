@@ -37,6 +37,20 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         },
         {
           "source": "claude-code",
+          "session": "cache_expiry",
+          "project": "/work/demo",
+          "model": "claude-opus-4-8",
+          "requests": 3,
+          "first_tokens": 20100,
+          "last_tokens": 20600,
+          "peak_tokens": 20600,
+          "compactions": [],
+          "window": 200000,
+          "window_basis": "documented",
+          "near_limit": false
+        },
+        {
+          "source": "claude-code",
           "session": "clear_at_start",
           "project": "/work/demo",
           "model": "claude-test-1",
@@ -219,7 +233,7 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
         }
       ],
       "unavailable": {
-        "claude-code": 7
+        "claude-code": 8
       }
     }
   },

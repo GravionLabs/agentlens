@@ -449,6 +449,8 @@ fn copilot_spans(spans: &[Value], sessions: &mut Sessions, skipped: &mut BTreeMa
                         output: count(attrs, "gen_ai.usage.output_tokens"),
                         cache_read,
                         cache_write,
+                        // Neither the GenAI conventions nor the Copilot export split the write by lifetime.
+                        cache_write_1h: 0,
                         reasoning: count(attrs, "gen_ai.usage.reasoning.output_tokens"),
                         cost_usd: None,
                         measured: true,

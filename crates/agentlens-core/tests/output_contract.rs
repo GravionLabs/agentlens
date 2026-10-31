@@ -25,7 +25,7 @@ fn setup() -> (TempHome, Context) {
     let home = TempHome::new();
     // A Claude Code session with context items, one in which skill folders are used, one with a typed
     // skill command, one with a retry loop, three that carried their context on (one opened by a /clear,
-    // one compacted twice, one near the limit), and a Copilot CLI session with its store.
+    // one compacted twice, one near the limit), one with a pause longer than the cache lifetime, and a Copilot CLI session with its store.
     home.copy_fixture(
         "claude_code/context.jsonl",
         ".claude/projects/-work-demo/context.jsonl",
@@ -42,7 +42,12 @@ fn setup() -> (TempHome, Context) {
         "claude_code/retry_loop.jsonl",
         ".claude/projects/-work-demo/retry_loop.jsonl",
     );
-    for fixture in ["clear_at_start", "two_compactions", "near_limit"] {
+    for fixture in [
+        "clear_at_start",
+        "two_compactions",
+        "near_limit",
+        "cache_expiry",
+    ] {
         home.copy_fixture(
             &format!("claude_code/{fixture}.jsonl"),
             &format!(".claude/projects/-work-demo/{fixture}.jsonl"),

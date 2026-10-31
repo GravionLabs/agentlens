@@ -120,6 +120,7 @@ pub fn advice_run(
     let model_mix = advice::model_mix_saving(&sessions, prices);
     let hygiene = advice::hygiene_saving(&sessions, prices);
     let delegation = advice::delegation_use(&sessions);
+    let cache_expiry = advice::cache_expiry_use(&sessions, prices);
     let pricing = advice::Pricing::from_sessions(&sessions, prices);
     AdviceRun {
         report: advice::analyze_with(
@@ -131,6 +132,7 @@ pub fn advice_run(
             &model_mix,
             &hygiene,
             &delegation,
+            &cache_expiry,
             &pricing,
         ),
         warnings: run.warnings + catalog.warnings.len() as u64 + instructions.warnings.len() as u64,

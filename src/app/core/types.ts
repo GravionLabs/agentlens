@@ -131,7 +131,8 @@ export type FindingKind =
   | "retry-loops"
   | "model-mix"
   | "delegation"
-  | "context-hygiene";
+  | "context-hygiene"
+  | "cache-expiry";
 
 export interface Reference {
   kind: "agent" | "command" | "skill";

@@ -7,10 +7,10 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
   "data": {
     "report": {
       "totals": {
-        "requests": 30,
+        "requests": 33,
         "subagent_requests": 0,
-        "tokens": 463268,
-        "context_tokens": 452389,
+        "tokens": 524718,
+        "context_tokens": 513689,
         "large_context_requests": 0,
         "measured": true,
         "largest_sessions": [
@@ -27,6 +27,12 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
             "average_context": 99999
           },
           {
+            "id": "cache_expiry",
+            "project": "/work/demo",
+            "requests": 3,
+            "average_context": 20433
+          },
+          {
             "id": "clear_at_start",
             "project": "/work/demo",
             "requests": 6,
@@ -37,12 +43,6 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
             "project": "/work/demo",
             "requests": 6,
             "average_context": 3250
-          },
-          {
-            "id": "retry_loop",
-            "project": "/work/demo",
-            "requests": 4,
-            "average_context": 2432
           }
         ],
         "listing_sessions": 1,
@@ -51,11 +51,11 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "measured": false
         }
       },
-      "sessions": 8,
+      "sessions": 9,
       "first_event": "2026-07-15T04:00:01Z",
-      "last_event": "2026-10-03T12:00:03Z",
+      "last_event": "2026-10-04T09:32:00Z",
       "requests_by_source": {
-        "claude-code": 29,
+        "claude-code": 32,
         "copilot-cli": 1
       },
       "skills": [
@@ -116,9 +116,9 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
             "cache_write": 0
           },
           "baseline": {
-            "requests": 30,
+            "requests": 33,
             "tokens": {
-              "count": 300,
+              "count": 330,
               "measured": false
             }
           },
@@ -184,9 +184,9 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
             "cache_write": 0
           },
           "baseline": {
-            "requests": 30,
+            "requests": 33,
             "tokens": {
-              "count": 180,
+              "count": 198,
               "measured": false
             }
           },
@@ -321,9 +321,9 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
             "cache_write": 0
           },
           "baseline": {
-            "requests": 30,
+            "requests": 33,
             "tokens": {
-              "count": 180,
+              "count": 198,
               "measured": false
             }
           },
