@@ -17,4 +17,5 @@ site/.vitepress/dist
 site/.vitepress/cache
 src-tauri/windows
 .claude
+.agents
 .worktrees
