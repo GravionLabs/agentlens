@@ -1,0 +1,18 @@
+# Pull request checks of the reusable workflow GravionLabs/ci pr-checks.yml: the PR must close a ready issue (readiness)
+# and a change to the decision-bearing paths of .agents/config.json (governance) needs an ADR (adr).
+# The caller job id must stay `pr-checks`: the rulesets require the check `pr-checks / PR checks`.
+name: PR checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+permissions: {}
+
+jobs:
+  pr-checks:
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    uses: GravionLabs/ci/.github/workflows/pr-checks.yml@main
