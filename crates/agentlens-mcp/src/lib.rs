@@ -142,6 +142,22 @@ const GLOSSARY: &str = include_str!("../../../docs/guide/glossary.md");
 /// Where the glossary is served.
 pub const GLOSSARY_URI: &str = "agentlens://glossary";
 
+/// The tips analysis: the filter and how many tips to return.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct TipsQuery {
+    #[serde(flatten)]
+    pub query: Query,
+    /// How many tips to return, at most. Default: 5.
+    pub limit: Option<usize>,
+}
+
+/// What the `tips` prompt asks for.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct TipsPrompt {
+    /// How far back to look: a duration (`30d`, `4w`) or a date. Default: 30d.
+    pub since: Option<String>,
+}
+
 /// What the `optimize-skills` prompt asks for.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 pub struct OptimizeSkills {
@@ -215,6 +231,18 @@ impl AgentLensServer {
     async fn advice(&self, Parameters(q): Parameters<Query>) -> CallToolResult {
         let f = q.filters();
         self.run(move |c| api::advice(c, &f)).await
+    }
+
+    #[tool(
+        description = "The few advice findings that pay most (each saves at least `threshold`, 0.5 %, of the period's cost), one line each: `headline`, the saving in tokens and USD (an estimate) with its `share` of the period's cost and its `confidence`, the general `action`, and up to three `targets` with the ready `steps` where the client documents the syntax (Claude Code: `disable-model-invocation` for a skill, the project scope `.mcp.json` for an MCP server). `more` counts the targets not listed, `below_threshold` the findings with a smaller saving. Computed, no model involved; `limit` (default 5) caps the tips. The fields are explained in the resource agentlens://glossary.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn tips(&self, Parameters(q): Parameters<TipsQuery>) -> CallToolResult {
+        let f = q.query.filters();
+        let limit = q
+            .limit
+            .unwrap_or(agentlens_core::analyzers::tips::DEFAULT_LIMIT);
+        self.run(move |c| api::tips(c, &f, limit)).await
     }
 
     #[tool(
@@ -320,6 +348,32 @@ impl AgentLensServer {
 #[prompt_router]
 impl AgentLensServer {
     #[prompt(
+        name = "tips",
+        description = "The few changes that save the most, in plain language, with the edits to make. Uses the tips tool first, then advice, skills, context or timeline where a tip is surprising. Changes nothing."
+    )]
+    async fn tips_prompt(
+        &self,
+        Parameters(args): Parameters<TipsPrompt>,
+    ) -> Result<GetPromptResult, ErrorData> {
+        let since = args.since.as_deref().unwrap_or("30d");
+        let text = format!(
+            "Tell me which few changes would save the most tokens and cost, with the agentlens tools. Look at the last {since} (pass it as `since`).\n\n\
+1. Call `tips`. Its tips are computed from the numbers, not guessed, and come ranked by what each could have saved in the period (`headline`, `saving_usd`, `share` of the period's cost, `confidence`). Explain each tip in plain language, in that order.\n\
+2. If a field is unclear, read the resource {GLOSSARY_URI} instead of guessing.\n\
+3. Where a tip is surprising, look closer: `advice` for the whole finding, `skills` for one skill, `context` for what the clients add to every request, `timeline` for one long session.\n\
+4. Propose the edits. For a target with `steps`, give the `file` and the `change` as they are; where a target has no step, use the tip's `action` and say that the syntax was not checked. `more` counts targets that are not listed, `below_threshold` findings that save less than the `threshold`.\n\n\
+Rules for the conclusions:\n\
+- Trust a number without a tilde (`measured: true`); say so when a conclusion rests on an estimate (`~`, `measured: false`). A saving in USD is always an estimate.\n\
+- `confidence` says how sure a saving is: `measured`, `estimated`, or `inferred`. An `inferred` saving rests on an assumption; say so.\n\
+- Do not change anything yourself. List the changes, with the saving each would bring, and let me decide."
+        );
+        Ok(
+            GetPromptResult::new(vec![PromptMessage::new_text(Role::User, text)])
+                .with_description("The changes that save the most, with the edits to make"),
+        )
+    }
+
+    #[prompt(
         name = "optimize-skills",
         description = "Analyze how the coding agents use skills and what that costs in tokens, and propose concrete changes. Uses the advice tool first, then the others where something needs a closer look."
     )]
@@ -361,7 +415,7 @@ impl ServerHandler for AgentLensServer {
         )
         .with_server_info(Implementation::new("agentlens", env!("CARGO_PKG_VERSION")))
         .with_instructions(
-            "Read-only analyses of the token use of coding agents (Claude Code, OpenCode, Copilot CLI, VS Code Copilot) from the session files on this machine. Every number says whether the client measured it or AgentLens estimated it. The resource agentlens://glossary explains the field names; the prompt optimize-skills runs a complete analysis of the skill setup."
+            "Read-only analyses of the token use of coding agents (Claude Code, OpenCode, Copilot CLI, VS Code Copilot) from the session files on this machine. Every number says whether the client measured it or AgentLens estimated it. The resource agentlens://glossary explains the field names; the prompt tips names the few changes that save the most, the prompt optimize-skills runs a complete analysis of the skill setup."
                 .to_string(),
         )
     }

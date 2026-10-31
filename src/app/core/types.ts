@@ -184,6 +184,42 @@ export interface AdviceReport {
   findings: Finding[];
 }
 
+/** A ready change for one client, only where the client documents the syntax. */
+export interface TipStep {
+  client: string;
+  file: string | null;
+  change: string;
+}
+
+export interface TipTarget {
+  name: string;
+  detail: string;
+  steps: TipStep[];
+}
+
+export interface Tip {
+  /** The rank of the finding in the advice report. */
+  rank: number;
+  kind: FindingKind;
+  headline: string;
+  saving: Tokens;
+  saving_usd: number | null;
+  /** The saving over the period's cost (over the weighted tokens without prices). */
+  share: number | null;
+  confidence: Confidence;
+  action: string;
+  targets: TipTarget[];
+  /** Items of the finding that are not listed. */
+  more: number;
+}
+
+export interface TipsReport {
+  period_cost_usd: number | null;
+  threshold: number;
+  tips: Tip[];
+  below_threshold: number;
+}
+
 export interface SkillsData {
   report: SkillReport;
   installed_skills: number;

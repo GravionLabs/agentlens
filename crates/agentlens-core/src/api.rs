@@ -20,6 +20,7 @@ use crate::analyzers::efficiency::{CacheBy, EfficiencyReport};
 use crate::analyzers::flow::{ErrorReport, GrowthReport, HooksReport};
 use crate::analyzers::skills::SkillReport;
 use crate::analyzers::timeline::{SessionSummary, Timeline};
+use crate::analyzers::tips::{self, TipsReport};
 use crate::analyzers::trend::{self, TrendReport, Windows};
 use crate::analyzers::unused::UnusedReport;
 use crate::cli_tools::{self, CliTools};
@@ -261,6 +262,29 @@ pub fn advice(ctx: &Context, f: &Filters) -> Result<Answer<AdviceReport>, String
     );
     run.errors.extend(price_warning);
     answer(run.report, run.warnings, run.errors)
+}
+
+/// The few advice findings that pay most (at most `limit`), computed from the same run as [`advice`].
+pub fn tips(ctx: &Context, f: &Filters, limit: usize) -> Result<Answer<TipsReport>, String> {
+    let (filter, only) = f.resolve(Timestamp::now())?;
+    let (prices, price_warning) = prices::load_or_bundled(&ctx.env, None);
+    let mut run = pipeline::advice_run(
+        &ctx.registry,
+        &ctx.env,
+        &filter,
+        &only,
+        &CharsPerToken,
+        &prices,
+    );
+    run.errors.extend(price_warning);
+    let report = tips::tips(
+        &run.report,
+        &run.skills,
+        run.period_cost_usd,
+        run.weighted_tokens,
+        limit,
+    );
+    answer(report, run.warnings, run.errors)
 }
 
 pub fn context(ctx: &Context, f: &Filters) -> Result<Answer<ContextReport>, String> {
@@ -636,6 +660,11 @@ pub fn export(
             let a = advice(ctx, f)?;
             csv_file(view, csv_export::advice(&a.data), a.warnings, a.errors)
         }
+        ("tips", "json") => exported(view, format, tips(ctx, f, tips::DEFAULT_LIMIT)?),
+        ("tips", "csv") => {
+            let a = tips(ctx, f, tips::DEFAULT_LIMIT)?;
+            csv_file(view, csv_export::tips(&a.data), a.warnings, a.errors)
+        }
         ("skills", "csv") => {
             let a = skills(ctx, f)?;
             let mut list: Vec<_> = a.data.report.skills.iter().collect();
@@ -741,6 +770,28 @@ mod tests {
             filter.since.map(|t| t.to_string()),
             filter.until.map(|t| t.to_string()),
         )
+    }
+
+    #[test]
+    fn tips_are_exportable_as_json_and_csv() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = Context {
+            env: Env::for_home(dir.path()),
+            registry: default_registry(),
+        };
+        let opts = ExportOptions::default();
+        let csv = export(&ctx, "tips", "csv", &Filters::default(), &opts).unwrap();
+        assert_eq!(
+            csv.content.trim(),
+            "rank,kind,target,saving_tokens,saving_usd,confidence,step"
+        );
+        assert!(csv.suggested_name.starts_with("agentlens-tips-"));
+        let json = export(&ctx, "tips", "json", &Filters::default(), &opts).unwrap();
+        assert!(
+            json.content.contains("\"threshold\": 0.005"),
+            "{}",
+            json.content
+        );
     }
 
     #[test]

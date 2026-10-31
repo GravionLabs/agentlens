@@ -15,6 +15,7 @@ use crate::analyzers::cost_without::WithoutReport;
 use crate::analyzers::efficiency::{CacheRow, RoleRow};
 use crate::analyzers::flow::{HookStats, SessionGrowth, ToolErrors};
 use crate::analyzers::skills::SkillStats;
+use crate::analyzers::tips::TipsReport;
 use crate::analyzers::trend::TrendReport;
 use crate::analyzers::unused::{UnusedItem, UnusedKind};
 use crate::model::ContextKind;
@@ -605,6 +606,47 @@ pub fn advice(report: &AdviceReport) -> Result<String, CsvError> {
                 f.impact.saving.count.to_string(),
                 usd.clone(),
                 confidence.clone(),
+            ]);
+        }
+    }
+    write(&header, rows)
+}
+
+/// `tips`: one row per target of each tip, with the tip's rank, kind and saving on every row and the
+/// ready steps of the target (their changes, separated by `; `; empty where there is none).
+pub fn tips(report: &TipsReport) -> Result<String, CsvError> {
+    let header = [
+        "rank",
+        "kind",
+        "target",
+        "saving_tokens",
+        "saving_usd",
+        "confidence",
+        "step",
+    ];
+    let id = |v: serde_json::Result<serde_json::Value>| {
+        v.ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default()
+    };
+    let mut rows = Vec::new();
+    for t in &report.tips {
+        let usd = t.saving_usd.map(|u| format!("{u:.6}")).unwrap_or_default();
+        for target in &t.targets {
+            let step = target
+                .steps
+                .iter()
+                .map(|s| s.change.as_str())
+                .collect::<Vec<_>>()
+                .join("; ");
+            rows.push(vec![
+                t.rank.to_string(),
+                id(serde_json::to_value(t.kind)),
+                target.name.clone(),
+                t.saving.count.to_string(),
+                usd.clone(),
+                id(serde_json::to_value(t.confidence)),
+                step,
             ]);
         }
     }

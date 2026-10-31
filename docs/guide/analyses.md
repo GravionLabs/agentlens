@@ -91,6 +91,20 @@ An `inferred` saving rests on an assumption: for **Context size**, that the work
 
 A finding says what it cannot know: a skill that is needed only now and then may be worth keeping although it shows up as unused, and the work after a skill is activity, not cost the skill caused. The CLI prints the findings as a table (`--format json` and `--format csv` have all of them), the application has an **Advice** view, and the [MCP server](mcp-server.md) has an `advice` tool, so an agent gets the findings and only has to explain and act on them.
 
+## Tips
+
+```sh
+agentlens tips --limit 5
+```
+
+The few [advice](#advice) findings that pay most, said in one line each. A tip is a view over a finding, computed from the same sessions, never written by a model: the same sessions give the same tips.
+
+- **Threshold.** A finding with a saving becomes a tip only if its saving is at least `MIN_TIP_SHARE` (0.5 %) of the period's cost. Without any price the share is taken of the tokens of the period weighted by class (input 1, cache write 1.25, cache read 0.1). The findings below are counted in `below_threshold`; findings without a saving are no tips. `--limit` (default 5) caps the list; the tips keep the order of the findings.
+- **Targets.** A tip lists the first `TIP_TARGETS` (3) items of its finding, and `more` counts the rest. The headline is a fixed sentence per kind with the numbers; estimates carry a tilde, and the USD saving is always an estimate.
+- **Steps.** Where the client documents the syntax, a target carries a ready step (`client`, `file`, `change`); every other finding and client has the general `action` only. Today only Claude Code has steps: for an unused skill or one that is listed but loaded by hand, add `disable-model-invocation: true` to the front matter of its `SKILL.md` ([documentation](https://code.claude.com/docs/en/skills); the skill stays usable as `/name` and leaves the listing; skills supplied by plugins get no step); for a costly MCP server, move it from the user scope (`~/.claude.json`) to the `.mcp.json` of the projects that call it ([documentation](https://code.claude.com/docs/en/mcp)).
+
+`--format json` prints the report (`period_cost_usd`, `threshold`, `tips`, `below_threshold`), `--format csv` one row per target (`rank`, `kind`, `target`, `saving_tokens`, `saving_usd`, `confidence`, `step`). The [MCP server](mcp-server.md) has a `tips` tool and a `tips` prompt.
+
 ## Context
 
 ```sh

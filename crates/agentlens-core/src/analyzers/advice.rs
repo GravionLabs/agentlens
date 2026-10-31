@@ -274,17 +274,17 @@ impl Pricing {
         // Per class: price × tokens, tokens and the plain sum of the prices.
         let mut sums = [(0.0f64, 0u64, 0.0f64); 3];
         let mut pricing = Pricing::default();
-        for u in sessions
-            .iter()
-            .flat_map(|se| &se.events)
-            .filter_map(|e| match &e.kind {
-                EventKind::Usage(u) => Some(u),
+        for (se, u) in sessions.iter().flat_map(|se| {
+            se.events.iter().filter_map(move |e| match &e.kind {
+                EventKind::Usage(u) => Some((se, u)),
                 _ => None,
             })
-        {
+        }) {
+            // Like `period_totals`: a request without a model takes the session's.
             let Some(r) = u
                 .model
                 .as_deref()
+                .or(se.session.model.as_deref())
                 .and_then(|m| prices.rates(m, u.total_input()))
             else {
                 pricing.unpriced_requests += 1;
@@ -329,6 +329,34 @@ impl Pricing {
                 / 1_000_000.0
         })
     }
+}
+
+/// The cost of all priced requests of the sessions (`None` if no request has a price) and their tokens
+/// weighted by class ([`INPUT_WEIGHT`] and the others; output is not weighted, no finding saves it).
+pub fn period_totals(sessions: &[SessionEvents], prices: &PriceTable) -> (Option<f64>, u64) {
+    let mut usd = None;
+    let mut weighted = 0.0;
+    for se in sessions {
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            let mut usage = u.clone();
+            if usage.model.is_none() {
+                usage.model = se.session.model.clone();
+            }
+            if let Some(c) = prices.cost(&usage) {
+                *usd.get_or_insert(0.0) += c.usd;
+            }
+            weighted += Split {
+                input: u.input as f64,
+                cache_read: u.cache_read as f64,
+                cache_write: u.cache_write as f64,
+            }
+            .weight();
+        }
+    }
+    (usd, weighted.round() as u64)
 }
 
 /// What starting fresh sessions could have saved: on every main-agent request with at least
@@ -1213,7 +1241,7 @@ pub struct AdviceReport {
 }
 
 /// `1234567` -> `1,234,567`.
-fn n(value: u64) -> String {
+pub(crate) fn n(value: u64) -> String {
     let digits = value.to_string();
     let mut out = String::new();
     for (i, c) in digits.chars().enumerate() {

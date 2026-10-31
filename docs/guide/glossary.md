@@ -132,6 +132,10 @@ Shows what the period would have cost on a different model. “Excluded” reque
 
 Every advice finding has an impact: its saving in tokens, the saving in USD (always an estimate, computed from the price table) and the confidence of the saving. The findings are ranked by it: by the USD saving, without any price by the tokens weighted by class (input 1, cache write 1.25, cache read 0.1); findings without a saving come last.
 
+### Tip
+
+A tip is a view over a finding of the advice: its headline, saving, share of the period's cost and confidence, the general action, and up to three targets (the first items of the finding). Only findings that save at least 0.5% of the period's cost (without any price: of the tokens weighted by class) are tips; the others are counted in below_threshold. Where a client documents the syntax, a target carries a step with the file and the change (Claude Code: disable-model-invocation in the front matter of a skill, the project scope .mcp.json for an MCP server). Tips are computed, never written by a model.
+
 ### Saving
 
 For unused skills and costly descriptions the listing tokens that removing or shortening would have saved; for large skill bodies the body above 2,000 tokens times the requests that carried it; for MCP servers their context where none of their tools was called; for the context size the input above each session's first request on requests of at least 200,000 tokens. Findings that know their requests price each with its own model, the others with the period's average price per token class.
