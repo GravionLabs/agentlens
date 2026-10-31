@@ -11,13 +11,13 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       {
         "rank": 1,
         "kind": "context-hygiene",
-        "headline": "Sessions that carried their context on after the task: ~$0.30 (109.0 %)",
+        "headline": "Sessions that carried their context on after the task: ~$0.30 (100.0 %)",
         "saving": {
           "count": 297000,
           "measured": false
         },
         "saving_usd": 0.295949,
-        "share": 1.0900515653775324,
+        "share": 1.0,
         "confidence": "inferred",
         "action": "Clear the context between tasks (`/clear` in Claude Code, a new session in the other clients), compact before the limit (`/compact`), and keep sessions short.",
         "targets": [

@@ -274,17 +274,17 @@ impl Pricing {
         // Per class: price × tokens, tokens and the plain sum of the prices.
         let mut sums = [(0.0f64, 0u64, 0.0f64); 3];
         let mut pricing = Pricing::default();
-        for u in sessions
-            .iter()
-            .flat_map(|se| &se.events)
-            .filter_map(|e| match &e.kind {
-                EventKind::Usage(u) => Some(u),
+        for (se, u) in sessions.iter().flat_map(|se| {
+            se.events.iter().filter_map(move |e| match &e.kind {
+                EventKind::Usage(u) => Some((se, u)),
                 _ => None,
             })
-        {
+        }) {
+            // Like `period_totals`: a request without a model takes the session's.
             let Some(r) = u
                 .model
                 .as_deref()
+                .or(se.session.model.as_deref())
                 .and_then(|m| prices.rates(m, u.total_input()))
             else {
                 pricing.unpriced_requests += 1;

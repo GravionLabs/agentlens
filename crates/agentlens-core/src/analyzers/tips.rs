@@ -211,11 +211,13 @@ pub fn tips(
         below_threshold: 0,
     };
     for f in advice.findings.iter().filter(|f| f.impact.saving.count > 0) {
+        // A saving never exceeds the period it is taken from, however it was priced.
         let share = match (f.impact.saving_usd, cost) {
             (Some(usd), Some(cost)) => Some(usd / cost),
             _ if weighted_tokens > 0 => Some(f.impact.saving.count as f64 / weighted_tokens as f64),
             _ => None,
-        };
+        }
+        .map(|s| s.min(1.0));
         if !share.is_some_and(|s| s >= MIN_TIP_SHARE) {
             out.below_threshold += 1;
             continue;
@@ -340,6 +342,23 @@ mod tests {
         assert_eq!(t.tips.len(), 1);
         assert_eq!(t.tips[0].kind, FindingKind::RetryLoops);
         assert_eq!(t.below_threshold, 0, "no saving is not below the threshold");
+    }
+
+    #[test]
+    fn the_share_never_exceeds_one() {
+        let a = advice(vec![finding(
+            1,
+            FindingKind::RetryLoops,
+            100,
+            Some(3.0),
+            &["a"],
+        )]);
+        let t = tips(&a, &[], Some(2.0), 0, 5);
+        assert_eq!(t.tips[0].share, Some(1.0));
+        assert_eq!(
+            t.tips[0].headline,
+            "Repeated failing tool calls: ~$3.00 (100.0 %)"
+        );
     }
 
     #[test]
