@@ -21,8 +21,10 @@ gh api repos/{owner}/{repo}/branches/<branch> --jq .commit.commit.committer.date
 `git ls-remote` gives no date. Then the open PR of the branch, if any:
 
 ```powershell
-gh pr list --head <branch> --state open --json number,updatedAt
+gh api "repos/{owner}/{repo}/pulls?head=<owner>:<branch>&state=open" --jq '.[] | {number, updated_at}'
 ```
+
+REST, not `gh pr list` (GraphQL budget); `head` needs the owner prefix, a bare branch name matches nothing.
 
 - **Fresh**: the branch was pushed within the last hour, or its open PR was updated within the last hour (a long CI run). Skip the PBI with `#<nr> select: claimed, skipped`.
 - **Stale**: the branch is older than an hour and no open PR was updated within the hour. Claim it and continue it (step 2 resumes the branch) with `#<nr> select: stale claim, taken over`.

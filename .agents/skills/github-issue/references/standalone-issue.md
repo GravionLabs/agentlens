@@ -36,4 +36,4 @@ Applies to: **PBI**, **Bug**, **Feature** (no PBIs). A legacy `[Task]` sub-issue
 
 - CI does not run on PRs into a release branch: the local build, tests and `code-review` are the gate
 - Bug issues require a regression test in the PR — do not close without one
-- If asked to also merge: `gh pr merge <nr> --squash` into `<base>` (`gh pr checks <nr> --watch` first when the base is `main`)
+- If asked to also merge: `gh pr merge <nr> --squash` into `release/**`; `gh pr merge <nr> --merge` into `main` (the `main` ruleset allows only merge commits, never squashed; `gh pr checks <nr> --watch --interval 60` first; each poll is a GraphQL query, the default 10 s drains the budget)

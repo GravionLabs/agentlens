@@ -2,6 +2,8 @@
 
 `refine <nr>` checks the issue against the list of its level. A point is met when the body (or, for children, the sub-issues) states it concretely; only the missing points go to `grill-me`. Facts the code answers are looked up, not asked.
 
+with `governance`: also `references/governance.md`
+
 ## Epic
 
 - Outcome: what is true when the Epic is done.

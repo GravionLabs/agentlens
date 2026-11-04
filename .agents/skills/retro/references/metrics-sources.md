@@ -14,6 +14,10 @@ The metrics table has seven columns. Each has one source; a column without a val
 
 PRs of an issue: `gh pr list --state all --search "<nr> in:body" --json number,title,url,state`; Epics and Features: the PBIs among their sub-issues.
 
+## Flow of agent calls
+
+Source of the order in the flow diagram (`references/flow.md`), never inferred: the `Agent`/`Task` tool calls of the session transcript (tool input role or description, timestamps of the call and its result), or an `agentlens` timeline of subagent calls (role, start, end) if the installed version exposes one. Results come from `gh` (review findings, checks, merge) and the `deliver` report. No source: "flow not measured".
+
 ## Escalation lines
 
 Blocked and skipped PBIs come from the final report of `deliver` (blocked: PBI, reason, open PR; skipped: issue, reason). Use the report in the session or the one the user gives you. None available: the section says "no run report".

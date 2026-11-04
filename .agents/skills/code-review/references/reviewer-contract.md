@@ -22,14 +22,15 @@ A missing or weak test for changed behavior is blocking only when a criterion re
 
 Print one JSON object that validates against `schema/review.schema.json`, nothing else.
 
-| Property   | Meaning                                                          |
-| ---------- | ---------------------------------------------------------------- |
-| `blocking` | findings that must be fixed before merge; empty when none        |
-| `file`     | path relative to the repository root                             |
-| `line`     | 1-based line in the new version of the file                      |
-| `title`    | the defect in one line                                           |
-| `why`      | which criterion or defect class it breaks, and the fix direction |
-| `notes`    | non-blocking observations, one string each                       |
+| Property   | Meaning                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------- |
+| `blocking` | findings that must be fixed before merge; empty when none                                   |
+| `file`     | path relative to the repository root                                                        |
+| `line`     | 1-based line in the new version of the file                                                 |
+| `title`    | the defect in one line                                                                      |
+| `why`      | which criterion or defect class it breaks, and the fix direction                            |
+| `rule`     | optional on a blocking item: `adr-missing` or `spec-drift`, from `references/governance.md` |
+| `notes`    | non-blocking observations, one string each                                                  |
 
 ```json
 {

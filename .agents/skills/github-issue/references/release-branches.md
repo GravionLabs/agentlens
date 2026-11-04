@@ -3,11 +3,11 @@
 `main` is released code: a push to `main` builds the platform matrices and publishes. To keep those
 builds rare, day-to-day work never targets `main` directly.
 
-| Branch                                                            | Cut from               | Merged into                                             | Strategy                                                                                                | CI                                                                    |
-| ----------------------------------------------------------------- | ---------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `release/next` (rolling; `release/<x.y>` only for parallel lines) | `main`                 | `main`, once per release, by the `github-release` skill | merge commit (`gh pr merge --merge`), never squash: git-cliff needs the individual conventional commits | Linux checks on the PR, platform builds after the merge               |
-| `<type>/<nr>-<slug>`                                              | the integration branch | the integration branch                                  | squash                                                                                                  | none: local build, tests and `code-review` before the PR are the gate |
-| `fix/<nr>-<slug>` hotfix                                          | `main`                 | `main`                                                  | squash                                                                                                  | Linux checks on the PR                                                |
+| Branch                                                            | Cut from               | Merged into                                             | Strategy                                                                                                                | CI                                                                    |
+| ----------------------------------------------------------------- | ---------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `release/next` (rolling; `release/<x.y>` only for parallel lines) | `main`                 | `main`, once per release, by the `github-release` skill | merge commit (`gh pr merge --merge`), never squash: GitVersion and git-cliff need the individual `feat:`/`fix:` commits | Linux checks on the PR, platform builds after the merge               |
+| `<type>/<nr>-<slug>`                                              | the integration branch | the integration branch                                  | squash (the `release/**` ruleset allows only squash; commit title = PR title, a Conventional Commit)                    | none: local build, tests and `code-review` before the PR are the gate |
+| `fix/<nr>-<slug>` hotfix                                          | `main`                 | `main`                                                  | merge commit (the `main` ruleset allows only merge)                                                                     | Linux checks on the PR                                                |
 
 The release PR to `main` is created and refreshed by the caller of the reusable `release-branch.yml` (GravionLabs/ci, step `versioning/release-pr`) on every push to the release branch; the owner only merges it.
 
@@ -15,15 +15,19 @@ One rolling branch, `release/next`, serves every release. `github-release cut` c
 deletes and recreates it from `main` when it is released, i.e. its head is an ancestor of `main` and not equal to it (no force push; the git guardrail allows the remote delete of exactly `release/next`). A head equal to `main` is fresh and usable: `cut` is a no-op. While it holds unreleased work (not an ancestor of `main`), `cut` never resets it. `cut --feature` always only records `Release branch: release/next` when the branch is fresh or unreleased. After its
 merge the branch is reset by the next `cut`, never continued, so it can never be released under a stale name.
 
-- **Bump rule:** minor by default, no commit needed. `finish` defaults to minor; `finish major` adds an empty
-  `+semver: major` commit once (not again on a repeated finish). Patch releases are hotfixes.
-- **Version source:** the GitVersion branch config in `GitVersion.yml`
-  (`branches: release: { regex: ^release/next$, increment: Minor }`, `mode: ContinuousDeployment`), not the
-  branch name or an empty commit at `cut`.
-- **Hotfix path:** `fix/<nr>-<slug>` from `main`, squash into `main`, then merge `main` into `release/next`.
+- **Bump rule:** from the Conventional Commits on the branch, no commit needed: `fix:` → patch, `feat:` → minor,
+  `<type>!:` or `BREAKING CHANGE:` → major (only the commit title counts, a squash body line does not). A release
+  with only fixes is a patch release. `finish` adds no bump commit; `finish major` is the deliberate escape hatch
+  (batched renames) and adds an empty `+semver: major` commit once (not again on a repeated finish).
+- **Version source:** GitVersion on the default branch after the merge, with the Conventional Commit bump
+  messages (`*-version-bump-message`, the default of GravionLabs/ci `versioning/determine-version`), not the branch
+  name or an empty commit at `cut`. Preconditions: squash commit title = PR title, PR titles are Conventional
+  Commits, and the release PR stays a merge commit (never squash), so the `feat:`/`fix:` commits stay visible to
+  GitVersion and git-cliff.
+- **Hotfix path:** `fix/<nr>-<slug>` from `main`, merged into `main` with a merge commit (the `main` ruleset allows
+  only merge; no squash), then merge `main` into `release/next`.
 - **Parallel lines:** the exception; cut an explicit `release/<x.y>` by hand and record it in the issue's
-  `Release branch:` line. GitVersion's Minor increment applies only to `release/next`, so `finish` on a
-  `release/<x.y>` adds `+semver: minor|major` itself when `origin/<default>..HEAD` has none.
+  `Release branch:` line. The same bump rule applies: `finish` adds no commit on a `release/<x.y>` either.
 - **`finish` guards:** refuses when `release/next` is behind `main`, when its head is an ancestor of
   `main` (equal to it too: a fresh branch has nothing to release), when the branch was already released
   (tag `v<x.y>.0` on origin, or a release tag's merge commit is missing from HEAD while its second parent is

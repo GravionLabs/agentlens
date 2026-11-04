@@ -8,6 +8,8 @@ metadata:
 
 # skills-install
 
+`help` (or `--help`, `-h`): print `references/help.md` unchanged, nothing else.
+
 `scripts/Install-Skills.ps1` resolves the skill groups a project needs and installs their skills with `npx skills add GravionLabs/skills --skill …`. PowerShell 7+ and Node.js 22+ (`npx`) are required; the script exits 1 with a hint otherwise. Run from the project root.
 
 ## Slash usage
@@ -27,6 +29,8 @@ metadata:
 2. Ask for confirmation. Never install without it, even when the groups were named in the slash command.
 3. Run the same command without `-DryRun`. The result lists `installed`, `skipped` (already present in the target scope), `failed`, `dependencies` (`angular/skills` for `ng`, `dotnet/skills` for `dotnet`) and `notes`. Tell the user what was installed, which dependencies came along, and any failure.
 4. Relay the `notes` and follow [after install](references/after-install.md): what to commit, and the allowlist of the harness with the verify commands of the repository's `AGENTS.md` for `/deliver`.
+
+5. After the `delivery` group was installed (project or global): offer the `deliver-loop` shell command. Ask first; show `pwsh scripts/Install-LoopShim.ps1 -DryRun` (profile and block), then run it without `-DryRun` on a yes. A second run reports `unchanged`. It never touches a profile unasked; `-Shell zsh|bash|pwsh`, `-ProfilePath <file>`.
 
 ## Script inputs and output
 

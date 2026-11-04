@@ -4,9 +4,11 @@
     "grill-me",
     "planner",
     "retro",
+    "roadmap",
     "skills-install"
   ],
   "dotnet": [
+    "dotnet-aspire",
     "dotnet-create-solution",
     "dotnet-implementation",
     "dotnet-mcp-server-generator",
@@ -14,6 +16,7 @@
   ],
   "github": [
     "github-issue",
+    "github-milestone",
     "github-pull-request",
     "github-release"
   ],
@@ -22,7 +25,7 @@
     "go-test"
   ],
   "ng": [
-    "ng-ag-grid-developer",
+    "ng-ag-grid",
     "ng-create-project",
     "ng-implementation",
     "ng-test"
@@ -37,6 +40,7 @@
     "rust-test"
   ],
   "shared": [
+    "adr",
     "check-prerequisites",
     "code-review",
     "detect-techstack",

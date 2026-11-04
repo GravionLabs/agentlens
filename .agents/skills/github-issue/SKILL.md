@@ -44,4 +44,5 @@ read, create, move and verify them. Markdown checklists are not used.
 - Commit and PR titles reference the issue: `<type>: <description> (#<nr>)`; the PR body contains `Closes #<nr>` for every issue it completes (only partly delivered: `Refs #<nr>` and `## Not delivered`, see `github-pull-request`).
 - Verify per `implementation` (targeted tests per commit, one full run before the pull request); never commit or move on with a red run.
 - Never merge a PR with failing checks.
+- `.agents/config.json` has `governance`: an issue whose outcome is a decision follows `references/decisions.md`.
 - Closing a child is all that's needed — the native sub-issue link updates the parent's progress automatically. There is no checklist to tick. If a child turns out not to be linked to its parent, link it (`references/sub-issues.md`) instead of adding a checklist.

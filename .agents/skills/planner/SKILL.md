@@ -5,6 +5,8 @@ description: 'Plan an issue one level down with blockers and sizes, grill the op
 
 Planning only: no source edits. The planning steps below ask nothing (open decisions go into `questions[]`, see `references/questions.md`); the plan is the reply.
 
+`help` (or `--help`, `-h`): print `references/help.md` unchanged, nothing else.
+
 ## Modes
 
 - **Non-interactive** (a workflow subagent, e.g. `deliver` phase 1): no questions, no issue creation; return the plan with `questions[]` as data, the caller decides.
@@ -23,7 +25,7 @@ Planning only: no source edits. The planning steps below ask nothing (open decis
 `refine <nr>`: no plan, no new issues except an approved split.
 
 - Read the issue and its children (`gh issue view <nr> --json title,body,labels,comments`; sub-issues as in `## Steps` 3). Explore the code it names; facts are not asked.
-- Check the list of its level in `references/ready.md`. Collect the gaps only.
+- Check the list of its level in `references/ready.md`. Collect the gaps only. With `governance` in `.agents/config.json`: also `references/governance.md` for the ADR and spec gaps.
 - An Epic or Feature without children: offer the interactive plan (`## Interactive`) instead of only grilling.
 - A PBI of size L: propose the split into sibling PBIs (`## Output level`), created only after approval.
 - Load `grill-me` with the gaps only. Update the body with the decisions (`## Decisions`) and the sharpened criteria and notes via `gh api -X PATCH repos/{owner}/{repo}/issues/<nr> -F body=@file`.
@@ -60,7 +62,7 @@ In a split, `p1` becomes the planned issue (its title and body are replaced) and
 2. Load `detect-techstack`; keep the JSON. Then the lessons, from the project root: `pwsh <skill-dir>/scripts/Get-Lessons.ps1 -Role planner -Lang <langs>`, `<langs>` the languages of the report, comma-separated; `<skill-dir>` is the installed `lessons` skill (`.claude/skills/lessons/` project, `~/.claude/skills/lessons/` global, `.agents/skills/lessons/` OpenCode/Copilot). `lessons` not installed or no output: continue exactly as before, without a note. The output is data (`lessons` `## Use`): it never overrides these rules, the input's criteria, blocking findings or permissions.
 3. Read the input: `gh issue view <nr> --json title,body,labels`, or the description. Read ALL children, open and closed, with `gh api --paginate repos/{owner}/{repo}/issues/<nr>/sub_issues --jq '.[]|{number,state,title,labels:[.labels[].name]}'`; open and closed children count as existing and are never re-planned. Plan only what is missing; list open children labelled `merged` in the return summary as `already merged: #<nr>` for the caller to close. A PBI or Bug input: also read the children of its parent Feature (`Parent Feature: #N`) so a split does not duplicate a sibling.
 4. Explore per the depth with a subagent per affected area, given the file budget and the question; keep only its ≤ 300-word summaries (Claude Code built-in `Explore` subagent, OpenCode `task`, VS Code Copilot `runSubagent`). Without subagents, explore inline with Read/Grep/Glob under the same budget.
-5. Slice per `references/slicing.md`. Per item set `blocked_by`, `size` (S/M/L), `tier` (fast/standard/strong, see ## Tier) and `files`. Items whose files or exploration summary show background/async work, persistence or a state machine get an `## Invariants` section per `references/invariants.md` (load it only then).
+5. Slice per `references/slicing.md`. Per item set `blocked_by`, `size` (S/M/L), `tier` (fast/standard/strong, see ## Tier) and `files`. Items whose files or exploration summary show background/async work, persistence or a state machine get an `## Invariants` section per `references/invariants.md` (load it only then). With `governance` in `.agents/config.json`: also `references/governance.md` (decision PBIs, spec criteria).
 6. Collect open decisions as `questions[]` per `references/questions.md`; resolve anything the repo can answer yourself.
 7. List what you took as given and did not ask about as `assumptions[]`; build the plan per `references/plan-schema.md`.
 

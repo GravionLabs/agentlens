@@ -32,7 +32,7 @@ $nr  = [int]($url -split '/')[-1]   # remember: $created[<plan id>] = $nr
 
 ## 3. Link to the parent
 
-`addSubIssue` of every created issue to `parent_issue` (`sub-issues.md`, "Link a child to a
+Link every created issue to `parent_issue` (`sub-issues.md`, "Link a child to a
 parent"); in a split, to the Feature of the body's first line (no line: no link). A plan from a
 description creates no issues.
 

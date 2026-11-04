@@ -64,5 +64,5 @@ Load `ng-test` for TestBed setup, signal testing, mocking and async patterns.
 
 ## Related Skills
 
-- `ng-ag-grid-developer` — AG Grid Enterprise integration
+- `ng-ag-grid` — AG Grid Enterprise integration
 - `ng-create-project` — new application or workspace

@@ -129,4 +129,6 @@ Trial #5 (Copilot CLI 1.0.105, `-p` mode):
 - The model per subagent is set only in `~/.copilot/settings.json` (`subagents.agents.general-purpose.model`), not per repository.
 - `herdr pane report-metadata` with quoted arguments was denied, so the herdr display stays empty on Copilot. No workaround is required.
 
+Live check of the unattended flags (Copilot CLI 1.0.105, `-p --no-ask-user`): `--allow-all-tools` alone denies `view` of paths outside the cwd (worktrees of subagents) and shell commands with URLs; adding `--allow-all-paths --allow-all-urls` allows both, in the orchestrator and in subagents. `Invoke-DeliverLoop.ps1 -Harness copilot` passes these three flags (`references/loop.md`); the per-tool list above is for runs that must stay narrower.
+
 Keep the call in a PowerShell script of the repository so the list lives next to the code like the other two files.

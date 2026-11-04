@@ -14,7 +14,7 @@
   only when `-d` fails; the head branch and `wip-<Issue>` always get `-D` (a squash merge does not mark them merged).
   A worktree with uncommitted changes or a branch still checked out is listed in `left` with the command to remove it.
   A `git branch -D` that fails is listed in `left` with reason `git branch -D failed: <first stderr line>`.
-  Output: {removed[], branchesDeleted[], left[{path|branch, reason, command}]}. Exit 1 when the PR cannot be read.
+  Output: {removed[], branchesDeleted[], left[{path|branch, reason, command}]}. Exit 1 when the PR cannot be read (REST `pulls/<pr>` and `pulls/<pr>/commits`).
 .PARAMETER Pr
   Number of the merged pull request.
 .PARAMETER Issue
@@ -40,11 +40,14 @@ function Remove-Branch([string]$b, [switch]$TrySafe) {
   $left.Add([ordered]@{ branch = $b; reason = "git branch -D failed: $line"; command = "git branch -D $b" })
 }
 
-$json = & gh pr view $Pr --json headRefName,baseRefName,commits 2>$null
-if ($LASTEXITCODE -ne 0 -or -not $json) { Fail "gh pr view $Pr failed" }
-$info = $json | ConvertFrom-Json
-$head = $info.headRefName
-$shas = @($info.commits | ForEach-Object { $_.oid })
+# REST, not `gh pr view`: porcelain reads run on the GraphQL budget (#117)
+function Get-Rest([string]$endpoint) {
+  $out = & gh api $endpoint 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not $out) { Fail "gh api $endpoint failed" }
+  return ($out -join "`n") | ConvertFrom-Json
+}
+$head = (Get-Rest "repos/{owner}/{repo}/pulls/$Pr").head.ref
+$shas = @(Get-Rest "repos/{owner}/{repo}/pulls/$Pr/commits?per_page=100" | ForEach-Object { $_.sha })
 $branches = @($head, "wip-$Issue")
 
 $self = (& git rev-parse --show-toplevel 2>$null)

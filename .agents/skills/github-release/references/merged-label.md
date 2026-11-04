@@ -4,7 +4,7 @@
 
 ## Lifecycle
 
-1. A PR merges into a `release/*` branch. The reusable workflow `GravionLabs/ci/.github/workflows/release-branch.yml@main` (`release-branch.yml` template; its step `versioning/mark-merged-issues`) adds `merged` to every issue the PR closes or references, comments on it, and labels the parent PBI and Feature once their children are merged. With `project-status` (default `In release`) it sets the project Status `In release` on the same issues: those the merged PR closes (`closingIssuesReferences`) plus those named with a keyword (`Refs #n`, `Closes #n`, `Fixes #n`) in the PR body or its commits, so Refs-only issues and PRs into `release/next` are covered. Only merged PRs whose base is the pushed branch count.
+1. A PR merges into a `release/*` branch. The reusable workflow `GravionLabs/ci/.github/workflows/release-branch.yml@v1` (`release-branch.yml` template; its step `versioning/mark-merged-issues`) adds `merged` to every issue the PR closes or references, comments on it, and labels the parent PBI and Feature once their children are merged. With `project-status` (default `In release`) it sets the project Status `In release` on the same issues: those the merged PR closes (`closingIssuesReferences`) plus those named with a keyword (`Refs #n`, `Closes #n`, `Fixes #n`) in the PR body or its commits, so Refs-only issues and PRs into `release/next` are covered. Only merged PRs whose base is the pushed branch count.
 2. The issue stays open and keeps the label while the release branch is unreleased.
 3. The release lands on `main`: `close-release-issues` (`gh-release`) closes the issue and removes `merged`.
 

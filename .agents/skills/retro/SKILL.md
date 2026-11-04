@@ -10,6 +10,8 @@ Retrospective on a finished run. You improve the agent **environment** (steering
 
 ## Input
 
+`help` (or `--help`, `-h`): print `references/help.md` unchanged, nothing else.
+
 Issue number (`retro 197`), session id, or nothing = the newest run.
 
 ## Steps
@@ -20,10 +22,12 @@ Issue number (`retro 197`), session id, or nothing = the newest run.
    - `agentlens` missing or failing: report that, show cost and context as not measured, continue with the `gh` data and the review findings.
 2. **Read primary sources.** The metrics, the review findings and the relevant transcript turns. **Escalation lines** (blocked PBIs with their reason) come from the final report of `deliver`; without a `deliver` run the section says "no run report". Search only for what a metric flags (a peak, a costly role); do not read whole transcripts.
 3. **Find candidates** in the categories of `references/categories.md`. Each needs evidence (turn, review finding, metric). Drop candidates without evidence.
-4. **Report**, at most 40 lines: a metrics table, then candidates ranked by severity (cost or rework caused), one line each: category, evidence, proposed change. Escalation lines are listed after the candidates.
+4. **Report**, at most 40 lines: a metrics table, then candidates ranked by severity (cost or rework caused), one line each: category, evidence, proposed change. Escalation lines are listed after the candidates. The flow diagram of step 8 is a separate block and does not count towards the 40 lines.
 5. **Draft PBIs** for the candidates the user wants, in the `github-issue` format (`github-issue` `references/standalone-issue.md`; sections per its issue templates: Overview, Acceptance Criteria with a verifiable done-when, Definition of Done). Each draft names the skill file (path under `skills/<group>/<name>/`) and the rule to change (heading or quoted line) in its Acceptance Criteria. Show them as text.
 6. **Draft lessons.** A candidate that is repository-, language- or role-specific (it holds only for this repository, one language or one role) becomes a lesson draft instead of or next to a draft PBI: frontmatter per the `lessons` skill's `references/contract.md`, `status: proposed`, `version: 1`, `evidence` from the candidate. Run `Get-Lessons.ps1 -Check` on the drafts in a temporary folder outside the repository, fix every error, and show the drafts as text. After approval they go into `.agents/lessons/` on a branch with a normal PR; approval of a lesson is setting `status: approved` in that PR. Procedure: `references/lessons.md`.
 7. **Retire lessons.** Check the `approved` lessons of the scope against the runs after their `created` date; a repeated finding or fix rounds on a lesson's topic → a draft proposal to retire it (`status: retired`, evidence: the run). Procedure: `references/lessons.md`, section "Retire ineffective lessons".
+8. **Flow diagram.** Draw the order of the agent calls (main session, subagent roles) per PBI as Mermaid, from measured sources only; without a source write "flow not measured". Load `references/flow.md` for sources, limits and the example.
+
 
 ## Rules
 

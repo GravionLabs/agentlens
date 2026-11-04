@@ -27,7 +27,7 @@ One table for every MCP server of this package (Angular CLI above, `ag-mcp` belo
 
 ## AG Grid server (`ag-mcp`)
 
-Block for the same files, with the root key of the table: `{ "mcpServers": { "ag-mcp": { "command": "npx", "args": ["ag-mcp"] } } }`. Usage and prompts: skill `ng-ag-grid-developer`.
+Block for the same files, with the root key of the table: `{ "mcpServers": { "ag-mcp": { "command": "npx", "args": ["ag-mcp"] } } }`. Usage and prompts: skill `ng-ag-grid`.
 
 ## Default tools
 

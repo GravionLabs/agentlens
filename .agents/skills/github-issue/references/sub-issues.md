@@ -31,28 +31,29 @@ Epic or PBIs under a Feature (legacy: Tasks under a PBI). An issue with no child
 
 ## Link a child to a parent
 
-Linking is a GraphQL mutation over **node IDs**, not issue numbers:
+Linking is a REST call with the child's **database id** (`.id` of the REST issue, an integer), not
+the issue number and not the GraphQL node id (`node_id`):
 
 ```powershell
-$parentId = gh issue view <parent-nr> --json id --jq .id
-$childId  = gh issue view <child-nr> --json id --jq .id
-
-$query = 'mutation($parentId: ID!, $childId: ID!) { addSubIssue(input: { issueId: $parentId, subIssueId: $childId }) { issue { number } } }'
-gh api graphql -f query=$query -f parentId=$parentId -f childId=$childId
+$childId = gh api repos/{owner}/{repo}/issues/<child-nr> --jq .id
+gh api -X POST repos/{owner}/{repo}/issues/<parent-nr>/sub_issues -F sub_issue_id=$childId
 ```
 
-Re-running on an already-linked pair is harmless, which makes batch scripts safe to resume.
+`-F` (capital) sends the integer. Re-running on an already-linked pair changes nothing but fails
+with HTTP 422 "Issue may not contain duplicate sub-issues and Sub issue may only have one parent".
+The same 422 means the child has another parent, so on a 422 check
+`gh api repos/{owner}/{repo}/issues/<child-nr>/parent --jq .number`: the expected parent → done
+(a resumed batch stays safe), another one → move it (next section).
 
 ## Move a child to a different parent
 
 A child has at most one parent — unlink before re-linking:
 
 ```powershell
-$query = 'mutation($parentId: ID!, $childId: ID!) { removeSubIssue(input: { issueId: $parentId, subIssueId: $childId }) { issue { number } } }'
-gh api graphql -f query=$query -f parentId=$oldParentId -f childId=$childId
+gh api -X DELETE repos/{owner}/{repo}/issues/<old-parent-nr>/sub_issue -F sub_issue_id=$childId
 ```
 
-Then `addSubIssue` against the new parent, and update the child's `Parent …: #N` body line to match.
+`sub_issue` is singular here. Then link it to the new parent, and update the child's `Parent …: #N` body line to match.
 
 ## Blocked-by links
 
@@ -81,7 +82,7 @@ the body line — and that every non-Epic issue has exactly one parent:
 
 ```powershell
 gh api repos/{owner}/{repo}/issues/<parent-nr>/sub_issues --jq 'length'
-gh issue view <child-nr> --json body --jq '.body | split("\n")[0]'
+gh api repos/{owner}/{repo}/issues/<child-nr> --jq '.body | split("\n")[0]'
 gh api repos/{owner}/{repo}/issues/<child-nr>/dependencies/blocked_by --jq '[.[].number]'
 ```
 
@@ -91,9 +92,10 @@ the create step linked anything.
 
 ## gh CLI gotchas
 
-- `gh api graphql -f query=@file.graphql` **silently fails to read the file**. Use `-F query=@file.graphql`
-  (capital `F`). Inline `-f query='...'` works fine.
-- `-f` sends every value as a String. Typed variables need `-F` (e.g. `-F number=42` for an `Int!`).
+- Reads and links go through REST (`gh api repos/...`, own budget of 5000/h); `gh issue view/list` and
+  `gh pr view/list/checks` run on GraphQL. REST issue lists include PRs: filter with
+  `select(.pull_request == null)` and pass `--paginate`.
+- `-f` sends every value as a String. Integers (ids) need `-F`.
 - `gh issue view` / `gh issue edit` need `--repo <owner>/<repo>` when run outside a git worktree
   (for example from a scratch directory).
 - `gh issue create` prints the new issue URL; take the number from its last path segment.

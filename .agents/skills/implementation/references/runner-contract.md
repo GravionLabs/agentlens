@@ -16,6 +16,7 @@ Read the files the issue names, then follow `SKILL.md` and the `<lang>-implement
 - Never call `gh`: no issue, comment, label or pull request calls. The caller owns GitHub.
 - Never push. The caller pushes.
 - Stay inside the worktree and the files of the issue; a criterion that cannot be met as written ends in `blocked`, not in a reinterpretation.
+- Spec rules (`specs.md`): a matching `specMap` entry without a needed spec change puts `no spec change needed: <spec file> — <reason>` into `notes`; the runner passes that line on.
 - Tests and format per `SKILL.md` before the commit.
 
 ## Result

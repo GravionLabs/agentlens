@@ -7,14 +7,20 @@
   ignored: the caller runs on without a pane. The pane is never closed here, so the log stays readable after the run.
   -Pane/-Tab name the pane to split and its tab (default: the current pane, the tab of HERDR_PANE_ID). -Detached skips the
   herdr and terminal check, for a caller without a terminal that checked herdr itself (the toggle keybinding).
-  DELIVER_LOOP_ASSUME_TTY=1 treats a redirected stdout as a terminal (tests only).
+  DELIVER_LOOP_ASSUME_TTY=1 treats a redirected stdout as a terminal (tests only; see Test-LoopTerminal).
 #>
 
 $script:LogPaneLabel = 'deliver-log'
 
+# "Terminal" for the loop: stdout is not redirected. DELIVER_LOOP_ASSUME_TTY=1 forces true (tests only).
+# The single definition; Invoke-DeliverLoop.ps1 (stdout colors) and Test-LogPaneHost both call it.
+function Test-LoopTerminal {
+  return (-not [Console]::IsOutputRedirected) -or $env:DELIVER_LOOP_ASSUME_TTY -eq '1'
+}
+
 function Test-LogPaneHost {
   if ($env:HERDR_ENV -ne '1') { return $false }
-  return (-not [Console]::IsOutputRedirected) -or $env:DELIVER_LOOP_ASSUME_TTY -eq '1'
+  return (Test-LoopTerminal)
 }
 
 # Panes of one tab: -Tab, else the tab of -Pane (default HERDR_PANE_ID); every pane when neither is known.
