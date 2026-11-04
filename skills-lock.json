@@ -8,78 +8,6 @@
       "skillPath": "angular-developer/SKILL.md",
       "computedHash": "9b78fec217d3f9e585b0eff7c7a64fefc61b3f1d15d15e7df4e44180d76d90bb"
     },
-    "check-prerequisites": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/shared/check-prerequisites/SKILL.md",
-      "computedHash": "5e42f2a3a541c2dc9eb05f36f49d7f14dc27ac6edaa25037b1ee772c2b2eb897"
-    },
-    "code-review": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/shared/code-review/SKILL.md",
-      "computedHash": "f1ed5fcb17915f8b5d4b1699f4eb7b09742b7cafe9e159c6bd3d338cbddbbeca"
-    },
-    "context-statusline": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/statusline/context-statusline/SKILL.md",
-      "computedHash": "4001657e8171ca053d4f71ecf725f8ee30577103dd9cab2a3001d0fc6211cf50"
-    },
-    "deliver": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/delivery/deliver/SKILL.md",
-      "computedHash": "3a46fcab2924670207e9e8e28ff74ca291a5d3c73360930170a3cee031dde722"
-    },
-    "detect-techstack": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/shared/detect-techstack/SKILL.md",
-      "computedHash": "eda7e9ae55b7e7ad9252e8e6f6cb4eb043b3fc48b9066ff00246ba851752505e"
-    },
-    "diagnose": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/shared/diagnose/SKILL.md",
-      "computedHash": "5e1637fbae006b603c241d5eaced21ccdab7dc1f4bbf85804dcd6d1ef6852c91"
-    },
-    "github-issue": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/github/github-issue/SKILL.md",
-      "computedHash": "c31935563ead07ce381e0fccfed2ee80c16bd955fc750e76dd286243ba98dd05"
-    },
-    "github-pull-request": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/github/github-pull-request/SKILL.md",
-      "computedHash": "7e462d0f7e5727b73f53370a0186005683b587f316cedec571a3228329b89dd8"
-    },
-    "github-release": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/github/github-release/SKILL.md",
-      "computedHash": "d038e1ffc71f807a91a4ce3de3ef598aa82574f17e6792f80511f782aa2e7ac6"
-    },
-    "grill-me": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/delivery/grill-me/SKILL.md",
-      "computedHash": "5036068699e267446ddc2ee1b7d379b3f3797694bfabb9b783e2c6a9132f8b2e"
-    },
-    "implementation": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/shared/implementation/SKILL.md",
-      "computedHash": "224b6592c46173e8d239d506a4ad8ec68496fa55e072fe614abc785ae5361950"
-    },
-    "lessons": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/shared/lessons/SKILL.md",
-      "computedHash": "ba77828b015d255003fdcd1e97f27508deef332bc802bbb272c7563df98df160"
-    },
     "ng-ag-grid": {
       "source": "GravionLabs/skills",
       "sourceType": "github",
@@ -104,18 +32,6 @@
       "skillPath": "skills/ng/ng-test/SKILL.md",
       "computedHash": "7ba5808a17eee597c7515d34b0945d0a1ad1980cd0ccdf0bb44dcd6779c41687"
     },
-    "planner": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/delivery/planner/SKILL.md",
-      "computedHash": "c005baa432d478acb5de9a0d105827d9fbe61c6c8c2347fb33f04e1a7d9a7598"
-    },
-    "retro": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/delivery/retro/SKILL.md",
-      "computedHash": "d2b299ed49856f8a572c288c260891c17a8073f16382ce0176e10faa81f121c6"
-    },
     "rust-implementation": {
       "source": "GravionLabs/skills",
       "sourceType": "github",
@@ -139,12 +55,6 @@
       "sourceType": "github",
       "skillPath": "skills/ts/setup-prettier-eslint-husky/SKILL.md",
       "computedHash": "6be8c158f26dd9f52c552316ef6db8cd0be4eaaca3b8b86bbf2c2ffb9011257a"
-    },
-    "skills-install": {
-      "source": "GravionLabs/skills",
-      "sourceType": "github",
-      "skillPath": "skills/delivery/skills-install/SKILL.md",
-      "computedHash": "343060ae6e1be3f1cc9e25ed57925668679c00fedfa7c48219e514637646eb91"
     },
     "ts-create-project": {
       "source": "GravionLabs/skills",
