@@ -232,7 +232,20 @@ fn json_samples_for_the_frontend_are_up_to_date() {
         ),
         (
             "unused",
-            serde_json::to_string_pretty(&api::unused(&ctx, &all).unwrap()).unwrap(),
+            // A fixed period: without one, unused looks back DEFAULT_PERIOD_DAYS from now and the fixtures age out.
+            // The 30 days up to 2026-10-13 hold the Claude Code session, not the Copilot one of July.
+            serde_json::to_string_pretty(
+                &api::unused(
+                    &ctx,
+                    &Filters {
+                        since: Some("2026-09-13".into()),
+                        until: Some("2026-10-13".into()),
+                        ..Filters::default()
+                    },
+                )
+                .unwrap(),
+            )
+            .unwrap(),
         ),
         (
             "flow",

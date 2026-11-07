@@ -1687,8 +1687,9 @@ fn a_skill_used_only_through_its_files_is_not_unused() {
         .success()
         .stdout(predicate::str::contains("file uses"));
 
-    // `unused` lists the idle skill and not the one whose files are in use.
-    let u = json(agentlens(&home).args(["unused", "--format", "json"]));
+    // `unused` lists the idle skill and not the one whose files are in use. A fixed --since: the default window of
+    // 30 days counted back from now would drop the fixture sessions as they age.
+    let u = json(agentlens(&home).args(["unused", "--since", "2026-01-01", "--format", "json"]));
     let names: Vec<&str> = u["items"]
         .as_array()
         .unwrap()
