@@ -31,7 +31,7 @@ Download the archive for your platform (and the installer of the application) fr
 
 ## Agent skills
 
-Run `apm install` before working in the repository to install the stack skills declared in `apm.yml`. The skill folders (`.claude/skills`, `.agents/skills`) are git-ignored, so a fresh clone has none. This needs [apm](https://github.com/microsoft/apm).
+The stack skills from [GravionLabs/skills](https://github.com/GravionLabs/skills) are committed in `.agents/skills` and `.claude/skills` and pinned in `skills-lock.json`. Update them with `npx skills update`; `/skills-manage` installs the skills of a new stack.
 
 ## Usage
 
