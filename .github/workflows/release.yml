@@ -26,6 +26,8 @@ jobs:
       contents: write
       issues: write
       pull-requests: read
+      id-token: write
+      attestations: write
     with:
       # The application crate needs system libraries; app.yml checks it.
       ci-exclude: agentlens-app
