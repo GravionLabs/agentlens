@@ -24,9 +24,9 @@ jobs:
         # Linux only, the full matrix runs once the release branch is merged into main.
         os: ${{ fromJSON(github.event_name == 'push' && github.ref == 'refs/heads/main' && '["ubuntu-latest", "macos-latest", "windows-latest"]' || '["ubuntu-latest"]') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # fmt, clippy and tests of the CLI crates; the application crate needs system libraries and is
       # checked in app.yml.
-      - uses: GravionLabs/ci/rust/ci@main
+      - uses: GravionLabs/ci/rust/ci@511932d4b5d0d7c77149bb705cfc2b6bae5f2df1 # v1.15.0
         with:
           exclude: agentlens-app
