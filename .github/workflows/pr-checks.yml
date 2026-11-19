@@ -1,0 +1,25 @@
+# Caller of the reusable pr-checks.yml of GravionLabs/ci. The ruleset `main` requires the status check
+# "pr-checks / PR checks": the job id `pr-checks` and the aggregate job `PR checks` of the reusable workflow make that name.
+# Jobs that run: readiness (the PR closes an issue that is ready; release PRs exempt) and title (the PR title is a
+# Conventional Commit and agrees with the commits). adr, spec and persistence stay off; turn them on here.
+name: PR checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  pr-checks:
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    uses: GravionLabs/ci/.github/workflows/pr-checks.yml@v1
+    with:
+      readiness: true
+      title: true
+      adr: false
+      spec: false
+      persistence: false
