@@ -1,6 +1,6 @@
 /*
  * The AgentLens theme for helix: the roles of the helix tokens (--h-*, --helix-*) are bound to the
- * AgentLens tokens of styles.scss (--bg, --panel, --text, --muted, --line, --accent, ...). Those flip
+ * AgentLens tokens of styles.css (--bg, --panel, --text, --muted, --line, --accent, ...). Those flip
  * with prefers-color-scheme and data-theme, so this one block serves light and dark; the `app-dark`
  * class (set by HelixDark) only selects helix's own dark values, which are overridden here.
  *

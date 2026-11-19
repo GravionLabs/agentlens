@@ -5,7 +5,7 @@ const QUERY = "(prefers-color-scheme: dark)";
 
 /**
  * Bridges the app's dark mode to helix: toggles the `app-dark` class on `<html>`. Dark when the system
- * prefers dark and `data-theme` is not `light`, or when `data-theme="dark"` (same rule as `styles.scss`).
+ * prefers dark and `data-theme` is not `light`, or when `data-theme="dark"` (same rule as `styles.css`).
  */
 @Directive({ selector: "[appHelixDark]" })
 export class HelixDark {
