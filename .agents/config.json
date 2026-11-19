@@ -8,6 +8,11 @@
       "crates/agentlens-core/src/exact.rs",
       "src-tauri/windows/**"
     ],
-    "skipLabels": ["skip-adr"]
+    "skipLabels": [
+      "skip-adr"
+    ]
+  },
+  "deliver": {
+    "notifications": false
   }
 }
