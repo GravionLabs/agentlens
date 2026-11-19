@@ -27,6 +27,6 @@ jobs:
       - uses: actions/checkout@v4
       # fmt, clippy and tests of the CLI crates; the application crate needs system libraries and is
       # checked in app.yml.
-      - uses: GravionLabs/ci/rust/ci@main
+      - uses: GravionLabs/ci/rust/ci@v1
         with:
           exclude: agentlens-app
