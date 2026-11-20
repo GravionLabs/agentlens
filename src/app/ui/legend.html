@@ -1,0 +1,5 @@
+<div class="legend">
+  @for (i of items(); track i.label) {
+    <span><i [style.background]="i.color"></i>{{ i.label }}</span>
+  }
+</div>

@@ -23,117 +23,7 @@ import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../c
   selector: "app-filter-bar",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HxSelect, HxMultiSelect, HxInput, HxDateTimeRangePicker, HxSwitch],
-  template: `
-    <form class="bar" (submit)="$event.preventDefault()" aria-label="Filters">
-      <div class="field">
-        <label for="filter-period">Period</label>
-        <hx-select
-          inputId="filter-period"
-          fluid
-          [options]="periodOptions"
-          optionLabel="label"
-          optionValue="value"
-          [value]="customOpen() ? custom : filters.periodChoice()"
-          (valueChange)="setSince($event)"
-        />
-      </div>
-      @if (customOpen()) {
-        <div class="field last">
-          <label for="filter-last">Last</label>
-          <div class="pair">
-            <input
-              hx-input
-              fluid
-              id="filter-last"
-              type="number"
-              placeholder="Last"
-              min="1"
-              step="1"
-              [attr.aria-invalid]="lastError() ? 'true' : null"
-              [value]="lastValue()"
-              (change)="setLastNumber($event)"
-            />
-            <hx-select
-              inputId="filter-last-unit"
-              ariaLabel="Unit"
-              fluid
-              [options]="units"
-              optionLabel="label"
-              optionValue="value"
-              [value]="lastUnit()"
-              (valueChange)="setLastUnit($event)"
-            />
-          </div>
-        </div>
-        <div class="field range">
-          <label for="filter-window">Date range</label>
-          <hx-date-time-range-picker
-            inputId="filter-window"
-            ariaLabel="Date range"
-            placeholder="Date range"
-            showTime
-            [presets]="rangePresets"
-            [invalid]="!!rangeError()"
-            [value]="rangeValue()"
-            (valueChange)="setRange($event)"
-          />
-        </div>
-        @if (lastError() || rangeError()) {
-          <p class="error" role="alert">{{ lastError() || rangeError() }}</p>
-        }
-      }
-      <div class="field">
-        <label for="filter-sources">Sources</label>
-        <hx-multi-select
-          inputId="filter-sources"
-          fluid
-          [options]="sources"
-          optionLabel="label"
-          optionValue="id"
-          placeholder="All sources"
-          showClear
-          [value]="filters.sources()"
-          (valueChange)="setSources($event)"
-        />
-      </div>
-      <div class="field">
-        <label for="filter-project">Project</label>
-        <input
-          hx-input
-          fluid
-          id="filter-project"
-          type="text"
-          placeholder="Directory, or empty for all"
-          [value]="filters.project()"
-          (change)="setProject($event)"
-        />
-      </div>
-      @if (roles().length > 0) {
-        <div class="field">
-          <label for="filter-roles">Roles</label>
-          <hx-multi-select
-            inputId="filter-roles"
-            fluid
-            [options]="roles()"
-            placeholder="All roles"
-            showClear
-            [value]="filters.roles()"
-            (valueChange)="filters.setRoles($event)"
-          />
-        </div>
-      }
-      <label class="compare" for="filter-compare">
-        <input
-          hx-switch
-          type="checkbox"
-          id="filter-compare"
-          [checked]="filters.compare()"
-          (change)="filters.setCompare(isChecked($event))"
-        />
-        vs. previous period
-      </label>
-    </form>
-  `,
+  templateUrl: "./filter-bar.html",
   styles: `
     /* Projected into the topbar (helixTopbarEnd): it takes the free width there. */
     :host {
@@ -211,11 +101,11 @@ export class FilterBar {
   /** Whether the custom inputs are open; they open with the "Custom…" choice or a custom window. */
   protected readonly customOpen = signal(this.filters.periodChoice() === CUSTOM);
   /** The inputs being edited; the filter only changes when they are valid. */
-  private readonly draftLast = signal<unknown>(this.filters.last()?.last ?? 1);
+  private readonly draftLast = signal<number>(this.filters.last()?.last ?? 1);
   protected readonly lastUnit = signal<string>(this.filters.last()?.unit ?? "d");
   protected readonly lastError = signal<string | null>(null);
   protected readonly rangeError = signal<string | null>(null);
-  protected readonly lastValue = computed(() => String(this.draftLast() ?? ""));
+  protected readonly lastValue = computed(() => String(this.draftLast()));
   protected readonly rangeValue = computed<HxDateTimeRangeValue>(() => {
     const r = this.filters.range();
     return r ? { from: new Date(r.from), to: new Date(r.to) } : { from: null, to: null };

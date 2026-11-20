@@ -32,31 +32,7 @@ export function trendStat(
   selector: "app-stat-cards",
   imports: [HelixStatCard],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="cards">
-      @for (s of stats(); track s.label) {
-        <div class="card">
-          <helix-stat-card [label]="s.label" [value]="s.value" [attr.title]="s.title ?? null" />
-          @if (s.delta; as d) {
-            <p
-              class="delta"
-              [class.good]="d.tone === 'good'"
-              [class.bad]="d.tone === 'bad'"
-              [attr.data-direction]="d.direction"
-            >
-              @if (d.arrow) {
-                <span aria-hidden="true">{{ d.arrow }}</span>
-              }
-              {{ d.text }}
-            </p>
-          }
-        </div>
-      }
-    </div>
-    @if (note()) {
-      <p class="note">{{ note() }}</p>
-    }
-  `,
+  templateUrl: "./stat-cards.html",
   styles: `
     .delta {
       margin: 2px 8px 0;

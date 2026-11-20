@@ -1,0 +1,169 @@
+// oxlint lints every TypeScript and JavaScript file (ADR 0006 of GravionLabs/skills, #542); ESLint
+// lints the Angular templates only (eslint.config.mjs). Converted from the former ESLint config
+// (`@eslint/js` recommended, `typescript-eslint` recommended, angular-eslint `tsRecommended`) by
+// `@oxlint/migrate`, plus the correctness category and the type-aware promise rules. Not covered:
+// `no-octal` (no oxlint rule; octal literals are a TypeScript error in modules anyway).
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "vitest"],
+  "jsPlugins": ["@angular-eslint/eslint-plugin"],
+  "categories": { "correctness": "error" },
+  "env": { "builtin": true },
+  "options": { "typeAware": true },
+  "ignorePatterns": [
+    "dist/**",
+    ".angular/**",
+    "node_modules/**",
+    ".agents/**",
+    ".claude/**",
+    "src-tauri/**",
+    "crates/**",
+    "target/**",
+    "site/.vitepress/dist/**",
+    "site/.vitepress/cache/**"
+  ],
+  "rules": {
+    // Off as in typescript-eslint's `eslint-recommended`: the TypeScript compiler reports these
+    // (duplicate members and keys, assignments to const/imports/functions/classes, unreachable
+    // code, missing super calls, getter and setter returns, non-constructors with `new`).
+    "constructor-super": "off",
+    "getter-return": "off",
+    "no-class-assign": "off",
+    "no-const-assign": "off",
+    "no-dupe-class-members": "off",
+    "no-dupe-keys": "off",
+    "no-func-assign": "off",
+    "no-import-assign": "off",
+    "no-new-native-nonconstructor": "off",
+    "no-obj-calls": "off",
+    "no-redeclare": "off",
+    "no-setter-return": "off",
+    "no-this-before-super": "off",
+    "no-unreachable": "off",
+    "no-unsafe-negation": "off",
+    "no-with": "off",
+
+    // @eslint/js recommended
+    "for-direction": "error",
+    "no-async-promise-executor": "error",
+    "no-case-declarations": "error",
+    "no-compare-neg-zero": "error",
+    "no-cond-assign": "error",
+    "no-constant-binary-expression": "error",
+    "no-constant-condition": "error",
+    "no-control-regex": "error",
+    "no-debugger": "error",
+    "no-delete-var": "error",
+    "no-dupe-else-if": "error",
+    "no-duplicate-case": "error",
+    "no-empty": "error",
+    "no-empty-character-class": "error",
+    "no-empty-pattern": "error",
+    "no-empty-static-block": "error",
+    "no-ex-assign": "error",
+    "no-extra-boolean-cast": "error",
+    "no-fallthrough": "error",
+    "no-global-assign": "error",
+    "no-invalid-regexp": "error",
+    "no-irregular-whitespace": "error",
+    "no-loss-of-precision": "error",
+    "no-misleading-character-class": "error",
+    "no-nonoctal-decimal-escape": "error",
+    "no-prototype-builtins": "error",
+    "no-regex-spaces": "error",
+    "no-self-assign": "error",
+    "no-shadow-restricted-names": "error",
+    "no-sparse-arrays": "error",
+    "no-unassigned-vars": "error",
+    "no-unexpected-multiline": "error",
+    "no-unsafe-finally": "error",
+    "no-unsafe-optional-chaining": "error",
+    "no-unused-labels": "error",
+    "no-unused-private-class-members": "error",
+    "no-unused-vars": "error",
+    "no-useless-backreference": "error",
+    "no-useless-catch": "error",
+    // Nursery in oxlint 1.93 (pinned); no findings and no false positives here.
+    "no-useless-assignment": "error",
+    "no-useless-escape": "error",
+    "preserve-caught-error": "error",
+    "require-yield": "error",
+    "use-isnan": "error",
+    "valid-typeof": "error",
+
+    // typescript-eslint recommended
+    "no-var": "error",
+    "prefer-const": "error",
+    "prefer-rest-params": "error",
+    "prefer-spread": "error",
+    "no-array-constructor": "error",
+    "no-unused-expressions": "error",
+    "typescript/ban-ts-comment": "error",
+    "typescript/no-duplicate-enum-values": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-extra-non-null-assertion": "error",
+    "typescript/no-misused-new": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-non-null-asserted-optional-chain": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-this-alias": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-unsafe-declaration-merging": "error",
+    "typescript/no-unsafe-function-type": "error",
+    "typescript/no-wrapper-object-types": "error",
+    "typescript/prefer-as-const": "error",
+    "typescript/prefer-namespace-keyword": "error",
+    "typescript/triple-slash-reference": "error",
+
+    // Type-aware (oxlint-tsgolint); these fire only when listed.
+    "typescript/no-floating-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-misused-promises": "error",
+
+    "vitest/no-focused-tests": "error",
+    // Vitest's `expect(value, message)` takes a message as its second argument; the rule's default
+    // of one argument comes from Jest.
+    "vitest/valid-expect": ["error", { "maxArgs": 2 }],
+    // Off: `vi.fn(impl)` takes its type from the implementation, so the rule mostly asks for
+    // type parameters that repeat it; the bare `vi.fn()` spies are only checked for calls.
+    "vitest/require-mock-type-parameters": "off",
+
+    // angular-eslint tsRecommended, through the JS plugin
+    "@angular-eslint/contextual-lifecycle": "error",
+    "@angular-eslint/no-empty-lifecycle-method": "error",
+    "@angular-eslint/no-input-rename": "error",
+    "@angular-eslint/no-inputs-metadata-property": "error",
+    "@angular-eslint/no-output-native": "error",
+    "@angular-eslint/no-output-on-prefix": "error",
+    "@angular-eslint/no-output-rename": "error",
+    "@angular-eslint/no-outputs-metadata-property": "error",
+    "@angular-eslint/prefer-inject": "error",
+    "@angular-eslint/prefer-on-push-component-change-detection": "error",
+    "@angular-eslint/prefer-standalone": "error",
+    "@angular-eslint/use-pipe-transform-interface": "error",
+    "@angular-eslint/use-lifecycle-interface": "warn",
+    "@angular-eslint/directive-selector": [
+      "error",
+      { "type": "attribute", "prefix": "app", "style": "camelCase" }
+    ],
+    "@angular-eslint/component-selector": [
+      "error",
+      { "type": "element", "prefix": "app", "style": "kebab-case" }
+    ],
+    // Guard: templates live in .html files, so ESLint sees every one of them. Inline styles stay
+    // allowed; the limits for styles and animations are lifted because the rule's defaults (3 and
+    // 15 lines) would otherwise apply to them.
+    "@angular-eslint/component-max-inline-declarations": [
+      "error",
+      { "template": 0, "styles": 100000, "animations": 100000 }
+    ]
+  },
+  "overrides": [
+    {
+      // Test hosts in specs keep their inline templates.
+      "files": ["**/*.spec.ts"],
+      "rules": { "@angular-eslint/component-max-inline-declarations": "off" }
+    }
+  ]
+}

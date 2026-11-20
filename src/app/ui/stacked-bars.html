@@ -1,0 +1,41 @@
+<svg [attr.viewBox]="'0 0 ' + width + ' ' + height()" role="img" [attr.aria-label]="label()">
+  <defs>
+    @for (c of colors(); track c) {
+      <pattern
+        [attr.id]="patternId(c)"
+        width="6"
+        height="6"
+        patternUnits="userSpaceOnUse"
+        patternTransform="rotate(45)"
+      >
+        <rect width="6" height="6" [attr.fill]="c" opacity="0.35" />
+        <rect width="3" height="6" [attr.fill]="c" />
+      </pattern>
+    }
+  </defs>
+  @for (r of bars(); track r.label; let i = $index) {
+    <text [attr.x]="left - 8" [attr.y]="i * rowHeight + 20" text-anchor="end" class="lbl">
+      {{ clip(r.label) }}
+    </text>
+    @for (s of r.segs; track $index) {
+      @if (s.w > 0) {
+        <rect
+          [attr.x]="s.x"
+          [attr.y]="i * rowHeight + 8"
+          [attr.width]="s.w"
+          height="16"
+          [attr.fill]="s.estimated ? 'url(#' + patternId(s.color) + ')' : s.color"
+          [attr.stroke]="s.color"
+          stroke-width="0.5"
+        >
+          <title>
+            {{ r.label }} – {{ s.label }}: {{ s.estimated ? "~" : "" }}{{ fmt(s.value) }} ({{
+              s.estimated ? "estimated" : "measured"
+            }})
+          </title>
+        </rect>
+      }
+    }
+    <text [attr.x]="left + plot + 8" [attr.y]="i * rowHeight + 20">{{ r.total }}</text>
+  }
+</svg>

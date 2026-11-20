@@ -23,24 +23,7 @@ const toNavItem = (item: NavItem) => ({ label: item.label, routerLink: `/${item.
   hostDirectives: [HelixDark],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { "(document:keydown)": "zoom.handleKey($event)" },
-  template: `
-    @if (loading.busy()) {
-      <div class="progress" role="progressbar" aria-label="Reading sessions"></div>
-    }
-    <helix-app-layout
-      appTitle="AgentLens"
-      brandIcon="favicon.svg"
-      [navGroups]="navGroups"
-      [topbarItems]="[]"
-      [topbarActions]="topbarActions()"
-      statusBarBrand="AgentLens"
-      [statusBarNote]="note"
-      [statusBarVersions]="versions()"
-    >
-      <app-filter-bar helixTopbarEnd />
-      <app-status-bar hxStatusBarEnd />
-    </helix-app-layout>
-  `,
+  templateUrl: "./app.html",
   styles: `
     .progress {
       position: fixed;

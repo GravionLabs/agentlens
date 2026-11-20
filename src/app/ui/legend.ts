@@ -8,13 +8,7 @@ export interface LegendItem {
 @Component({
   selector: "app-legend",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="legend">
-      @for (i of items(); track i.label) {
-        <span><i [style.background]="i.color"></i>{{ i.label }}</span>
-      }
-    </div>
-  `,
+  templateUrl: "./legend.html",
   styles: `
     .legend {
       display: flex;
