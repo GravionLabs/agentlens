@@ -101,11 +101,11 @@ export class FilterBar {
   /** Whether the custom inputs are open; they open with the "Custom…" choice or a custom window. */
   protected readonly customOpen = signal(this.filters.periodChoice() === CUSTOM);
   /** The inputs being edited; the filter only changes when they are valid. */
-  private readonly draftLast = signal<unknown>(this.filters.last()?.last ?? 1);
+  private readonly draftLast = signal<number>(this.filters.last()?.last ?? 1);
   protected readonly lastUnit = signal<string>(this.filters.last()?.unit ?? "d");
   protected readonly lastError = signal<string | null>(null);
   protected readonly rangeError = signal<string | null>(null);
-  protected readonly lastValue = computed(() => String(this.draftLast() ?? ""));
+  protected readonly lastValue = computed(() => String(this.draftLast()));
   protected readonly rangeValue = computed<HxDateTimeRangeValue>(() => {
     const r = this.filters.range();
     return r ? { from: new Date(r.from), to: new Date(r.to) } : { from: null, to: null };
