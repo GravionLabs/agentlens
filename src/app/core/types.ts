@@ -629,7 +629,13 @@ export interface UpdateInfo {
 export type CliToolMethod = "symlink" | "copy" | "user_path" | "unsupported";
 export type CliToolState = "missing" | "installed" | "stale" | "foreign";
 export type CliToolAction =
-  "created" | "repaired" | "kept" | "removed" | "absent" | "skipped_foreign" | "failed";
+  | "created"
+  | "repaired"
+  | "kept"
+  | "removed"
+  | "absent"
+  | "skipped_foreign"
+  | "failed";
 
 /** One command line tool: where its link goes and what is there now. */
 export interface CliTool {
