@@ -5,7 +5,13 @@ import type { UpdateInfo } from "./types";
 
 /** `error` is a failed check; `installFailed` keeps `info`, so the update can be retried. */
 export type UpdateState =
-  "idle" | "checking" | "upToDate" | "available" | "installing" | "error" | "installFailed";
+  | "idle"
+  | "checking"
+  | "upToDate"
+  | "available"
+  | "installing"
+  | "error"
+  | "installFailed";
 
 /**
  * Checks for and installs application updates. Nothing is checked in the background: the network
