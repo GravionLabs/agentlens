@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "trailingComma": "all",
+  "sortPackageJson": false,
+  "associations": [
+    {
+      "files": ["src/app/**/*.html"],
+      "language": "angular-html"
+    }
+  ],
+  "ignorePatterns": [
+    "dist",
+    ".angular",
+    "node_modules",
+    "target",
+    "src-tauri/gen",
+    "src-tauri/icons",
+    "pnpm-lock.yaml",
+    "Cargo.lock",
+    "CHANGELOG.md",
+    "*.toml",
+    "crates",
+    "docs",
+    "*.md",
+    ".github",
+    "LICENSE",
+    "src/app/core/samples",
+    "site/.vitepress/dist",
+    "site/.vitepress/cache",
+    "src-tauri/windows",
+    ".claude",
+    ".agents",
+    ".worktrees"
+  ]
+}
