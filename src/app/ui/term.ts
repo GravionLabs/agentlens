@@ -7,9 +7,7 @@ import { glossaryEntry } from "../core/glossary";
   selector: "app-term",
   imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<a class="term" routerLink="/glossary" [queryParams]="{ term: id() }" [title]="short()"
-    ><ng-content
-  /></a>`,
+  templateUrl: "./term.html",
   styles: `
     .term {
       color: inherit;

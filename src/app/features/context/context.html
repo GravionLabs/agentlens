@@ -1,0 +1,83 @@
+<section class="view">
+  <app-page-header
+    exportView="context"
+    [exportFormats]="['json', 'csv']"
+    title="Context"
+    summary="Static content the clients add to every request."
+  >
+    <p>
+      Static content the clients add to every request (<app-term id="context"
+        >static context</app-term
+      >). <app-term id="overhead">Overhead</app-term> = tokens × the requests that followed;
+      <span class="est">~</span> marks estimates.
+    </p>
+  </app-page-header>
+  <app-status
+    [loading]="res.isLoading()"
+    [error]="res.error()"
+    [warnings]="res.value()?.warnings ?? 0"
+    [errors]="res.value()?.errors ?? []"
+  />
+  <div class="views" role="group" aria-label="Kind of context">
+    @for (v of views; track v.id) {
+      <button type="button" [class.on]="view() === v.id" (click)="view.set(v.id)">
+        {{ v.label }}
+      </button>
+    }
+  </div>
+  <div class="views" role="group" aria-label="Grouping">
+    <button type="button" [class.on]="grouping() === 'owner'" (click)="grouping.set('owner')">
+      By owner
+    </button>
+    <button type="button" [class.on]="grouping() === 'project'" (click)="grouping.set('project')">
+      By project
+    </button>
+  </div>
+  <hx-data-table
+    [value]="rows()"
+    [columns]="columns()"
+    sortField="overheadCount"
+    [sortOrder]="-1"
+    [paginator]="rows().length > 100"
+    [rows]="100"
+    [rowsPerPageOptions]="[100, 'all']"
+    allLabel="Show all"
+    emptyMessage="No context items found."
+    ariaLabel="Context"
+  >
+    <ng-template hxColumnHeader="kind"><app-help-link term="kind" label="Kind" /></ng-template>
+    <ng-template hxColumnHeader="ownerLabel"
+      ><app-help-link term="owner" label="Owner"
+    /></ng-template>
+    <ng-template hxColumnHeader="tokenCount"
+      ><app-help-link term="token" label="Tokens"
+    /></ng-template>
+    <ng-template hxColumnHeader="requests"
+      ><app-help-link term="request" label="Requests"
+    /></ng-template>
+    <ng-template hxColumnHeader="overheadCount"
+      ><app-help-link term="overhead" label="Overhead"
+    /></ng-template>
+    <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
+    <ng-template hxCell="project" let-row>
+      <span [attr.title]="row.project">{{ shortPath(row.project) }}</span>
+    </ng-template>
+    <ng-template hxCell="ownerLabel" let-row>
+      <span [attr.title]="row.owner">{{ row.ownerLabel }}</span>
+    </ng-template>
+    <ng-template hxCell="tokenCount" let-row>
+      <span [class.est]="row.tokensEstimated" [attr.title]="exact(row.tokenCount)">{{
+        row.tokenText
+      }}</span>
+    </ng-template>
+    <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+    <ng-template hxCell="overheadCount" let-row>
+      <span [class.est]="row.overheadEstimated" [attr.title]="exact(row.overheadCount)">{{
+        row.overheadText
+      }}</span>
+    </ng-template>
+  </hx-data-table>
+  @for (n of notes(); track n.text) {
+    <p class="muted" [attr.title]="n.title">{{ n.text }}</p>
+  }
+</section>

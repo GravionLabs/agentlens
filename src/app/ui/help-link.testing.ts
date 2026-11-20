@@ -6,12 +6,7 @@ import { Component, Input } from "@angular/core";
  */
 @Component({
   selector: "app-help-link",
-  template: `<a
-    class="help"
-    [attr.href]="'/glossary?term=' + term"
-    [attr.aria-label]="'Explain ' + label"
-    >?</a
-  >`,
+  templateUrl: "./help-link.testing.html",
 })
 export class HelpLinkStub {
   @Input() term = "";

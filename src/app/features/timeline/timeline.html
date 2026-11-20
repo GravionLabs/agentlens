@@ -1,0 +1,95 @@
+<section class="view">
+  <app-page-header title="Timeline" summary="Context size of every request of one session.">
+    <p>
+      The <app-term id="context-size">context size</app-term> (input + cache, measured) of every
+      main-agent request of one session, with what happened in between.
+    </p>
+  </app-page-header>
+  <app-status
+    [loading]="list.isLoading()"
+    [error]="list.error()"
+    [errors]="list.value()?.errors ?? []"
+  />
+  @if (sessions().length > 0) {
+    <label class="pick">
+      <span>Session</span>
+      <select (change)="choose($event)">
+        @for (s of sessions(); track key(s)) {
+          <option [value]="key(s)" [selected]="key(s) === current()">{{ describe(s) }}</option>
+        }
+      </select>
+    </label>
+  } @else if (!list.isLoading()) {
+    <p class="muted">No sessions with requests for the selected filters.</p>
+  }
+
+  <app-status [loading]="res.isLoading()" [error]="res.error()" />
+  @if (timeline(); as t) {
+    <p class="meta">
+      {{ label(t.session.source) }} · {{ t.session.model ?? "unknown model" }} ·
+      {{ n(t.session.requests) }} requests · peak {{ n(t.session.peak_tokens) }} tokens ·
+      {{ day(t.session.started_at) }}
+      @if (t.thinned_from) {
+        · thinned from {{ n(t.thinned_from) }} to {{ n(t.points.length) }} points (peaks are kept)
+      }
+    </p>
+    <app-legend [items]="markerLegend" />
+    <svg [attr.viewBox]="'0 0 ' + W + ' ' + H" role="img" aria-label="Context size per request">
+      @for (v of ticks(); track v) {
+        <line
+          class="grid"
+          [attr.x1]="m.left"
+          [attr.x2]="W - m.right"
+          [attr.y1]="y(v)"
+          [attr.y2]="y(v)"
+        />
+        <text [attr.x]="m.left - 6" [attr.y]="y(v) + 4" text-anchor="end">
+          {{ compact(v) }}
+        </text>
+      }
+      <path class="area" [attr.d]="area()" />
+      <path class="line" [attr.d]="line()" />
+      @for (mk of markers(); track $index) {
+        <line
+          class="marker"
+          [class.strong]="mk.strong"
+          [attr.x1]="mk.x"
+          [attr.x2]="mk.x"
+          [attr.y1]="m.top"
+          [attr.y2]="H - m.bottom"
+          [attr.stroke]="mk.color"
+        >
+          <title>{{ mk.text }}</title>
+        </line>
+      }
+      @for (p of t.points; track p.request) {
+        <circle [attr.cx]="x(p.request)" [attr.cy]="y(p.context_tokens)" r="2.5">
+          <title>
+            Request {{ p.request + 1 }}: {{ n(p.context_tokens) }} tokens in context,
+            {{ n(p.output_tokens) }} out @if (p.model) { , {{ p.model }} } @if (p.cost_usd !== null)
+            { , {{ usd(p.cost_usd, p.cost_estimated) }} } @if (p.at) { , {{ p.at }}
+            }
+          </title>
+        </circle>
+      }
+      <text [attr.x]="m.left" [attr.y]="H - 8">request 1</text>
+      <text [attr.x]="W - m.right" [attr.y]="H - 8" text-anchor="end">
+        request {{ n(t.session.requests) }}
+      </text>
+    </svg>
+    @if (t.markers.length > 0) {
+      <h3>Events</h3>
+      <ul class="events">
+        @for (mk of t.markers; track $index) {
+          <li>
+            <span class="dot" [style.background]="color(mk.kind.type)"></span>
+            before request {{ mk.request + 1 }}: {{ text(mk) }}
+            @if (mk.at) {
+              <span class="muted" [title]="mk.at">{{ time(mk.at) }}</span>
+            }
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>

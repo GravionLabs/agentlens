@@ -15,36 +15,7 @@ import { GLOSSARY_GROUPS, searchGlossary } from "../../core/glossary";
   selector: "app-glossary",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HxInput],
-  template: `
-    <section class="view">
-      <h2>Glossary</h2>
-      <p class="muted">What the terms in the tables and charts mean.</p>
-      <input
-        hx-input
-        type="search"
-        placeholder="Search terms"
-        aria-label="Search terms"
-        [value]="query()"
-        (input)="query.set(asInput($event).value)"
-      />
-      @for (g of groups(); track g.name) {
-        <h3>{{ g.name }}</h3>
-        <dl>
-          @for (e of g.entries; track e.id) {
-            <div class="entry" [id]="e.id" [class.target]="e.id === focus()">
-              <dt>{{ e.term }}</dt>
-              <dd>
-                <strong>{{ e.short }}</strong>
-                <span class="muted">{{ e.long }}</span>
-              </dd>
-            </div>
-          }
-        </dl>
-      } @empty {
-        <p class="muted">No term matches.</p>
-      }
-    </section>
-  `,
+  templateUrl: "./glossary.html",
   styles: `
     input {
       margin: 8px 0 4px;

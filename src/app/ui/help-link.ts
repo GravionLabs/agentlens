@@ -12,13 +12,7 @@ export function termTitle(term: string): string | undefined {
   selector: "app-help-link",
   imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<a
-    class="help"
-    routerLink="/glossary"
-    [queryParams]="{ term: term() }"
-    [attr.aria-label]="'Explain ' + label()"
-    >?</a
-  >`,
+  templateUrl: "./help-link.html",
   styles: `
     .help {
       margin-left: 4px;

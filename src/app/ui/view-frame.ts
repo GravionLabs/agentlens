@@ -7,11 +7,7 @@ import { LoadingService } from "../core/loading.service";
   selector: "app-view-frame",
   imports: [RouterOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <main [class.busy]="loading.busy()" [attr.aria-busy]="loading.busy()">
-      <router-outlet />
-    </main>
-  `,
+  templateUrl: "./view-frame.html",
   styles: `
     :host {
       display: block;

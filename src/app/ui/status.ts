@@ -7,24 +7,7 @@ import { messageOf } from "../core/analysis";
   selector: "app-status",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HxMessage, HxProgressSpinner],
-  template: `
-    @if (loading()) {
-      <hx-message severity="secondary" variant="simple" size="small">
-        <hx-progress-spinner class="spinner" ariaLabel="Loading" />Reading sessions…
-      </hx-message>
-    }
-    @if (failure(); as message) {
-      <hx-message severity="error" variant="simple" size="small">{{ message }}</hx-message>
-    }
-    @if (warnings() > 0) {
-      <hx-message severity="warn" variant="simple" size="small"
-        >{{ warnings() }} warnings while reading sessions.</hx-message
-      >
-    }
-    @for (e of errors(); track $index) {
-      <hx-message severity="error" variant="simple" size="small">{{ e }}</hx-message>
-    }
-  `,
+  templateUrl: "./status.html",
   styles: `
     :host {
       display: block;
