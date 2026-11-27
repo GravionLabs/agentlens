@@ -1,7 +1,7 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
-import { analysis, trendAnalysis } from "../../core/analysis";
+import { answerOf, analysis, trendAnalysis } from "../../core/analysis";
 import { trendNote } from "../../core/delta";
 import { FiltersService } from "../../core/filters.service";
 import {
@@ -94,14 +94,15 @@ export class Efficiency {
   protected readonly by = signal<By>("source");
   protected readonly options: By[] = ["source", "project", "session"];
   protected readonly res = analysis<EfficiencyReport>("efficiency", () => ({ by: this.by() }));
+  protected readonly answer = computed(() => answerOf(this.res));
   protected readonly compare = inject(FiltersService).compare;
   protected readonly trend = trendAnalysis();
   protected readonly note = computed(() => {
-    const w = this.trend.value()?.data.windows;
+    const w = answerOf(this.trend)?.data.windows;
     return w ? trendNote(w) : "";
   });
   protected readonly trendStats = computed(() => {
-    const t = this.trend.value()?.data;
+    const t = answerOf(this.trend)?.data;
     if (!t) return [];
     const perDay = t.windows.normalized;
     return [
@@ -111,8 +112,8 @@ export class Efficiency {
       trendStat("Retry loops", t.errors.retry_loops, "count", { good: "down", perDay }),
     ];
   });
-  protected readonly cache = computed(() => this.res.value()?.data.cache ?? []);
-  protected readonly subagents = computed(() => this.res.value()?.data.subagents ?? []);
+  protected readonly cache = computed(() => answerOf(this.res)?.data.cache ?? []);
+  protected readonly subagents = computed(() => answerOf(this.res)?.data.subagents ?? []);
 
   protected readonly sort = nullsLast;
   protected readonly n = number;

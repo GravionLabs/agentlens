@@ -13,8 +13,9 @@
   <app-status
     [loading]="res.isLoading()"
     [error]="res.error()"
-    [warnings]="res.value()?.warnings ?? 0"
-    [errors]="res.value()?.errors ?? []"
+    [warnings]="answer()?.warnings ?? 0"
+    [errors]="answer()?.errors ?? []"
+    (retry)="res.reload()"
   />
   @if (sources().length > 0) {
     <hx-data-table

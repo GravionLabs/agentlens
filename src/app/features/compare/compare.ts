@@ -1,6 +1,6 @@
 import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { answerOf, analysis } from "../../core/analysis";
 import { exactTokens, minutes, number, percent, sourceLabel, tokens } from "../../core/format";
 import type { CompareReport, SourceStats } from "../../core/types";
 import { Status } from "../../ui/status";
@@ -74,7 +74,8 @@ export class Compare {
   }
 
   protected readonly res = analysis<CompareReport>("compare");
-  protected readonly sources = computed(() => this.res.value()?.data.sources ?? []);
+  protected readonly answer = computed(() => answerOf(this.res));
+  protected readonly sources = computed(() => answerOf(this.res)?.data.sources ?? []);
   protected readonly rows = METRICS;
   protected readonly columns = computed<HxColumn[]>(() => [
     { field: "label", header: "Metric" },

@@ -2,7 +2,7 @@ import { RouterLink } from "@angular/router";
 import { tipSaving } from "../advice/advice";
 import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/core";
-import { analysis, trendAnalysis } from "../../core/analysis";
+import { answerOf, analysis, trendAnalysis } from "../../core/analysis";
 import { FiltersService } from "../../core/filters.service";
 import { trendNote } from "../../core/delta";
 import { number, sourceLabel } from "../../core/format";
@@ -69,21 +69,22 @@ import { Status } from "../../ui/status";
 })
 export class Overview {
   protected readonly res = analysis<SourceOverview[]>("overview");
+  protected readonly answer = computed(() => answerOf(this.res));
   // The Overview stays silent when the tips fail; the Advice view shows the error.
   private readonly tips = analysis<TipsReport>("tips", () => ({ limit: 1 }));
   protected readonly topTip = computed(() =>
     this.tips.hasValue() ? (this.tips.value().data.tips[0] ?? null) : null,
   );
   protected readonly saving = tipSaving;
-  protected readonly sources = computed(() => this.res.value()?.data ?? []);
+  protected readonly sources = computed(() => answerOf(this.res)?.data ?? []);
   protected readonly compare = inject(FiltersService).compare;
   protected readonly trend = trendAnalysis();
   protected readonly note = computed(() => {
-    const w = this.trend.value()?.data.windows;
+    const w = answerOf(this.trend)?.data.windows;
     return w ? trendNote(w) : "";
   });
   protected readonly trendStats = computed(() => {
-    const t = this.trend.value()?.data;
+    const t = answerOf(this.trend)?.data;
     if (!t) return [];
     const perDay = t.windows.normalized;
     return [

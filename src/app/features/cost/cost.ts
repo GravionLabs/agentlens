@@ -8,7 +8,7 @@ import {
   inject,
   signal,
 } from "@angular/core";
-import { analysis, messageOf, trendAnalysis } from "../../core/analysis";
+import { answerOf, analysis, messageOf, trendAnalysis } from "../../core/analysis";
 import { trendNote } from "../../core/delta";
 import { FiltersService } from "../../core/filters.service";
 import { WithoutService } from "../../core/without.service";
@@ -209,8 +209,7 @@ export class Cost {
     without: this.without.items(),
   }));
 
-  /** The answer, absent while loading and after a failure (`value()` of a failed resource throws). */
-  protected readonly answer = computed(() => (this.res.hasValue() ? this.res.value() : undefined));
+  protected readonly answer = computed(() => answerOf(this.res));
 
   constructor() {
     // A model the core cannot price is an error of the entry: it moves to the field, and the view
@@ -228,11 +227,11 @@ export class Cost {
   protected readonly compare = inject(FiltersService).compare;
   protected readonly trend = trendAnalysis();
   protected readonly note = computed(() => {
-    const w = this.trend.value()?.data.windows;
+    const w = answerOf(this.trend)?.data.windows;
     return w ? trendNote(w) : "";
   });
   protected readonly trendStats = computed(() => {
-    const t = this.trend.value()?.data;
+    const t = answerOf(this.trend)?.data;
     if (!t) return [];
     const perDay = t.windows.normalized;
     return [
@@ -253,7 +252,7 @@ export class Cost {
    */
   protected readonly emptyMessage = computed(() => {
     if (this.res.isLoading()) return "Loading cost…";
-    if (this.res.error()) return "Cost could not be loaded. Use Refresh to try again.";
+    if (this.res.error()) return "Cost could not be loaded. Use Try again to load it.";
     return "No usage found. Choose a longer period or other filters.";
   });
   protected readonly unpriced = computed(() =>

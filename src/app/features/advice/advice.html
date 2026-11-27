@@ -17,14 +17,16 @@
   <app-status
     [loading]="res.isLoading()"
     [error]="res.error()"
-    [warnings]="res.value()?.warnings ?? 0"
-    [errors]="res.value()?.errors ?? []"
+    [warnings]="answer()?.warnings ?? 0"
+    [errors]="answer()?.errors ?? []"
+    (retry)="res.reload()"
   />
   <app-status
     [loading]="tipsRes.isLoading()"
     [error]="tipsRes.error()"
     [warnings]="0"
     [errors]="tipsRes.hasValue() ? tipsRes.value().errors : []"
+    (retry)="tipsRes.reload()"
   />
   @if (tipsReport(); as t) {
     <section class="tips" aria-label="Top tips">

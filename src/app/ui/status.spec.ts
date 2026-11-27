@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { TestBed } from "@angular/core/testing";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Status } from "./status";
 
 beforeAll(() => {
@@ -21,7 +21,9 @@ function create(
     errors: () => values.errors ?? [],
   });
   fixture.detectChanges();
-  return fixture.nativeElement as HTMLElement;
+  const retry = vi.fn();
+  fixture.componentInstance.retry.subscribe(retry);
+  return Object.assign(fixture.nativeElement as HTMLElement, { retry });
 }
 
 describe("Status", () => {
@@ -52,5 +54,21 @@ describe("Status", () => {
     const el = create({ errors: ["first", "second"] });
     const texts = Array.from(el.querySelectorAll("hx-message")).map((m) => m.textContent?.trim());
     expect(texts).toEqual(["first", "second"]);
+  });
+
+  it("offers to try again inside the failure message", () => {
+    const el = create({ error: "boom" });
+    // A native button: Tab reaches it, Enter and Space press it.
+    const button = el.querySelector<HTMLButtonElement>("hx-message.hx-message-error button")!;
+    expect(button.textContent!.trim()).toBe("Try again");
+    expect(button.type).toBe("button");
+    expect(el.retry).not.toHaveBeenCalled();
+    button.click();
+    expect(el.retry).toHaveBeenCalledOnce();
+  });
+
+  it("has no button without a failure", () => {
+    const el = create({ loading: true, warnings: 2, errors: ["unreadable file"] });
+    expect(el.querySelector("button")).toBeNull();
   });
 });

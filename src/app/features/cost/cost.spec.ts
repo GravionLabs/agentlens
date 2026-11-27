@@ -461,7 +461,7 @@ describe("Cost states and estimates", () => {
   it("does not claim there is no usage after a failure", async () => {
     failure = "cannot read the price table";
     const el = await render();
-    expect(table(el).textContent).toContain("Cost could not be loaded. Use Refresh to try again.");
+    expect(table(el).textContent).toContain("Cost could not be loaded. Use Try again to load it.");
     expect(table(el).textContent).not.toContain("No usage found");
   });
 
