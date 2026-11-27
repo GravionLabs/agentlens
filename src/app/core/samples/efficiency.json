@@ -28,9 +28,9 @@
         "subagent_requests": 0,
         "tokens": 2905,
         "subagent_tokens": 0,
-        "usd": 0.0,
+        "usd": 0.007582500000000001,
         "subagent_usd": 0.0,
-        "unpriced_requests": 3
+        "unpriced_requests": 0
       },
       {
         "source": "copilot-cli",
@@ -54,10 +54,10 @@
         "cache_read": 1000,
         "cache_write": 1850,
         "output": 10014,
-        "usd": null,
-        "usd_per_run": null,
+        "usd": 0.007582500000000001,
+        "usd_per_run": 0.0037912500000000003,
         "cost_measured": false,
-        "unpriced_requests": 4,
+        "unpriced_requests": 1,
         "models": [
           "claude-test-1",
           "model-a"

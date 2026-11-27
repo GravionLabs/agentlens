@@ -18,8 +18,9 @@ site/.vitepress/cache
 # git worktrees of the deliver workflow
 /.worktrees/
 
-# agent runtime files (bus database); installed skills and config are committed
+# agent runtime files (bus database, installed skills)
 /.agents/*
-!/.agents/skills/
-!/.agents/config.json
-!/.agents/lessons/
+!.agents/skills/
+!.agents/config.json
+!.agents/lessons/
+.postcss-angular/

@@ -25,7 +25,7 @@ fn setup() -> (TempHome, Context) {
     let home = TempHome::new();
     // A Claude Code session with context items, one in which skill folders are used, one with a typed
     // skill command, one with a retry loop, three that carried their context on (one opened by a /clear,
-    // one compacted twice, one near the limit), and a Copilot CLI session with its store.
+    // one compacted twice, one near the limit), one with a pause longer than the cache lifetime, and a Copilot CLI session with its store.
     home.copy_fixture(
         "claude_code/context.jsonl",
         ".claude/projects/-work-demo/context.jsonl",
@@ -42,7 +42,43 @@ fn setup() -> (TempHome, Context) {
         "claude_code/retry_loop.jsonl",
         ".claude/projects/-work-demo/retry_loop.jsonl",
     );
-    for fixture in ["clear_at_start", "two_compactions", "near_limit"] {
+    // The typed-command session runs `/cliff-setup` a second time in the same context (a SkillQuality
+    // signal: a repeat load). Appended here so that no other fixture or test changes.
+    {
+        use std::io::Write;
+        let line = |ts: &str, content: &str| {
+            serde_json::json!({"sessionId":"tc1","cwd":"/work/demo","gitBranch":"main","timestamp":ts,
+                "type":"user","message":{"role":"user","content":content}})
+            .to_string()
+        };
+        let meta = serde_json::json!({"sessionId":"tc1","cwd":"/work/demo","gitBranch":"main",
+            "timestamp":"2026-10-02T11:03:00Z","type":"user","isMeta":true,
+            "message":{"role":"user","content":[{"type":"text","text":
+            "Base directory for this skill: /home/u/.claude/skills/cliff-setup\n\nbody body body"}]}})
+        .to_string();
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(
+                home.path()
+                    .join(".claude/projects/-work-demo/typed_skill.jsonl"),
+            )
+            .unwrap();
+        writeln!(
+            file,
+            "{}\n{meta}",
+            line(
+                "2026-10-02T11:03:00Z",
+                "<command-message>cliff-setup</command-message>\n<command-name>/cliff-setup</command-name>\n<command-args>0.9</command-args>"
+            )
+        )
+        .unwrap();
+    }
+    for fixture in [
+        "clear_at_start",
+        "two_compactions",
+        "near_limit",
+        "cache_expiry",
+    ] {
         home.copy_fixture(
             &format!("claude_code/{fixture}.jsonl"),
             &format!(".claude/projects/-work-demo/{fixture}.jsonl"),
@@ -95,7 +131,13 @@ fn text<T: Serialize>(home: &TempHome, value: &T) -> String {
         json.contains(&format!("\"schema_version\": {SCHEMA_VERSION},")),
         "the answer says which version of the layout it has"
     );
-    json.replace(&home.path().display().to_string(), "/home/user")
+    // Paths may come back canonicalized (macOS resolves the temp dir through `/private`), so replace both spellings.
+    let canonical = home
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|_| home.path().to_path_buf());
+    json.replace(&canonical.display().to_string(), "/home/user")
+        .replace(&home.path().display().to_string(), "/home/user")
 }
 
 #[test]
@@ -115,6 +157,24 @@ fn the_json_of_every_analysis_keeps_its_shape() {
     );
     snap("skills", text(&home, &api::skills(&ctx, &all()).unwrap()));
     snap("advice", text(&home, &api::advice(&ctx, &all()).unwrap()));
+    snap("tips", text(&home, &api::tips(&ctx, &all(), 5).unwrap()));
+    snap(
+        "tips_check",
+        text(
+            &home,
+            // Fixed windows (2026-10-01..03 and 2026-10-03..05), so that nothing depends on today's date.
+            &api::tips_check(
+                &ctx,
+                &Filters {
+                    until: Some("2026-10-05".into()),
+                    ..Filters::default()
+                },
+                "2026-10-03",
+                5,
+            )
+            .unwrap(),
+        ),
+    );
     snap("context", text(&home, &api::context(&ctx, &all()).unwrap()));
     snap("unused", text(&home, &api::unused(&ctx, &all()).unwrap()));
     snap("flow", text(&home, &api::flow(&ctx, &all()).unwrap()));

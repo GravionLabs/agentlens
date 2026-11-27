@@ -64,6 +64,37 @@ pub const DELEGATION_MAX_SHARE: f64 = 0.05;
 /// ... and at least this many main-agent requests with [`LARGE_CONTEXT_TOKENS`] of input in that client.
 pub const MIN_DELEGATION_REQUESTS: u64 = 20;
 
+/// SkillQuality: a skill loaded twice into the same context (a repeat load) is listed from this many.
+pub const MIN_REPEAT_LOADS: u32 = 1;
+/// SkillQuality: misfires (a model load with no work after it) need at least this many ...
+pub const MIN_MISFIRES: u32 = 2;
+/// ... and this share of the skill's model loads (0.2 is 20 %).
+pub const MIN_MISFIRE_SHARE: f64 = 0.2;
+/// SkillQuality: a skill the user starts as `/name` at least this many times and the model never loads
+/// is listed although the model could pick it (it sits in the listing for nothing).
+pub const MIN_USER_ONLY_STARTS: u32 = 3;
+/// SkillQuality: failing calls after a skill need at least this many ...
+pub const MIN_FOLLOW_ON_ERRORS: u64 = 5;
+/// ... at this many times the failure rate of the rest of the skill's sessions.
+pub const MIN_ERROR_RATE_FACTOR: u64 = 2;
+/// SkillQuality: retry loops that begin after a skill are listed from this many.
+pub const MIN_FOLLOW_ON_RETRY_LOOPS: u32 = 1;
+/// SkillQuality: compactions soon after a load need at least this many ...
+pub const MIN_COMPACTIONS_SOON: u32 = 2;
+/// ... and this share of the skill's loads (0.25 is 25 %).
+pub const MIN_COMPACTION_SHARE: f64 = 0.25;
+
+/// How the SkillQuality detail of an item names the signal of a skill only the user starts; `tips` finds
+/// it by this text.
+pub const USER_ONLY_SIGNAL: &str = "only started by /name";
+
+/// How long Anthropic keeps a prompt cache entry after its last use, by default: 5 minutes. A request after
+/// a longer pause writes its context to the cache again instead of reading it (CacheExpiry).
+pub const CACHE_TTL_5M: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+/// The longer lifetime of 1 hour, which a client opts into. A session has it when any of its requests
+/// wrote tokens with it (`Usage::cache_write_1h`).
+pub const CACHE_TTL_1H: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FindingKind {
@@ -92,6 +123,11 @@ pub enum FindingKind {
     ContextHygiene,
     /// Work on a large context with almost no subagent requests: reading and research stay in the main context.
     Delegation,
+    /// Requests after a pause longer than the cache lifetime: the context was written again, not read.
+    CacheExpiry,
+    /// Skills whose order of events hints at a problem: loaded twice, loaded without work after, never
+    /// picked by the model, or followed by failing work.
+    SkillQuality,
 }
 
 impl FindingKind {
@@ -130,6 +166,12 @@ impl FindingKind {
             }
             FindingKind::ContextHygiene => {
                 "Context that is carried on after the task is done is paid on every request. These sessions came near the limit of the context window without a compaction, or were compacted again and again instead of starting fresh."
+            }
+            FindingKind::CacheExpiry => {
+                "After a pause longer than the cache lifetime the provider's prompt cache expired, and the whole context was written to the cache again at the write price instead of being read at the read price."
+            }
+            FindingKind::SkillQuality => {
+                "Skills with signs of a problem: loaded twice into the same context, loaded by the model without any work following, never picked by the model although listed, or followed by failing work. These are signals from the order of events, not proof."
             }
             FindingKind::Delegation => {
                 "Research and long reads that happen in the main context are carried on every later request; a subagent reads them in its own context and returns a summary. These clients ran many requests on a large context and almost none by subagents. No saving is estimated: what a subagent would have kept out of the main context cannot be counted from the requests."
@@ -172,6 +214,12 @@ impl FindingKind {
             }
             FindingKind::ContextHygiene => {
                 "Clear the context between tasks (`/clear` in Claude Code, a new session in the other clients), compact before the limit (`/compact`), and keep sessions short."
+            }
+            FindingKind::CacheExpiry => {
+                "Before a long pause, finish the task and start the next one in a fresh session, or compact (`/compact`) so that less has to be written again. Long-idle sessions with a large context are the expensive ones."
+            }
+            FindingKind::SkillQuality => {
+                "Repeat loads: say in the body that the skill is loaded once per task. Misfires: narrow the description to the situations it is for. Only started by /name: mark it as not automatically invoked (Claude Code: `disable-model-invocation: true`), so it leaves the listing. Errors or retry loops after it: check the commands, paths and scripts the skill gives. Compaction soon after: shorten the body or move steps into a script."
             }
             FindingKind::Delegation => {
                 "Delegate file searches, log reading and reviews to subagents, and keep the main context for decisions."
@@ -259,17 +307,17 @@ impl Pricing {
         // Per class: price × tokens, tokens and the plain sum of the prices.
         let mut sums = [(0.0f64, 0u64, 0.0f64); 3];
         let mut pricing = Pricing::default();
-        for u in sessions
-            .iter()
-            .flat_map(|se| &se.events)
-            .filter_map(|e| match &e.kind {
-                EventKind::Usage(u) => Some(u),
+        for (se, u) in sessions.iter().flat_map(|se| {
+            se.events.iter().filter_map(move |e| match &e.kind {
+                EventKind::Usage(u) => Some((se, u)),
                 _ => None,
             })
-        {
+        }) {
+            // Like `period_totals`: a request without a model takes the session's.
             let Some(r) = u
                 .model
                 .as_deref()
+                .or(se.session.model.as_deref())
                 .and_then(|m| prices.rates(m, u.total_input()))
             else {
                 pricing.unpriced_requests += 1;
@@ -314,6 +362,34 @@ impl Pricing {
                 / 1_000_000.0
         })
     }
+}
+
+/// The cost of all priced requests of the sessions (`None` if no request has a price) and their tokens
+/// weighted by class ([`INPUT_WEIGHT`] and the others; output is not weighted, no finding saves it).
+pub fn period_totals(sessions: &[SessionEvents], prices: &PriceTable) -> (Option<f64>, u64) {
+    let mut usd = None;
+    let mut weighted = 0.0;
+    for se in sessions {
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            let mut usage = u.clone();
+            if usage.model.is_none() {
+                usage.model = se.session.model.clone();
+            }
+            if let Some(c) = prices.cost(&usage) {
+                *usd.get_or_insert(0.0) += c.usd;
+            }
+            weighted += Split {
+                input: u.input as f64,
+                cache_read: u.cache_read as f64,
+                cache_write: u.cache_write as f64,
+            }
+            .weight();
+        }
+    }
+    (usd, weighted.round() as u64)
 }
 
 /// What starting fresh sessions could have saved: on every main-agent request with at least
@@ -775,6 +851,110 @@ pub fn retry_saving(sessions: &[SessionEvents], prices: &PriceTable) -> RetryLoo
     }
 }
 
+/// One session in the input of the CacheExpiry finding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CacheExpirySession {
+    pub id: String,
+    pub project: Option<PathBuf>,
+    /// The session's cache lifetime: [`CACHE_TTL_1H`] if any request wrote 1-hour tokens, else [`CACHE_TTL_5M`].
+    pub ttl: std::time::Duration,
+    /// Requests that came after a pause longer than `ttl` and wrote more than they read.
+    pub requests: u64,
+    /// The cache-write tokens of those requests: what was written again.
+    pub tokens: u64,
+    /// The shortest and the longest pause before such a request, in seconds.
+    pub min_gap_secs: u64,
+    pub max_gap_secs: u64,
+    /// `false` if one of those requests was estimated, not reported.
+    pub measured: bool,
+    /// What writing again cost over reading, per request with the prices of its own model, in USD.
+    pub usd: f64,
+    /// The requests among them with a price for their model; `usd` covers only these.
+    pub priced_requests: u64,
+}
+
+/// The input of the CacheExpiry finding.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CacheExpiryUse {
+    /// The sessions with at least one expired request, the largest saving first.
+    pub sessions: Vec<CacheExpirySession>,
+    /// Requests left out because their model is not an Anthropic model ...
+    pub skipped_models: u64,
+    /// ... and because they or the request before them have no timestamp.
+    pub skipped_untimed: u64,
+}
+
+/// The input of the CacheExpiry finding: per session the main-agent requests that came after a pause longer
+/// than the session's cache lifetime and wrote more tokens than they read. The first request of a session
+/// never counts, and neither do subagent requests, which have their own context.
+pub fn cache_expiry_use(sessions: &[SessionEvents], prices: &PriceTable) -> CacheExpiryUse {
+    let mut out = CacheExpiryUse::default();
+    for se in sessions {
+        let one_hour = se
+            .events
+            .iter()
+            .any(|e| matches!(&e.kind, EventKind::Usage(u) if u.cache_write_1h > 0));
+        let ttl = if one_hour { CACHE_TTL_1H } else { CACHE_TTL_5M };
+        let mut row = CacheExpirySession {
+            id: se.session.id.clone(),
+            project: se.session.project_dir.clone(),
+            ttl,
+            requests: 0,
+            tokens: 0,
+            min_gap_secs: u64::MAX,
+            max_gap_secs: 0,
+            measured: true,
+            usd: 0.0,
+            priced_requests: 0,
+        };
+        let mut previous: Option<Option<jiff::Timestamp>> = None;
+        for e in &se.events {
+            let EventKind::Usage(u) = &e.kind else {
+                continue;
+            };
+            if u.subagent {
+                continue;
+            }
+            let Some(before) = previous.replace(e.at) else {
+                continue;
+            };
+            let model = u.model.as_deref();
+            if !model.is_some_and(|m| crate::prices::normalize(m).starts_with("claude")) {
+                out.skipped_models += 1;
+                continue;
+            }
+            let (Some(from), Some(to)) = (before, e.at) else {
+                out.skipped_untimed += 1;
+                continue;
+            };
+            let gap_ms = to.as_millisecond() - from.as_millisecond();
+            if gap_ms <= ttl.as_millis() as i64 || u.cache_write <= u.cache_read {
+                continue;
+            }
+            let gap = (gap_ms / 1000) as u64;
+            row.requests += 1;
+            row.tokens += u.cache_write;
+            row.min_gap_secs = row.min_gap_secs.min(gap);
+            row.max_gap_secs = row.max_gap_secs.max(gap);
+            row.measured &= u.measured;
+            if let Some(r) = model.and_then(|m| prices.rates(m, u.total_input())) {
+                row.usd += u.cache_write as f64 * (r.cache_write - r.cache_read) / 1_000_000.0;
+                row.priced_requests += 1;
+            }
+        }
+        if row.requests > 0 {
+            out.sessions.push(row);
+        }
+    }
+    out.sessions.sort_by(|a, b| {
+        b.usd
+            .total_cmp(&a.usd)
+            .then_with(|| b.tokens.cmp(&a.tokens))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    out
+}
+
 /// One client in the input of the Delegation finding.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DelegationSource {
@@ -1094,7 +1274,7 @@ pub struct AdviceReport {
 }
 
 /// `1234567` -> `1,234,567`.
-fn n(value: u64) -> String {
+pub(crate) fn n(value: u64) -> String {
     let digits = value.to_string();
     let mut out = String::new();
     for (i, c) in digits.chars().enumerate() {
@@ -1104,6 +1284,17 @@ fn n(value: u64) -> String {
         out.push(c);
     }
     out
+}
+
+/// `1234567` -> `1.2M`, `12345` -> `12.3k`, small numbers as they are.
+fn short_tokens(value: u64) -> String {
+    if value >= 1_000_000 {
+        format!("{:.1}M", value as f64 / 1_000_000.0)
+    } else if value >= 1_000 {
+        format!("{:.1}k", value as f64 / 1_000.0)
+    } else {
+        value.to_string()
+    }
 }
 
 fn times(count: u32) -> String {
@@ -1141,6 +1332,142 @@ fn finding(kind: FindingKind, count: usize, items: Vec<Item>, total: Option<Toke
     }
 }
 
+/// The quality signals of a skill that pass their minimums, in the order of the table in the analyses
+/// guide. The first three have a saving, the rest have none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QualitySignal {
+    RepeatLoads,
+    Misfires,
+    UserOnly,
+    Errors,
+    RetryLoops,
+    Compactions,
+}
+
+impl QualitySignal {
+    fn has_saving(self) -> bool {
+        matches!(
+            self,
+            QualitySignal::RepeatLoads | QualitySignal::Misfires | QualitySignal::UserOnly
+        )
+    }
+}
+
+fn quality_signals(s: &SkillStats) -> Vec<QualitySignal> {
+    let q = &s.quality;
+    let mut out = Vec::new();
+    if q.repeat_loads >= MIN_REPEAT_LOADS {
+        out.push(QualitySignal::RepeatLoads);
+    }
+    if q.misfires >= MIN_MISFIRES
+        && f64::from(q.misfires) >= MIN_MISFIRE_SHARE * f64::from(s.triggers.model)
+    {
+        out.push(QualitySignal::Misfires);
+    }
+    if s.in_inventory && s.triggers.user >= MIN_USER_ONLY_STARTS && s.triggers.model == 0 {
+        out.push(QualitySignal::UserOnly);
+    }
+    // Rates compared by cross-multiplying; a baseline without errors always passes.
+    if q.follow_on_errors >= MIN_FOLLOW_ON_ERRORS
+        && u128::from(q.follow_on_errors) * u128::from(q.baseline_calls)
+            >= u128::from(MIN_ERROR_RATE_FACTOR)
+                * u128::from(q.baseline_errors)
+                * u128::from(q.follow_on_calls)
+    {
+        out.push(QualitySignal::Errors);
+    }
+    if q.follow_on_retry_loops >= MIN_FOLLOW_ON_RETRY_LOOPS {
+        out.push(QualitySignal::RetryLoops);
+    }
+    if q.compactions_soon >= MIN_COMPACTIONS_SOON
+        && f64::from(q.compactions_soon) >= MIN_COMPACTION_SHARE * f64::from(s.invocations)
+    {
+        out.push(QualitySignal::Compactions);
+    }
+    out
+}
+
+fn rate(errors: u64, calls: u64) -> String {
+    format!("{:.0} %", share(errors, calls).unwrap_or(0.0) * 100.0)
+}
+
+/// The passing signals in words.
+fn quality_detail(s: &SkillStats, signals: &[QualitySignal]) -> String {
+    let q = &s.quality;
+    signals
+        .iter()
+        .map(|sig| match sig {
+            QualitySignal::RepeatLoads => {
+                format!(
+                    "loaded again into the same context ({})",
+                    times(q.repeat_loads)
+                )
+            }
+            QualitySignal::Misfires => format!(
+                "{} of {} model loads without any work after",
+                q.misfires, s.triggers.model
+            ),
+            QualitySignal::UserOnly => {
+                format!("{USER_ONLY_SIGNAL} ({})", times(s.triggers.user))
+            }
+            QualitySignal::Errors => format!(
+                "{} failed calls after it vs {} in the rest of its sessions",
+                rate(q.follow_on_errors, q.follow_on_calls),
+                rate(q.baseline_errors, q.baseline_calls)
+            ),
+            QualitySignal::RetryLoops => format!(
+                "{} after it",
+                if q.follow_on_retry_loops == 1 {
+                    "1 retry loop".to_owned()
+                } else {
+                    format!("{} retry loops", q.follow_on_retry_loops)
+                }
+            ),
+            QualitySignal::Compactions => format!(
+                "compaction soon after {} of {} loads",
+                q.compactions_soon, s.invocations
+            ),
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// The saving of one skill listed for SkillQuality: the loads that did no good, each priced as load
+/// (cache write) and carry (the skill's own cache read : uncached ratio), and the listing of a skill
+/// only the user starts (cache read).
+fn quality_split(s: &SkillStats, signals: &[QualitySignal]) -> Split {
+    let mut split = Split::default();
+    let wasted = u64::from(
+        if signals.contains(&QualitySignal::RepeatLoads) {
+            s.quality.repeat_loads
+        } else {
+            0
+        } + if signals.contains(&QualitySignal::Misfires) {
+            s.quality.misfires
+        } else {
+            0
+        },
+    );
+    if wasted > 0 && s.invocations > 0 {
+        let uses = f64::from(s.invocations);
+        let load = s.load.count as f64 / uses * wasted as f64;
+        let carry = s.carry.tokens.count as f64 / uses * wasted as f64;
+        let carried = s.carry.cache_read_tokens + s.carry.uncached_tokens;
+        let read_share = if carried > 0 {
+            s.carry.cache_read_tokens as f64 / carried as f64
+        } else {
+            1.0
+        };
+        split.cache_write += load;
+        split.cache_read += carry * read_share;
+        split.input += carry * (1.0 - read_share);
+    }
+    if signals.contains(&QualitySignal::UserOnly) {
+        split.cache_read += s.baseline.tokens.count as f64;
+    }
+    split
+}
+
 fn per_request(s: &SkillStats) -> u64 {
     s.baseline
         .tokens
@@ -1160,6 +1487,7 @@ pub fn analyze(report: &SkillReport) -> AdviceReport {
         &ModelMixUse::default(),
         &ContextHygieneUse::default(),
         &DelegationUse::default(),
+        &CacheExpiryUse::default(),
         &Pricing::default(),
     )
 }
@@ -1284,6 +1612,7 @@ pub fn analyze_with(
     model_mix: &ModelMixUse,
     hygiene: &ContextHygieneUse,
     delegation: &DelegationUse,
+    cache_expiry: &CacheExpiryUse,
     pricing: &Pricing,
 ) -> AdviceReport {
     let installed: Vec<&SkillStats> = report.skills.iter().filter(|s| s.in_inventory).collect();
@@ -2122,6 +2451,104 @@ pub fn analyze_with(
         findings.push((f, weight));
     }
 
+    // Requests after the cache expired: the context was written again at the write price.
+    if !cache_expiry.sessions.is_empty() {
+        let rows = &cache_expiry.sessions;
+        let tokens: u64 = rows.iter().map(|r| r.tokens).sum();
+        let measured = rows.iter().all(|r| r.measured);
+        let priced = rows.iter().any(|r| r.priced_requests > 0);
+        let usd: f64 = rows.iter().map(|r| r.usd).sum();
+        let unpriced: u64 = rows.iter().map(|r| r.requests - r.priced_requests).sum();
+        let minutes = |secs: u64| (secs as f64 / 60.0).round() as u64;
+        let count = |value: u64, one: &str, many: &str| {
+            format!("{} {}", n(value), if value == 1 { one } else { many })
+        };
+        let items: Vec<Item> = rows
+            .iter()
+            .take(TOP)
+            .map(|r| {
+                let (lo, hi) = (minutes(r.min_gap_secs), minutes(r.max_gap_secs));
+                let pauses = if lo == hi {
+                    format!("{lo} min")
+                } else {
+                    format!("{lo}\u{2013}{hi} min")
+                };
+                Item {
+                    name: r.id.clone(),
+                    tokens: Tokens {
+                        count: r.tokens,
+                        measured: r.measured,
+                    },
+                    requests: r.requests,
+                    detail: format!(
+                        "{} after {} of {pauses}, {} tokens written again, TTL {} min",
+                        count(r.requests, "request", "requests"),
+                        if r.requests == 1 { "a pause" } else { "pauses" },
+                        short_tokens(r.tokens),
+                        r.ttl.as_secs() / 60
+                    ),
+                    referenced_by: Vec::new(),
+                    session_id: Some(r.id.clone()),
+                }
+            })
+            .collect();
+        let total = Tokens {
+            count: tokens,
+            measured,
+        };
+        let mut f = finding(FindingKind::CacheExpiry, rows.len(), items, Some(total));
+        f.share_of_total_tokens = share(tokens, total_tokens.count);
+        f.impact = Impact {
+            saving: total,
+            saving_usd: priced.then_some(usd),
+            confidence: Confidence::Inferred,
+        };
+        f.notes.push(
+            "A request counts when it came more than the session's cache lifetime after the previous main-agent request and wrote more tokens than it read. The saving is those written tokens, in USD the difference between the write and the read price of the request's own model. It is inferred: the action shrinks the rewrite, it does not prove that it would not have happened."
+                .to_owned(),
+        );
+        f.notes.push(format!(
+            "The lifetime is {} minutes, or {} minutes for a session in which a request wrote tokens with the 1-hour lifetime. It is read from the client's own report where the client gives one (Claude Code) and assumed to be {} minutes elsewhere.",
+            CACHE_TTL_5M.as_secs() / 60,
+            CACHE_TTL_1H.as_secs() / 60,
+            CACHE_TTL_5M.as_secs() / 60
+        ));
+        if rows.iter().any(|r| r.ttl == CACHE_TTL_1H) {
+            f.notes.push(
+                "The price table has one cache-write price, that of the 5-minute lifetime. Writes with the 1-hour lifetime cost more, so the USD saving of such a session is a lower bound."
+                    .to_owned(),
+            );
+        }
+        if unpriced > 0 {
+            f.notes.push(format!(
+                "{} of the requests had no price for their model; their tokens are in the saving, not in the USD.",
+                n(unpriced)
+            ));
+        }
+        if cache_expiry.skipped_models > 0 {
+            f.notes.push(format!(
+                "Skipped, because the cache lifetime is not known: {} of models that are not Anthropic models.",
+                count(cache_expiry.skipped_models, "request", "requests")
+            ));
+        }
+        if cache_expiry.skipped_untimed > 0 {
+            f.notes.push(format!(
+                "Skipped, because the pause cannot be told: {} without a timestamp, or right after one without.",
+                count(cache_expiry.skipped_untimed, "request", "requests")
+            ));
+        }
+        f.notes.push(
+            "The Context size saving counts the volume of a large context, this finding the price difference of writing it again. Both can name the same session; their savings are not additive."
+                .to_owned(),
+        );
+        if !measured {
+            f.notes
+                .push("Some requests are estimated, not reported by the client.".to_owned());
+        }
+        let weight = tokens as f64 * (CACHE_WRITE_WEIGHT - CACHE_READ_WEIGHT);
+        findings.push((f, weight));
+    }
+
     // Work on a large context with almost no subagent requests. No saving: weight 0, Impact::none().
     let delegating: Vec<&DelegationSource> = delegation
         .sources
@@ -2187,6 +2614,88 @@ pub fn analyze_with(
             n(MIN_DELEGATION_REQUESTS)
         ));
         findings.push((f, 0.0));
+    }
+
+    // Skills with signs of a problem in the order of their events.
+    {
+        struct Row<'a> {
+            skill: &'a SkillStats,
+            signals: Vec<QualitySignal>,
+            split: Split,
+            usd: Option<f64>,
+            saving: u64,
+        }
+        let mut rows: Vec<Row> = report
+            .skills
+            .iter()
+            .filter_map(|s| {
+                let signals = quality_signals(s);
+                if signals.is_empty() {
+                    return None;
+                }
+                let split = quality_split(s, &signals);
+                Some(Row {
+                    skill: s,
+                    usd: pricing.usd(&split),
+                    saving: (split.input + split.cache_read + split.cache_write).round() as u64,
+                    signals,
+                    split,
+                })
+            })
+            .collect();
+        if !rows.is_empty() {
+            let has = |r: &Row| r.signals.iter().any(|sig| sig.has_saving());
+            rows.sort_by(|a, b| {
+                has(b)
+                    .cmp(&has(a))
+                    .then_with(|| match (a.usd, b.usd) {
+                        (Some(x), Some(y)) => y.total_cmp(&x),
+                        _ => b.split.weight().total_cmp(&a.split.weight()),
+                    })
+                    .then_with(|| b.signals.len().cmp(&a.signals.len()))
+                    .then_with(|| a.skill.name.cmp(&b.skill.name))
+            });
+            let items: Vec<Item> = rows
+                .iter()
+                .take(TOP)
+                .map(|r| Item {
+                    name: r.skill.name.clone(),
+                    tokens: Tokens::estimated(r.saving),
+                    requests: u64::from(r.skill.invocations),
+                    detail: quality_detail(r.skill, &r.signals),
+                    referenced_by: Vec::new(),
+                    session_id: None,
+                })
+                .collect();
+            let saved: u64 = rows.iter().map(|r| r.saving).sum();
+            let split = rows.iter().fold(Split::default(), |mut acc, r| {
+                acc.input += r.split.input;
+                acc.cache_read += r.split.cache_read;
+                acc.cache_write += r.split.cache_write;
+                acc
+            });
+            let total = Tokens::estimated(saved);
+            let mut f = finding(FindingKind::SkillQuality, rows.len(), items, Some(total));
+            f.share_of_total_tokens = share(saved, total_tokens.count);
+            if saved > 0 {
+                f.impact = Impact {
+                    saving: total,
+                    saving_usd: pricing.usd(&split),
+                    confidence: Confidence::Inferred,
+                };
+            }
+            f.notes.push(
+                "Signals count loads by the main agent only; skills of subagents are not judged. They hint at a problem and prove nothing.".to_owned(),
+            );
+            f.notes.push(
+                "A skill can also appear in Costly descriptions or Large skill bodies; the savings of the findings are not additive.".to_owned(),
+            );
+            f.notes.push(
+                "The saving is the load and carry of repeat loads and misfires, and the listing of a skill only started by /name. Errors, retry loops and compactions after a skill have no saving: their cost cannot be attributed to the skill; a skill listed only for them ranks last.".to_owned(),
+            );
+            unpriced_note(&mut f);
+            findings.push((f, split.weight()));
+        }
     }
 
     // Ranked by the USD saving, then by the weighted tokens, then in the order above; findings without
@@ -2257,6 +2766,7 @@ mod tests {
             carry: CarryCost::default(),
             follow_on: UsageSum::default(),
             attributed: UsageSum::default(),
+            quality: Default::default(),
             baseline: BaselineCost {
                 requests: listed.0,
                 tokens: Tokens::estimated(listed.1),
@@ -2283,6 +2793,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         )
     }
@@ -2979,6 +3490,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &pricing(),
         )
     }
@@ -3215,6 +3727,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         );
         let f = find(&a, FindingKind::ContextSize);
@@ -3301,6 +3814,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
@@ -3324,6 +3838,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         );
         assert_eq!(a.findings[0].kind, FindingKind::ContextSize);
@@ -3339,6 +3854,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         );
         assert_eq!(
@@ -3396,6 +3912,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &p,
         );
         let f = find(&a, FindingKind::UnusedSkills);
@@ -3500,6 +4017,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             pricing,
         )
     }
@@ -3760,6 +4278,7 @@ mod tests {
             &model_mix_saving(sessions, &table),
             &ContextHygieneUse::default(),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::from_sessions(sessions, &table),
         )
     }
@@ -3937,6 +4456,7 @@ mod tests {
             &ModelMixUse::default(),
             &hygiene_saving(sessions, &table),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::from_sessions(sessions, &table),
         )
     }
@@ -4234,6 +4754,7 @@ mod tests {
             &ModelMixUse::default(),
             &hygiene_saving(&unpriced, &table),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::from_sessions(&unpriced, &table),
         );
         assert!(
@@ -4291,6 +4812,7 @@ mod tests {
             &ModelMixUse::default(),
             &hygiene,
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::from_sessions(&sessions, &table),
         );
         let size = find(&a, FindingKind::ContextSize);
@@ -4332,6 +4854,7 @@ mod tests {
             &ModelMixUse::default(),
             &hygiene_saving(&two, &table),
             &DelegationUse::default(),
+            &CacheExpiryUse::default(),
             &Pricing::from_sessions(&two, &table),
         );
         assert!(find_none(&a, FindingKind::ContextHygiene));
@@ -4371,6 +4894,7 @@ mod tests {
             &ModelMixUse::default(),
             &ContextHygieneUse::default(),
             &delegation_use(sessions),
+            &CacheExpiryUse::default(),
             &Pricing::default(),
         )
     }
@@ -4463,5 +4987,441 @@ mod tests {
         assert_eq!(f.count, 1);
         assert_eq!(f.items.len(), 2);
         assert_eq!(f.items[0].name, "copilot-cli");
+    }
+
+    /// $3.75 cache write, $0.30 cache read: the difference is $3.45 per million tokens.
+    fn expiry_prices() -> PriceTable {
+        PriceTable::parse(
+            r#"{"claude-test": {"input": 3.0, "output": 15.0, "cache_write": 3.75, "cache_read": 0.3}}"#,
+        )
+        .unwrap()
+    }
+
+    /// One request: (seconds since the start or `None`, model, cache read, cache write, 1-hour write, subagent).
+    type Timed<'a> = (Option<i64>, &'a str, u64, u64, u64, bool);
+
+    fn timed(id: &str, reqs: &[Timed]) -> SessionEvents {
+        use crate::model::{Event, Session};
+        let start: jiff::Timestamp = "2026-10-03T12:00:00Z".parse().unwrap();
+        SessionEvents {
+            session: Session::new(id, Source::ClaudeCode),
+            events: reqs
+                .iter()
+                .map(
+                    |&(secs, model, cache_read, cache_write, cache_write_1h, subagent)| Event {
+                        at: secs.map(|s| start + jiff::SignedDuration::from_secs(s)),
+                        kind: EventKind::Usage(Usage {
+                            model: Some(model.into()),
+                            cache_read,
+                            cache_write,
+                            cache_write_1h,
+                            subagent,
+                            measured: true,
+                            ..Usage::default()
+                        }),
+                    },
+                )
+                .collect(),
+            warnings: Vec::new(),
+        }
+    }
+
+    /// Two main-agent requests of `claude-test`, the second after `gap` seconds with a rewritten context.
+    fn after_gap(gap: i64) -> SessionEvents {
+        timed(
+            "s",
+            &[
+                (Some(0), "claude-test", 0, 100_000, 0, false),
+                (Some(gap), "claude-test", 1_000, 100_000, 0, false),
+            ],
+        )
+    }
+
+    fn expiry_advice(sessions: &[SessionEvents]) -> AdviceReport {
+        analyze_with(
+            &report(vec![]),
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
+            &cache_expiry_use(sessions, &expiry_prices()),
+            &Pricing::default(),
+        )
+    }
+
+    #[test]
+    fn a_pause_longer_than_five_minutes_expires_the_cache_and_the_first_request_never_does() {
+        let below = cache_expiry_use(&[after_gap(299)], &expiry_prices());
+        let exactly = cache_expiry_use(&[after_gap(300)], &expiry_prices());
+        let above = cache_expiry_use(&[after_gap(301)], &expiry_prices());
+        assert!(below.sessions.is_empty() && exactly.sessions.is_empty());
+        let row = &above.sessions[0];
+        assert_eq!((row.requests, row.tokens), (1, 100_000));
+        assert_eq!(row.ttl, CACHE_TTL_5M);
+        assert_eq!((row.min_gap_secs, row.max_gap_secs), (301, 301));
+    }
+
+    #[test]
+    fn a_session_that_wrote_one_hour_tokens_has_a_one_hour_lifetime() {
+        let session = |gap: i64| {
+            timed(
+                "s",
+                &[
+                    (Some(0), "claude-test", 0, 100_000, 100_000, false),
+                    (Some(gap), "claude-test", 1_000, 100_000, 100_000, false),
+                ],
+            )
+        };
+        let thirty = cache_expiry_use(&[session(30 * 60)], &expiry_prices());
+        let seventy = cache_expiry_use(&[session(70 * 60)], &expiry_prices());
+        assert!(thirty.sessions.is_empty());
+        assert_eq!(seventy.sessions[0].ttl, CACHE_TTL_1H);
+        assert_eq!(seventy.sessions[0].requests, 1);
+    }
+
+    #[test]
+    fn a_request_that_mostly_read_the_cache_is_not_expired() {
+        let s = timed(
+            "s",
+            &[
+                (Some(0), "claude-test", 0, 100_000, 0, false),
+                (Some(3_600), "claude-test", 90_000, 90_000, 0, false),
+            ],
+        );
+        assert!(cache_expiry_use(&[s], &expiry_prices()).sessions.is_empty());
+    }
+
+    #[test]
+    fn other_models_and_requests_without_a_timestamp_are_skipped_and_counted() {
+        let s = timed(
+            "s",
+            &[
+                (Some(0), "claude-test", 0, 100_000, 0, false),
+                (Some(1_000), "gpt-test", 0, 100_000, 0, false),
+                (None, "claude-test", 0, 100_000, 0, false),
+                (Some(3_000), "claude-test", 0, 100_000, 0, false),
+            ],
+        );
+        let out = cache_expiry_use(&[s], &expiry_prices());
+        assert_eq!(out.skipped_models, 1);
+        // The request without a timestamp, and the one after it (its predecessor has none).
+        assert_eq!(out.skipped_untimed, 2);
+        assert!(out.sessions.is_empty());
+    }
+
+    #[test]
+    fn subagent_requests_are_ignored_and_do_not_reset_the_pause() {
+        let s = timed(
+            "s",
+            &[
+                (Some(0), "claude-test", 0, 100_000, 0, false),
+                (Some(400), "claude-test", 0, 50_000, 0, true),
+                (Some(500), "claude-test", 1_000, 100_000, 0, false),
+            ],
+        );
+        let row = cache_expiry_use(&[s], &expiry_prices()).sessions.remove(0);
+        // The main agent paused 500 s; the subagent request at 400 s neither counts nor shortens it.
+        assert_eq!(
+            (row.requests, row.tokens, row.min_gap_secs),
+            (1, 100_000, 500)
+        );
+    }
+
+    #[test]
+    fn the_finding_prices_the_difference_between_write_and_read_of_each_model() {
+        let s = timed(
+            "sess-1",
+            &[
+                (Some(0), "claude-test", 0, 200_000, 0, false),
+                (Some(420), "claude-test", 0, 200_000, 0, false),
+                (Some(420 + 5_700), "claude-test", 0, 100_000, 0, false),
+                (Some(420 + 5_700 + 10), "other-model", 0, 100_000, 0, false),
+            ],
+        );
+        let a = expiry_advice(&[s]);
+        let f = find(&a, FindingKind::CacheExpiry);
+        assert_eq!(f.count, 1);
+        assert_eq!(f.impact.saving, Tokens::measured(300_000));
+        assert_eq!(f.impact.confidence, Confidence::Inferred);
+        // (200,000 + 100,000) × ($3.75 - $0.30) / M = $1.035
+        assert!(close(f.impact.saving_usd, 1.035));
+        let item = &f.items[0];
+        assert_eq!(item.name, "sess-1");
+        assert_eq!(item.session_id.as_deref(), Some("sess-1"));
+        assert_eq!(item.requests, 2);
+        assert_eq!(
+            item.detail,
+            "2 requests after pauses of 7\u{2013}95 min, 300.0k tokens written again, TTL 5 min"
+        );
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("1 request of models that are not Anthropic"))
+        );
+        assert!(
+            f.notes
+                .iter()
+                .any(|n| n.contains("assumed to be 5 minutes elsewhere"))
+        );
+        assert!(!f.notes.iter().any(|n| n.contains("lower bound")));
+    }
+
+    #[test]
+    fn a_one_hour_session_says_that_its_saving_is_a_lower_bound() {
+        let s = timed(
+            "s",
+            &[
+                (Some(0), "claude-test", 0, 100_000, 100_000, false),
+                (Some(4_200), "claude-test", 0, 100_000, 100_000, false),
+            ],
+        );
+        let a = expiry_advice(&[s]);
+        let f = find(&a, FindingKind::CacheExpiry);
+        assert!(f.notes.iter().any(|n| n.contains("lower bound")));
+        assert!(f.items[0].detail.ends_with("TTL 60 min"));
+    }
+
+    #[test]
+    fn no_expired_request_no_cache_expiry_finding() {
+        assert!(find_none(
+            &expiry_advice(&[after_gap(299)]),
+            FindingKind::CacheExpiry
+        ));
+    }
+
+    // SkillQuality.
+
+    /// A quality skill: loaded four times, two by the model, two by the user, with the given tweak.
+    fn quality_skill(name: &str, tweak: impl FnOnce(&mut SkillStats)) -> SkillStats {
+        let mut s = skill(name, true, 4, 0, (100, 1000));
+        s.triggers = TriggerCounts {
+            model: 2,
+            user: 2,
+            nested: 0,
+        };
+        tweak(&mut s);
+        s
+    }
+
+    /// The names listed for SkillQuality, or none when the finding is missing.
+    fn quality_names(skills: Vec<SkillStats>) -> Vec<String> {
+        analyze(&report(skills))
+            .findings
+            .iter()
+            .find(|f| f.kind == FindingKind::SkillQuality)
+            .map(|f| f.items.iter().map(|i| i.name.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    fn listed(tweak: impl FnOnce(&mut SkillStats)) -> bool {
+        !quality_names(vec![quality_skill("s", tweak)]).is_empty()
+    }
+
+    #[test]
+    fn a_repeat_load_passes_at_one_and_none_is_no_finding() {
+        assert!(listed(|s| s.quality.repeat_loads = 1));
+        assert!(!listed(|s| s.quality.repeat_loads = 0));
+    }
+
+    #[test]
+    fn misfires_need_two_and_a_fifth_of_the_model_loads() {
+        // 2 of 10 model loads: at the minimum of both.
+        assert!(listed(|s| {
+            s.triggers.model = 10;
+            s.quality.misfires = 2;
+        }));
+        // 2 of 11: just below 20 %.
+        assert!(!listed(|s| {
+            s.triggers.model = 11;
+            s.quality.misfires = 2;
+        }));
+        // 1 of 2 is 50 % but a single misfire is below the count.
+        assert!(!listed(|s| {
+            s.triggers.model = 2;
+            s.quality.misfires = 1;
+        }));
+    }
+
+    #[test]
+    fn a_skill_only_the_user_starts_needs_three_starts_no_model_load_and_an_installed_skill() {
+        let only = |user: u32, model: u32, installed: bool| {
+            listed(|s| {
+                s.triggers.user = user;
+                s.triggers.model = model;
+                s.in_inventory = installed;
+            })
+        };
+        assert!(only(3, 0, true));
+        assert!(!only(2, 0, true));
+        assert!(!only(3, 1, true));
+        assert!(!only(3, 0, false));
+    }
+
+    #[test]
+    fn errors_after_a_skill_need_five_at_twice_the_rate_of_the_rest() {
+        let errors = |fe: u64, fc: u64, be: u64, bc: u64| {
+            listed(|s| {
+                s.quality.follow_on_errors = fe;
+                s.quality.follow_on_calls = fc;
+                s.quality.baseline_errors = be;
+                s.quality.baseline_calls = bc;
+            })
+        };
+        // 20 % against 10 %: exactly twice.
+        assert!(errors(5, 25, 10, 100));
+        // 20 % against 10.1 %: just below.
+        assert!(!errors(5, 25, 101, 1000));
+        // Twice the rate but only 4 errors.
+        assert!(!errors(4, 10, 1, 100));
+        // A baseline without errors: five errors pass, four do not.
+        assert!(errors(5, 100, 0, 200));
+        assert!(!errors(4, 100, 0, 200));
+        // No baseline calls at all counts as no errors.
+        assert!(errors(5, 100, 0, 0));
+    }
+
+    #[test]
+    fn a_retry_loop_after_a_skill_passes_at_one() {
+        assert!(listed(|s| s.quality.follow_on_retry_loops = 1));
+        assert!(!listed(|s| s.quality.follow_on_retry_loops = 0));
+    }
+
+    #[test]
+    fn compactions_soon_after_need_two_and_a_quarter_of_the_loads() {
+        // 2 of 8 loads is exactly 25 %.
+        assert!(listed(|s| {
+            s.invocations = 8;
+            s.quality.compactions_soon = 2;
+        }));
+        // 2 of 9 is below.
+        assert!(!listed(|s| {
+            s.invocations = 9;
+            s.quality.compactions_soon = 2;
+        }));
+        // 1 of 1 is 100 % but below the count.
+        assert!(!listed(|s| {
+            s.invocations = 1;
+            s.quality.compactions_soon = 1;
+        }));
+    }
+
+    #[test]
+    fn no_skill_passing_no_finding() {
+        assert!(quality_names(vec![quality_skill("calm", |_| {})]).is_empty());
+    }
+
+    #[test]
+    fn the_saving_is_the_wasted_loads_times_load_and_carry_per_use() {
+        let mut s = quality_skill("heavy", |s| {
+            s.quality.repeat_loads = 1;
+            s.triggers.model = 4;
+            s.quality.misfires = 2;
+            s.load = Tokens::estimated(400);
+            s.carry = CarryCost {
+                requests: 40,
+                tokens: Tokens::estimated(2000),
+                cache_read_tokens: 1500,
+                uncached_tokens: 500,
+            };
+        });
+        s.triggers.user = 0;
+        let r = report(vec![s]);
+        let a = analyze_with(
+            &r,
+            &References::new(),
+            &[],
+            &ContextSaving::default(),
+            &RetryLoopUse::default(),
+            &ModelMixUse::default(),
+            &ContextHygieneUse::default(),
+            &DelegationUse::default(),
+            &CacheExpiryUse::default(),
+            &pricing(),
+        );
+        let f = find(&a, FindingKind::SkillQuality);
+        // 3 wasted loads x (100 load + 500 carry) = 1800 tokens.
+        assert_eq!(f.impact.saving.count, 1800);
+        assert_eq!(f.impact.confidence, Confidence::Inferred);
+        // 300 cache write at 3.75, 1125 cache read at 0.5, 375 input at 3.
+        assert!(close(f.impact.saving_usd, 2812.5 / 1_000_000.0));
+        assert_eq!(f.items[0].tokens.count, 1800);
+        assert_eq!(
+            f.items[0].detail,
+            "loaded again into the same context (once); 2 of 4 model loads without any work after"
+        );
+    }
+
+    #[test]
+    fn a_skill_only_the_user_starts_saves_its_listing_as_cache_read() {
+        let a = analyze(&report(vec![quality_skill("manual", |s| {
+            s.triggers.user = 5;
+            s.triggers.model = 0;
+        })]));
+        let f = find(&a, FindingKind::SkillQuality);
+        assert_eq!(f.impact.saving.count, 1000);
+        assert_eq!(f.items[0].detail, "only started by /name (5 times)");
+    }
+
+    #[test]
+    fn signals_without_a_saving_rank_after_skills_with_one_and_have_no_saving() {
+        let a = analyze(&report(vec![
+            quality_skill("a-loops", |s| s.quality.follow_on_retry_loops = 3),
+            quality_skill("z-repeat", |s| {
+                s.quality.repeat_loads = 1;
+                s.load = Tokens::estimated(40);
+            }),
+        ]));
+        let f = find(&a, FindingKind::SkillQuality);
+        let names: Vec<&str> = f.items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["z-repeat", "a-loops"]);
+        assert_eq!(f.items[1].tokens.count, 0);
+        assert_eq!(f.items[1].detail, "3 retry loops after it");
+        assert_eq!(f.count, 2);
+        assert_eq!(f.impact.saving.count, 10);
+    }
+
+    #[test]
+    fn a_skill_only_with_signals_without_saving_leaves_the_finding_without_impact() {
+        let a = analyze(&report(vec![quality_skill("loops", |s| {
+            s.quality.follow_on_retry_loops = 1;
+        })]));
+        let f = find(&a, FindingKind::SkillQuality);
+        assert_eq!(f.impact.saving.count, 0);
+        assert_eq!(f.impact.saving_usd, None);
+    }
+
+    #[test]
+    fn the_error_detail_compares_both_rates() {
+        let a = analyze(&report(vec![quality_skill("e", |s| {
+            s.quality.follow_on_errors = 5;
+            s.quality.follow_on_calls = 25;
+            s.quality.baseline_errors = 10;
+            s.quality.baseline_calls = 100;
+        })]));
+        assert_eq!(
+            find(&a, FindingKind::SkillQuality).items[0].detail,
+            "20 % failed calls after it vs 10 % in the rest of its sessions"
+        );
+    }
+
+    #[test]
+    fn ties_in_saving_go_by_signal_count_then_name() {
+        let a = analyze(&report(vec![
+            quality_skill("b", |s| s.quality.follow_on_retry_loops = 1),
+            quality_skill("a", |s| s.quality.follow_on_retry_loops = 1),
+            quality_skill("c", |s| {
+                s.quality.follow_on_retry_loops = 1;
+                s.quality.follow_on_errors = 5;
+            }),
+        ]));
+        let names: Vec<&str> = find(&a, FindingKind::SkillQuality)
+            .items
+            .iter()
+            .map(|i| i.name.as_str())
+            .collect();
+        assert_eq!(names, ["c", "a", "b"]);
     }
 }

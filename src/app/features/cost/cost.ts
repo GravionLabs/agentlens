@@ -1,16 +1,33 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
-import { analysis, trendAnalysis } from "../../core/analysis";
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from "@angular/core";
+import { answerOf, analysis, messageOf, trendAnalysis } from "../../core/analysis";
 import { trendNote } from "../../core/delta";
 import { FiltersService } from "../../core/filters.service";
 import { WithoutService } from "../../core/without.service";
 import { exactTokens, number, pathLabel, tokens, usd } from "../../core/format";
 import type { CostData, CostRow, WhatIfRow, WithoutReport } from "../../core/types";
 import { trendStat } from "../../ui/stat-cards";
+import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
 import { TrendCards } from "../../ui/trend-cards";
-import { HxCell, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxButton,
+  HxCell,
+  HxChip,
+  HxDataTable,
+  HxField,
+  HxInput,
+  HxSelect,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 /** A cost row prepared for the helix table: sortable raw values next to the display text. */
 export interface CostView {
@@ -40,12 +57,18 @@ export function costView(r: CostRow): CostView {
   };
 }
 
-/** A what-if row with the difference computed, so the table can sort it. */
-export interface WhatIfView extends WhatIfRow {
-  diff: number;
+/**
+ * A what-if row with the difference computed, so the table can sort it. A row whose requests are
+ * all excluded has no prices (`null`, n/a), not a price of zero.
+ */
+export interface WhatIfView extends Omit<WhatIfRow, "actual_usd" | "what_if_usd"> {
+  actual_usd: number | null;
+  what_if_usd: number | null;
+  diff: number | null;
 }
 
 export function whatIfView(r: WhatIfRow): WhatIfView {
+  if (r.requests === 0) return { ...r, actual_usd: null, what_if_usd: null, diff: null };
   return { ...r, diff: r.what_if_usd - r.actual_usd };
 }
 
@@ -87,9 +110,10 @@ export function withoutViews(w: WithoutReport): WithoutView[] {
   ];
 }
 
-/** `+$1.20` or `-$0.40`. */
-export function signedUsd(d: number): string {
-  return `${d < 0 ? "-" : "+"}${usd(Math.abs(d))}`;
+/** `+$1.20` or `-$0.40`, with a tilde for an estimate (`-~$0.40`); `n/a` without a value. */
+export function signedUsd(d: number | null, estimated = false): string {
+  if (d === null) return usd(d);
+  return `${d < 0 ? "-" : "+"}${usd(Math.abs(d), estimated)}`;
 }
 
 export type By = "model" | "project" | "branch" | "issue";
@@ -100,6 +124,9 @@ const GROUPS: { id: By; label: string }[] = [
   { id: "branch", label: "Branch" },
   { id: "issue", label: "Issue" },
 ];
+
+/** How the core starts the error of a what-if model it cannot price. */
+const WHAT_IF_ERROR = "no price for the what-if model";
 
 /** `$1.50`, `~$1.50` for computed values, `$1.50 + ~$2.00` for a mix, `unpriced` without any price. */
 export function money(r: CostRow): string {
@@ -113,233 +140,53 @@ export function money(r: CostRow): string {
 
 @Component({
   selector: "app-cost",
-  imports: [PageHeader, Term, Status, TrendCards, HxDataTable, HxCell],
+  imports: [
+    PageHeader,
+    Term,
+    Status,
+    TrendCards,
+    HxButton,
+    HxCell,
+    HxChip,
+    HxDataTable,
+    HxField,
+    HxInput,
+    HxSelect,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="view">
-      <app-page-header
-        exportView="cost"
-        [exportFormats]="['json', 'csv']"
-        [exportOptions]="{ by: by(), whatIf: whatIf() || null, without: without.items() }"
-        title="Cost"
-        summary="What the usage costs, grouped by model, project, branch or issue."
-      >
-        <p>
-          Cost the client reported is shown as is; <span class="est">~</span> was computed from the
-          price table. Cache writes are priced as 5-minute writes.
-          <app-term id="premium">Premium requests</app-term> are a plan allowance, not money.
-        </p>
-      </app-page-header>
-      <form class="controls" (submit)="apply($event)">
-        <label>
-          <span>Group by</span>
-          <select (change)="by.set(asSelect($event).value)">
-            @for (g of groups; track g.id) {
-              <option [value]="g.id" [selected]="g.id === by()">{{ g.label }}</option>
-            }
-          </select>
-        </label>
-        <label>
-          <span>What if everything ran on…</span>
-          <input
-            type="text"
-            placeholder="model id prefix, e.g. claude-haiku-4-5"
-            [value]="draft()"
-            (input)="draft.set(asInput($event).value)"
-          />
-        </label>
-        <button type="submit">Compare</button>
-        @if (whatIf()) {
-          <button type="button" (click)="clearWhatIf()">Clear</button>
-        }
-      </form>
-      @if (without.items().length > 0) {
-        <ul class="chips" aria-label="What if removed">
-          @for (item of without.items(); track item) {
-            <li class="chip">
-              {{ item }}
-              <button
-                type="button"
-                [attr.aria-label]="'Remove ' + item"
-                (click)="without.remove(item)"
-              >
-                ×
-              </button>
-            </li>
-          }
-        </ul>
-      }
-      <app-status
-        [loading]="res.isLoading()"
-        [error]="res.error()"
-        [warnings]="res.value()?.warnings ?? 0"
-        [errors]="res.value()?.errors ?? []"
-      />
-      @if (compare()) {
-        <app-trend-cards
-          [stats]="trendStats()"
-          [note]="note()"
-          [loading]="trend.isLoading()"
-          [error]="trend.error()"
-        />
-      }
-      <hx-data-table
-        [value]="views()"
-        [columns]="columns()"
-        dataKey="key"
-        [sortField]="'cost'"
-        [sortOrder]="-1"
-        [paginator]="views().length > 50"
-        [rows]="50"
-        emptyMessage="No usage found."
-        ariaLabel="Cost"
-      >
-        <ng-template hxCell="key" let-row>
-          <span [attr.title]="row.key">{{ row.label }}</span>
-        </ng-template>
-        <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
-        <ng-template hxCell="input" let-value="value">
-          <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
-        </ng-template>
-        <ng-template hxCell="output" let-value="value">
-          <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
-        </ng-template>
-        <ng-template hxCell="cost" let-row>
-          <span [class.est]="row.estimated">{{ row.costText }}</span>
-        </ng-template>
-        <ng-template hxCell="premium" let-value="value">{{ value > 0 ? value : "" }}</ng-template>
-      </hx-data-table>
-      @if (total(); as t) {
-        <p class="total">
-          <strong>Total</strong>: {{ n(t.requests) }} requests, {{ money(t) }}
-          @if (t.premium_requests > 0) {
-            , {{ t.premium_requests }} premium requests
-          }
-        </p>
-      }
-      @if (unpriced().length > 0) {
-        <p class="muted">
-          No price for: {{ unpriced().join(", ") }}. Add prices to ~/.config/agentlens/prices.json
-          (per million tokens, keyed by model-id prefix).
-        </p>
-      }
-      @if (res.value()?.data?.what_if; as w) {
-        <h3>What if everything ran on {{ w.target }}?</h3>
-        <hx-data-table
-          [value]="whatIfRows()"
-          [columns]="whatIfColumns"
-          emptyMessage="Nothing to compare."
-          [ariaLabel]="'What if everything ran on ' + w.target"
-        >
-          <ng-template hxCell="actual_usd" let-value="value">{{ usd(value, true) }}</ng-template>
-          <ng-template hxCell="what_if_usd" let-value="value">{{ usd(value, true) }}</ng-template>
-          <ng-template hxCell="diff" let-value="value">{{ signedUsd(value) }}</ng-template>
-        </hx-data-table>
-        <p class="muted">
-          Same tokens priced with the prices of {{ w.target }}. “Excluded” requests have no actual
-          price and are left out of both sides.
-        </p>
-      }
-      @if (res.value()?.data?.without; as w) {
-        <h3>What if removed</h3>
-        <hx-data-table
-          [value]="withoutRows()"
-          [columns]="withoutColumns"
-          emptyMessage="Nothing matched."
-          ariaLabel="What if removed"
-        >
-          <ng-template hxCell="installations" let-value="value">{{
-            value === null ? "" : n(value)
-          }}</ng-template>
-          <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
-          <ng-template hxCell="tokens" let-row>
-            <span class="est" [attr.title]="tip(row.tokens)">{{ tokens(row.tokens, true) }}</span>
-          </ng-template>
-          <ng-template hxCell="cost" let-row>
-            <span [class.est]="row.costText !== 'n/a'">{{ row.costText }}</span>
-          </ng-template>
-        </hx-data-table>
-        @for (note of w.notes; track note) {
-          <p class="muted">{{ note }}</p>
-        }
-        @for (warning of w.warnings; track warning) {
-          <p class="warning">{{ warning }}</p>
-        }
-      }
-    </section>
-  `,
+  templateUrl: "./cost.html",
   styles: `
     h3 {
       margin: 20px 0 6px;
-      font-size: 1.05rem;
+      font-size: var(--h-font-size-md);
     }
     .controls {
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      align-items: end;
-      margin: 12px 0;
-    }
-    label {
-      display: flex;
       flex-direction: column;
-      gap: 2px;
-      color: var(--muted);
-      font-size: 0.85rem;
+      gap: var(--h-space-4);
+      max-width: 28rem;
+      margin: var(--h-space-3) 0;
     }
-    select,
-    input {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 5px 8px;
-      min-width: 200px;
-    }
-    button {
-      background: var(--accent);
-      color: #fff;
-      border: 0;
-      border-radius: 6px;
-      padding: 6px 14px;
-      cursor: pointer;
-    }
-    button[type="button"] {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
+    .actions {
+      display: flex;
+      gap: var(--h-space-2);
     }
     .chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: var(--h-space-2);
       list-style: none;
-      margin: 8px 0;
+      margin: var(--h-space-2) 0;
       padding: 0;
     }
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 2px 4px 2px 10px;
-    }
-    .chip button {
-      background: transparent;
-      color: var(--muted);
-      border: 0;
-      padding: 0 6px;
-    }
     .warning {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
     .total {
       margin: 10px 0;
     }
     .est {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })
@@ -347,6 +194,8 @@ export class Cost {
   protected readonly by = signal<By>("model");
   protected readonly whatIf = signal("");
   protected readonly draft = signal("");
+  /** Why the entry was not applied; shown below its field. */
+  protected readonly entryError = signal<string | null>(null);
   protected readonly groups = GROUPS;
   protected readonly without = inject(WithoutService);
   protected readonly money = money;
@@ -360,14 +209,29 @@ export class Cost {
     without: this.without.items(),
   }));
 
+  protected readonly answer = computed(() => answerOf(this.res));
+
+  constructor() {
+    // A model the core cannot price is an error of the entry: it moves to the field, and the view
+    // loads again without the what-if.
+    effect(() => {
+      const error = this.res.error();
+      if (!error) return;
+      const message = messageOf(error);
+      if (!message.startsWith(WHAT_IF_ERROR)) return;
+      this.entryError.set(message);
+      this.whatIf.set("");
+    });
+  }
+
   protected readonly compare = inject(FiltersService).compare;
   protected readonly trend = trendAnalysis();
   protected readonly note = computed(() => {
-    const w = this.trend.value()?.data.windows;
+    const w = answerOf(this.trend)?.data.windows;
     return w ? trendNote(w) : "";
   });
   protected readonly trendStats = computed(() => {
-    const t = this.trend.value()?.data;
+    const t = answerOf(this.trend)?.data;
     if (!t) return [];
     const perDay = t.windows.normalized;
     return [
@@ -377,20 +241,30 @@ export class Cost {
     ];
   });
 
-  protected readonly rows = computed(() => this.res.value()?.data.report.rows ?? []);
-  protected readonly total = computed(() => this.res.value()?.data.report.total ?? null);
+  protected readonly rows = computed(() => this.answer()?.data.report.rows ?? []);
+  /** No total without rows: the empty table already says that there is no usage. */
+  protected readonly total = computed(() =>
+    this.rows().length > 0 ? (this.answer()?.data.report.total ?? null) : null,
+  );
+  /**
+   * What the empty row of the table says: while loading and after a failure it does not claim that
+   * there is no usage.
+   */
+  protected readonly emptyMessage = computed(() => {
+    if (this.res.isLoading()) return "Loading cost…";
+    if (this.res.error()) return "Cost could not be loaded. Use Try again to load it.";
+    return "No usage found. Choose a longer period or other filters.";
+  });
   protected readonly unpriced = computed(() =>
-    Object.entries(this.res.value()?.data.report.unpriced_models ?? {}).map(
-      ([m, n]) => `${m} (${n})`,
-    ),
+    Object.entries(this.answer()?.data.report.unpriced_models ?? {}).map(([m, n]) => `${m} (${n})`),
   );
   protected readonly whatIfRows = computed(() => {
-    const w = this.res.value()?.data.what_if;
-    return w ? [...w.rows, w.total].map(whatIfView) : [];
+    const w = this.answer()?.data.what_if;
+    return w ? [...w.rows, { ...w.total, model: "Total" }].map(whatIfView) : [];
   });
 
   protected readonly withoutRows = computed(() => {
-    const w = this.res.value()?.data.without;
+    const w = this.answer()?.data.without;
     return w ? withoutViews(w) : [];
   });
 
@@ -413,6 +287,7 @@ export class Cost {
 
   protected readonly usd = usd;
   protected readonly signedUsd = signedUsd;
+  protected readonly sort = nullsLast;
 
   protected readonly withoutColumns: HxColumn[] = [
     { field: "item", header: "Item" },
@@ -434,19 +309,23 @@ export class Cost {
 
   protected apply(event: Event): void {
     event.preventDefault();
-    this.whatIf.set(this.draft().trim());
+    const entry = this.draft().trim();
+    if (!entry) {
+      this.entryError.set("Enter a model id prefix.");
+      return;
+    }
+    this.entryError.set(null);
+    this.whatIf.set(entry);
+  }
+
+  protected edit(event: Event): void {
+    this.draft.set((event.target as HTMLInputElement).value);
+    this.entryError.set(null);
   }
 
   protected clearWhatIf(): void {
     this.draft.set("");
+    this.entryError.set(null);
     this.whatIf.set("");
-  }
-
-  protected asSelect(e: Event): { value: By } {
-    return e.target as unknown as { value: By };
-  }
-
-  protected asInput(e: Event): HTMLInputElement {
-    return e.target as HTMLInputElement;
   }
 }

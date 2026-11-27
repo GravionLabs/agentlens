@@ -1,7 +1,7 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
-import { analysis, trendAnalysis } from "../../core/analysis";
+import { answerOf, analysis, trendAnalysis } from "../../core/analysis";
 import { trendNote } from "../../core/delta";
 import { FiltersService } from "../../core/filters.service";
 import {
@@ -19,7 +19,14 @@ import { nullsLast } from "../../ui/sort";
 import { trendStat } from "../../ui/stat-cards";
 import { Status } from "../../ui/status";
 import { TrendCards } from "../../ui/trend-cards";
-import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  HxField,
+  HxSelect,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 type By = "source" | "project" | "session";
 
@@ -56,130 +63,30 @@ export function subagentView(s: SubagentShare): SubagentView {
 
 @Component({
   selector: "app-efficiency",
-  imports: [PageHeader, Term, Status, TrendCards, HxDataTable, HxCell, HxColumnHeader, HelpLink],
+  imports: [
+    PageHeader,
+    Term,
+    Status,
+    TrendCards,
+    HxDataTable,
+    HxCell,
+    HxColumnHeader,
+    HxField,
+    HxSelect,
+    HelpLink,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="view">
-      <app-page-header
-        exportView="efficiency"
-        [exportFormats]="['json', 'csv']"
-        [exportOptions]="{ by: by() }"
-        title="Efficiency"
-        summary="How well the prompt cache works and how much subagents contribute."
-      >
-        <p>
-          <app-term id="hit-rate">Cache hit rate</app-term> = cache read / all input tokens
-          (measured). “n/a”: the client reports no cache tokens.
-        </p>
-      </app-page-header>
-      <label class="by">
-        <span>Group the cache table by</span>
-        <select (change)="by.set(asSelect($event).value)">
-          @for (o of options; track o) {
-            <option [value]="o" [selected]="o === by()">{{ o }}</option>
-          }
-        </select>
-      </label>
-      <app-status
-        [loading]="res.isLoading()"
-        [error]="res.error()"
-        [warnings]="res.value()?.warnings ?? 0"
-        [errors]="res.value()?.errors ?? []"
-      />
-      @if (compare()) {
-        <app-trend-cards
-          [stats]="trendStats()"
-          [note]="note()"
-          [loading]="trend.isLoading()"
-          [error]="trend.error()"
-        />
-      }
-      <hx-data-table
-        [value]="cacheViews()"
-        [sortFunction]="sort"
-        [columns]="cacheColumns"
-        filterDisplay="row"
-        sortField="requests"
-        [sortOrder]="-1"
-        [paginator]="cache().length > 25"
-        [rows]="25"
-        [rowsPerPageOptions]="[25, 'all']"
-        allLabel="Show all"
-        emptyMessage="No usage found."
-        ariaLabel="Cache efficiency"
-      >
-        <ng-template hxColumnHeader="requests"
-          ><app-help-link term="request" label="Requests"
-        /></ng-template>
-        <ng-template hxColumnHeader="cache_read"
-          ><app-help-link term="cache-read" label="Cache read"
-        /></ng-template>
-        <ng-template hxColumnHeader="cache_write"
-          ><app-help-link term="cache-write" label="Cache write"
-        /></ng-template>
-        <ng-template hxColumnHeader="hit_rate"
-          ><app-help-link term="hit-rate" label="Hit rate"
-        /></ng-template>
-        <ng-template hxCell="groupName" let-row>
-          <span [attr.title]="row.key">{{ row.groupName }}</span>
-        </ng-template>
-        <ng-template hxCell="source" let-value="value">{{ label(value) }}</ng-template>
-        <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
-        <ng-template hxCell="input" let-value="value">
-          <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
-        </ng-template>
-        <ng-template hxCell="cache_read" let-value="value">
-          <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
-        </ng-template>
-        <ng-template hxCell="cache_write" let-value="value">
-          <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
-        </ng-template>
-        <ng-template hxCell="hit_rate" let-value="value">{{ percent(value) }}</ng-template>
-      </hx-data-table>
-      <h3>Subagent share</h3>
-      <p class="muted">
-        Cost shares only cover requests with a price (reported or from the price table).
-      </p>
-      <hx-data-table
-        [value]="subagentViews()"
-        [sortFunction]="sort"
-        [columns]="subagentColumns"
-        emptyMessage="No usage found."
-        ariaLabel="Subagent share"
-      >
-        <ng-template hxColumnHeader="requests"
-          ><app-help-link term="request" label="Requests"
-        /></ng-template>
-        <ng-template hxColumnHeader="unpriced"
-          ><app-help-link term="unpriced" label="Unpriced requests"
-        /></ng-template>
-        <ng-template hxCell="source" let-value="value">{{ label(value) }}</ng-template>
-        <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
-        <ng-template hxCell="subRequests" let-value="value">{{ percent(value) }}</ng-template>
-        <ng-template hxCell="subTokens" let-value="value">{{ percent(value) }}</ng-template>
-        <ng-template hxCell="subCost" let-value="value">{{ percent(value) }}</ng-template>
-      </hx-data-table>
-    </section>
-  `,
+  templateUrl: "./efficiency.html",
   styles: `
     h3 {
       margin: 20px 0 6px;
-      font-size: 1.05rem;
+      font-size: var(--h-font-size-md);
     }
     .by {
-      display: inline-flex;
-      flex-direction: column;
-      gap: 2px;
-      color: var(--muted);
-      font-size: 0.85rem;
-      margin: 8px 0;
-    }
-    select {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 5px 8px;
+      width: fit-content;
+      min-width: 16rem;
+      max-width: 100%;
+      margin: var(--h-space-2) 0;
     }
   `,
 })
@@ -187,14 +94,15 @@ export class Efficiency {
   protected readonly by = signal<By>("source");
   protected readonly options: By[] = ["source", "project", "session"];
   protected readonly res = analysis<EfficiencyReport>("efficiency", () => ({ by: this.by() }));
+  protected readonly answer = computed(() => answerOf(this.res));
   protected readonly compare = inject(FiltersService).compare;
   protected readonly trend = trendAnalysis();
   protected readonly note = computed(() => {
-    const w = this.trend.value()?.data.windows;
+    const w = answerOf(this.trend)?.data.windows;
     return w ? trendNote(w) : "";
   });
   protected readonly trendStats = computed(() => {
-    const t = this.trend.value()?.data;
+    const t = answerOf(this.trend)?.data;
     if (!t) return [];
     const perDay = t.windows.normalized;
     return [
@@ -204,8 +112,8 @@ export class Efficiency {
       trendStat("Retry loops", t.errors.retry_loops, "count", { good: "down", perDay }),
     ];
   });
-  protected readonly cache = computed(() => this.res.value()?.data.cache ?? []);
-  protected readonly subagents = computed(() => this.res.value()?.data.subagents ?? []);
+  protected readonly cache = computed(() => answerOf(this.res)?.data.cache ?? []);
+  protected readonly subagents = computed(() => answerOf(this.res)?.data.subagents ?? []);
 
   protected readonly sort = nullsLast;
   protected readonly n = number;
@@ -274,7 +182,8 @@ export class Efficiency {
     },
   ];
 
-  protected asSelect(e: Event): { value: By } {
-    return e.target as unknown as { value: By };
+  protected setBy(value: By | null): void {
+    // A cleared value is ignored: the table always has a grouping.
+    if (value) this.by.set(value);
   }
 }

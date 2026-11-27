@@ -14,33 +14,7 @@ const LABELS: Record<ExportFormat, string> = {
   selector: "app-export-menu",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HxButton, HxMenu],
-  template: `
-    <button
-      hx-button
-      type="button"
-      variant="link"
-      size="small"
-      aria-haspopup="menu"
-      [attr.aria-expanded]="menu.open()"
-      [disabled]="sampleMode || exporter.status().kind === 'saving'"
-      [title]="sampleMode ? 'Exporting needs the application; this page shows sample data.' : ''"
-      (click)="menu.toggle($event)"
-    >
-      Export ▾
-    </button>
-    <hx-menu #menu popup ariaLabel="Export" [model]="items()" />
-    @switch (exporter.status().kind) {
-      @case ("saving") {
-        <span class="note">Saving…</span>
-      }
-      @case ("done") {
-        <span class="note" role="status">Saved {{ savedPath() }}</span>
-      }
-      @case ("error") {
-        <span class="note err" role="alert">{{ errorMessage() }}</span>
-      }
-    }
-  `,
+  templateUrl: "./export-menu.html",
   styles: `
     :host {
       display: inline-flex;
@@ -48,15 +22,15 @@ const LABELS: Record<ExportFormat, string> = {
       gap: 8px;
     }
     .note {
-      font-size: 0.85rem;
-      color: var(--muted);
+      font-size: var(--h-font-size-sm);
+      color: var(--h-text-muted-color);
       max-width: 340px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .err {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })

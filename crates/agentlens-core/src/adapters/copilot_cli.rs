@@ -228,6 +228,7 @@ fn read_usage_rows(path: &Path) -> (HashMap<String, Vec<UsageRow>>, Option<Strin
                         output: n(3)?,
                         cache_read,
                         cache_write,
+                        cache_write_1h: 0,
                         reasoning: n(6)?,
                         cost_usd: None,
                         measured: true,
@@ -358,6 +359,7 @@ fn parse_session(
                     Some("agent-invoked") => SkillTrigger::Model,
                     _ => SkillTrigger::User,
                 };
+                // `subagent` stays false: the source does not mark loads inside a subagent.
                 let mut ev = SkillInvoked::new(name, trigger);
                 ev.path = str_of(data, "path").map(PathBuf::from);
                 ev.content_bytes = data
@@ -602,6 +604,7 @@ fn record_usage(u: &Value) -> Option<Usage> {
         output,
         cache_read,
         cache_write,
+        cache_write_1h: 0,
         reasoning: u64_of(u, "reasoningTokens"),
         cost_usd: None,
         measured: true,
@@ -639,6 +642,7 @@ fn shutdown_usage(data: &Value) -> Vec<Usage> {
                 output: u64_of(u, "outputTokens"),
                 cache_read,
                 cache_write,
+                cache_write_1h: 0,
                 reasoning: u64_of(u, "reasoningTokens"),
                 cost_usd: None,
                 measured: true,

@@ -30,7 +30,8 @@ pub struct Window {
 }
 
 impl Window {
-    fn days(&self) -> f64 {
+    /// The length of the window in days.
+    pub fn days(&self) -> f64 {
         (self.until.as_second() - self.since.as_second()) as f64 / DAY_SECONDS
     }
 }

@@ -145,3 +145,15 @@ describe("StatusBar zoom controls", () => {
     zoom.reset();
   });
 });
+
+describe("StatusBar button height", () => {
+  it("sets the small button padding token on the host instead of styling native buttons", () => {
+    TestBed.configureTestingModule({
+      providers: [{ provide: Ipc, useValue: { invoke: async () => "0.1.0" } }],
+    });
+    const fixture = TestBed.createComponent(StatusBar);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(getComputedStyle(host).getPropertyValue("--h-button-sm-padding-y").trim()).toBe("1px");
+  });
+});

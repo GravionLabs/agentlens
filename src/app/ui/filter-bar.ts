@@ -23,135 +23,33 @@ import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../c
   selector: "app-filter-bar",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HxSelect, HxMultiSelect, HxInput, HxDateTimeRangePicker, HxSwitch],
-  template: `
-    <form class="bar" (submit)="$event.preventDefault()" aria-label="Filters">
-      <div class="field">
-        <label for="filter-period">Period</label>
-        <hx-select
-          inputId="filter-period"
-          fluid
-          [options]="periodOptions"
-          optionLabel="label"
-          optionValue="value"
-          [value]="customOpen() ? custom : filters.periodChoice()"
-          (valueChange)="setSince($event)"
-        />
-      </div>
-      @if (customOpen()) {
-        <div class="field last">
-          <label for="filter-last">Last</label>
-          <div class="pair">
-            <input
-              hx-input
-              fluid
-              id="filter-last"
-              type="number"
-              placeholder="Last"
-              min="1"
-              step="1"
-              [attr.aria-invalid]="lastError() ? 'true' : null"
-              [value]="lastValue()"
-              (change)="setLastNumber($event)"
-            />
-            <hx-select
-              inputId="filter-last-unit"
-              ariaLabel="Unit"
-              fluid
-              [options]="units"
-              optionLabel="label"
-              optionValue="value"
-              [value]="lastUnit()"
-              (valueChange)="setLastUnit($event)"
-            />
-          </div>
-        </div>
-        <div class="field range">
-          <label for="filter-window">Date range</label>
-          <hx-date-time-range-picker
-            inputId="filter-window"
-            ariaLabel="Date range"
-            placeholder="Date range"
-            showTime
-            [presets]="rangePresets"
-            [invalid]="!!rangeError()"
-            [value]="rangeValue()"
-            (valueChange)="setRange($event)"
-          />
-        </div>
-        @if (lastError() || rangeError()) {
-          <p class="error" role="alert">{{ lastError() || rangeError() }}</p>
-        }
-      }
-      <div class="field">
-        <label for="filter-sources">Sources</label>
-        <hx-multi-select
-          inputId="filter-sources"
-          fluid
-          [options]="sources"
-          optionLabel="label"
-          optionValue="id"
-          placeholder="All sources"
-          showClear
-          [value]="filters.sources()"
-          (valueChange)="setSources($event)"
-        />
-      </div>
-      <div class="field">
-        <label for="filter-project">Project</label>
-        <input
-          hx-input
-          fluid
-          id="filter-project"
-          type="text"
-          placeholder="Directory, or empty for all"
-          [value]="filters.project()"
-          (change)="setProject($event)"
-        />
-      </div>
-      @if (roles().length > 0) {
-        <div class="field">
-          <label for="filter-roles">Roles</label>
-          <hx-multi-select
-            inputId="filter-roles"
-            fluid
-            [options]="roles()"
-            placeholder="All roles"
-            showClear
-            [value]="filters.roles()"
-            (valueChange)="filters.setRoles($event)"
-          />
-        </div>
-      }
-      <label class="compare" for="filter-compare">
-        <input
-          hx-switch
-          type="checkbox"
-          id="filter-compare"
-          [checked]="filters.compare()"
-          (change)="filters.setCompare(isChecked($event))"
-        />
-        vs. previous period
-      </label>
-    </form>
-  `,
+  templateUrl: "./filter-bar.html",
   styles: `
-    /* Projected into the topbar (helixTopbarEnd): it takes the free width there. */
+    /* A topbar action in the page header: it takes the free width there. */
     :host {
       display: block;
       flex: 1 1 auto;
       min-width: 0;
     }
-    /* The topbar has a fixed height: one row that shrinks, never wraps. */
+    /* The page header has a fixed height: one row that shrinks, never wraps. */
     .bar {
       display: flex;
       flex-wrap: nowrap;
       align-items: center;
       gap: 8px;
+      /* Where the fields do not fit side by side, the row scrolls inside the header. */
+      overflow-x: auto;
+      padding: 3px;
+      scrollbar-width: thin;
     }
     .field {
       flex: 1 1 11rem;
       min-width: 7rem;
       max-width: 18rem;
+    }
+    /* The number and the unit stay readable when the row scrolls. */
+    .field.last {
+      min-width: 11rem;
     }
     .pair {
       display: grid;
@@ -162,29 +60,29 @@ import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../c
       min-width: 14rem;
       max-width: 24rem;
     }
-    /* Below the topbar, so it never changes the topbar height. */
+    /* Below the page header, so it never changes the header height. */
     .error {
       position: fixed;
-      top: calc(var(--helix-topbar-height, 4rem) + 4px);
+      top: calc(var(--helix-topbar-height, 3rem) + 2 * var(--helix-panel-gap, 4px) + 4px);
       right: 1rem;
       z-index: 998;
       margin: 0;
       padding: 4px 8px;
-      background: var(--panel);
-      border: 1px solid var(--line);
+      background: var(--h-surface-overlay);
+      border: 1px solid var(--h-border-panel);
       border-radius: 4px;
-      color: var(--danger, #b00020);
-      font-size: 0.85rem;
+      color: var(--h-tag-danger-color);
+      font-size: var(--h-font-size-sm);
     }
     .compare {
       display: inline-flex;
       flex: 0 0 auto;
       align-items: center;
       gap: 6px;
-      font-size: 0.85rem;
+      font-size: var(--h-font-size-sm);
       white-space: nowrap;
     }
-    /* The fields keep their labels for assistive technology; the topbar has no room to show them. */
+    /* The fields keep their labels for assistive technology; the header has no room to show them. */
     label:not(.compare) {
       position: absolute;
       width: 1px;
@@ -211,11 +109,11 @@ export class FilterBar {
   /** Whether the custom inputs are open; they open with the "Custom…" choice or a custom window. */
   protected readonly customOpen = signal(this.filters.periodChoice() === CUSTOM);
   /** The inputs being edited; the filter only changes when they are valid. */
-  private readonly draftLast = signal<unknown>(this.filters.last()?.last ?? 1);
+  private readonly draftLast = signal<number>(this.filters.last()?.last ?? 1);
   protected readonly lastUnit = signal<string>(this.filters.last()?.unit ?? "d");
   protected readonly lastError = signal<string | null>(null);
   protected readonly rangeError = signal<string | null>(null);
-  protected readonly lastValue = computed(() => String(this.draftLast() ?? ""));
+  protected readonly lastValue = computed(() => String(this.draftLast()));
   protected readonly rangeValue = computed<HxDateTimeRangeValue>(() => {
     const r = this.filters.range();
     return r ? { from: new Date(r.from), to: new Date(r.to) } : { from: null, to: null };

@@ -3,7 +3,17 @@ import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
-import { HxCell, HxColumnHeader, HxDataTable } from "@gravionlabs/helix-ui";
+import {
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  HxTab,
+  HxTabContent,
+  HxTabList,
+  HxTabPanel,
+  HxTabPanels,
+  HxTabs,
+} from "@gravionlabs/helix-ui";
 import { HelpLinkStub } from "../../ui/help-link.testing";
 import { Ipc } from "../../core/ipc";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -29,7 +39,18 @@ class FakeIpc extends Ipc {
 async function render() {
   TestBed.overrideComponent(Flow, {
     set: {
-      imports: [HxDataTable, HxCell, HxColumnHeader, HelpLinkStub],
+      imports: [
+        HxDataTable,
+        HxCell,
+        HxColumnHeader,
+        HxTabs,
+        HxTabList,
+        HxTab,
+        HxTabPanels,
+        HxTabPanel,
+        HxTabContent,
+        HelpLinkStub,
+      ],
       schemas: [NO_ERRORS_SCHEMA],
     },
   });
@@ -44,6 +65,8 @@ const column = (el: HTMLElement, index: number) =>
   [...el.querySelectorAll("hx-data-table tbody tr")].map((r) =>
     r.querySelectorAll("td")[index].textContent!.trim(),
   );
+
+const tabs = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>('[role="tab"]')];
 
 const headerButton = (el: HTMLElement, name: string) =>
   [...el.querySelectorAll<HTMLElement>("hx-data-table th button")].find((b) =>
@@ -117,16 +140,60 @@ describe("Flow tables on helix", () => {
 
   it("shows the error rate on the tools tab, n/a when there were no calls", async () => {
     const { fixture, el } = await render();
-    [...el.querySelectorAll<HTMLElement>(".tabs button")][1].click();
+    tabs(el)[1].click();
     fixture.detectChanges();
     // Source, Tool, Calls, Errors, Error rate, Unknown, Retry loops
     expect(column(el, 1)).toEqual(["Edit", "Bash", "Read"]);
     expect(column(el, 4)).toEqual(["50.0%", "25.0%", "n/a"]);
   });
 
+  it("switches the tables with the tabs and marks the active one", async () => {
+    const { fixture, el } = await render();
+    const headers = () =>
+      [...el.querySelectorAll("hx-data-table thead th")].map((h) => h.textContent!).join("|");
+    expect(tabs(el).map((t) => t.textContent!.trim())).toEqual([
+      "Context growth",
+      "Tool errors",
+      "Hooks and permissions",
+    ]);
+    expect(tabs(el).map((t) => t.getAttribute("aria-selected"))).toEqual([
+      "true",
+      "false",
+      "false",
+    ]);
+    expect(headers()).toContain("Near limit");
+    tabs(el)[2].click();
+    fixture.detectChanges();
+    expect(tabs(el)[2].getAttribute("aria-selected")).toBe("true");
+    expect(headers()).toContain("Hook");
+    expect(headers()).not.toContain("Near limit");
+  });
+
+  it("moves between the tabs with the arrow keys, Home and End", async () => {
+    const { fixture, el } = await render();
+    document.body.appendChild(el);
+    const press = (key: string) => {
+      const active = tabs(el).find((t) => t.tabIndex === 0)!;
+      active.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+      fixture.detectChanges();
+    };
+    const selected = () => tabs(el).findIndex((t) => t.getAttribute("aria-selected") === "true");
+    press("ArrowRight");
+    expect(selected()).toBe(1);
+    expect(document.activeElement).toBe(tabs(el)[1]);
+    expect(column(el, 1)).toEqual(["Edit", "Bash", "Read"]);
+    press("End");
+    expect(selected()).toBe(2);
+    press("Home");
+    expect(selected()).toBe(0);
+    press("ArrowLeft");
+    expect(selected()).toBe(2);
+    el.remove();
+  });
+
   it("keeps the n/a error rate last in both sort directions", async () => {
     const { fixture, el } = await render();
-    [...el.querySelectorAll<HTMLElement>(".tabs button")][1].click();
+    tabs(el)[1].click();
     fixture.detectChanges();
     headerButton(el, "Error rate").click();
     fixture.detectChanges();
@@ -140,7 +207,7 @@ describe("Flow tables on helix", () => {
   it("has no column filter row, the filter bar filters by source", async () => {
     const { fixture, el } = await render();
     expect(el.querySelector("hx-data-table thead input")).toBeNull();
-    [...el.querySelectorAll<HTMLElement>(".tabs button")][1].click();
+    tabs(el)[1].click();
     fixture.detectChanges();
     expect(el.querySelector("hx-data-table thead input")).toBeNull();
   });

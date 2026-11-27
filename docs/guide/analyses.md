@@ -25,6 +25,19 @@ Two columns are often zero, and that is normal: `user` is zero when you let the 
 
 Clients that attribute usage to a skill itself (Claude Code through an [OpenTelemetry export](../telemetry.md)) add an `attributed` column with the measured tokens of those requests. The **follow-on** columns count what happened after the skill until the next user turn, skill or compaction.
 
+The `quality` object of every skill holds signals of how the work went after its loads. They count loads of the main agent only (loads inside a subagent get no signals until every subagent run has its own identity) and are signals, not proof: they show where to look, not that a skill is bad.
+
+| Signal | Meaning |
+| :-- | :-- |
+| `repeat_loads` | loads of a skill that the main agent had already loaded in the same session with no compaction in between (any trigger: the body is in the context twice) |
+| `misfires` | model loads whose follow-on window ends at a user turn and holds no tool call and no file use of the skill; a window that ends at another skill load (a dispatch) or at a compaction is work, and a window that ends with the session is undecidable and not counted |
+| `compactions_soon` | loads whose follow-on window ends at a compaction |
+| `follow_on_calls`, `follow_on_errors` | all tool calls in the follow-on windows and those that failed (an unknown outcome is no error) |
+| `baseline_calls`, `baseline_errors` | the tool calls of the same sessions outside the skill's follow-on windows, to compare the error rate after the skill with the rest of its sessions |
+| `follow_on_retry_loops` | retry loops (see **Retry loops** below) whose first call lies inside a follow-on window |
+
+A skill that only the user started is one with `triggers.user` above zero and `triggers.model` zero.
+
 ## Advice
 
 ```sh
@@ -47,6 +60,8 @@ What to change to save tokens, made from the skill numbers above. No model is in
 | **Model mix**              | per client, the small requests (fewer than 500 output tokens and fewer than 50,000 tokens of input) on the costliest model (highest list input price among the priced models that ran), next to the next cheaper model that ran in the same client: requests, small requests, the share by subagents, tokens and the estimated saving. Not shown below 20 small requests, below a saving of 5% of the period's cost, or when the client ran one priced model only |
 | **Context hygiene**        | the sessions that carried their context on after the task was done: near the limit of the context window without a compaction, or compacted at least twice. Per session its main-agent requests, the peak context, the compactions, the clears (a `/clear` that Claude Code recorded, measured; for the other clients a session that began at most 60 seconds after another of the same client, project and branch ended, estimated with a tilde; sessions of an unattended queue run on other branches and are not counted), whether it came near the limit, and the average context before a compaction against the context at the start. Not shown below 3 sessions or below a saving of 5% of the period's cost (of the period's tokens when no price is known) |
 | **Delegation**             | per client (Claude Code, OpenCode, Copilot CLI) with a subagent share below 5% of its requests and at least 20 main-agent requests of 200,000 tokens of input or more: its requests, large-context requests, subagent requests and subagent share, then the 10 sessions with the most large-context requests with their subagent requests, and the share of the period's requests that ran on a large context. No saving is estimated |
+| **Cache expiry**           | per session, the main-agent requests of Anthropic models that came more than the session's cache lifetime after the previous main-agent request and wrote more tokens than they read: the context was written again at the write price instead of being read. The 10 sessions with the largest saving, with the number of such requests, the range of the pauses, the tokens written again and the lifetime. Requests of other models and requests without a timestamp (or right after one) are skipped and counted in a note |
+| **Skill quality**          | skills whose signals pass a minimum (see the table below): loaded again into the same context, loaded by the model without any work after, only ever started as `/name`, followed by failing calls, a retry loop or a compaction; per skill the passing signals in words and the saving. Signals count loads by the main agent only and are hints, not proof; a skill can also appear in **Costly descriptions** or **Large skill bodies**, and the savings are not additive |
 
 Every sum is also given as a share of all tokens of the period (`share_of_total_tokens`, input, output and cache together), so that a small share is not read as the main lever (the carry of **Large skill bodies** now has a sum and a share too; the skill report's `totals` holds the period's request, subagent and context numbers): the descriptions of all installed skills are often well under 1% of the tokens, while the size of the context decides the rest. The **Context size** finding is that scale: it ends with the fixed advice to start new work in a fresh session, to clear the context between tasks and to delegate exploration and review to subagents, whose context stays separate.
 
@@ -66,13 +81,59 @@ Every finding has an *impact*: what its action could have saved in the period (`
 | **Model mix** | per client, for each small request on the costliest model, its cost on that model minus its cost on the next cheaper model that ran in the client (both from the price table, on the request's own tokens) | none: it saves cost, not tokens (`saving` 0); requests of a model without a price are not in it and a note counts them | inferred (it assumes the cheaper model could have answered) |
 | **Context hygiene** | per listed session, on every main-agent request, the input above the size of the session's first main-agent request (the quantity of **Context size** without its 200,000-token threshold); **Context size** then leaves out the requests of these sessions, so nothing is counted twice | each request in its own input : cache read : cache write ratio, with its own model (a model without a price at the period's average) | inferred (it assumes the work could have started fresh at that size) |
 | **Delegation** | none (`Impact::none()`: `saving` 0, `saving_usd` null) | – | – |
+| **Cache expiry** | per expired request, its cache-write tokens | its own model: cache-write tokens times (write price minus read price); a model without a price is left out of the USD and a note counts it | inferred (the action shrinks the rewrite, it does not prove that it would not have happened) |
+| **Skill quality** | per skill, `(repeat loads + misfires)` times its average `(load + carry)` per use, and for a skill only started by `/name` its listing; errors, retry loops and compactions after a skill have no saving, and a skill listed only for them ranks after all skills with a saving | the load part as cache write; the carry part split by the skill's own cache read : uncached ratio (cache read and input); the listing as cache read; all at the period's average prices | inferred |
 | **Used but not installed**, **Work on a large context** | none (`saving` 0, `saving_usd` null) | – | – |
 
 `saving_usd` is always an estimate, computed from the [price table](#cost) and never reported by a client, so the CLI and the application show it with a tilde. Where a finding knows its requests (**Context size**, **Retry loops**, **Context hygiene**), each request is priced with its own model; a request whose model has no price is priced with the period's average price per token class, split in its own ratio, and a note says how many were. The others are priced with the period's average price per token class (input, cache read, cache write), each class weighted with its tokens over all priced requests. Requests without a price are left out of those averages and a note says how many. So `saving_usd` is null only when the period has no price at all, and then for every finding. Without any price `saving_usd` is null and the order falls back to the tokens weighted by class: input 1, cache write 1.25, cache read 0.1.
 
-An `inferred` saving rests on an assumption: for **Context size**, that the work on the large requests could have run in a fresh session that started at the size of the session's first request. The constants are `DESCRIPTION_TARGET_TOKENS` (40), `BODY_TARGET_TOKENS` (2,000), `LARGE_CONTEXT_TOKENS` (200,000), `MANY_COMPACTIONS` (2), `MIN_HYGIENE_SESSIONS` (3), `MIN_HYGIENE_SHARE` (5%), `CLEAR_PROXY_SECONDS` (60), `DELEGATING_SOURCES` (Claude Code, OpenCode, Copilot CLI), `DELEGATION_MAX_SHARE` (5%), `MIN_DELEGATION_REQUESTS` (20) and the weights `INPUT_WEIGHT`, `CACHE_WRITE_WEIGHT` and `CACHE_READ_WEIGHT` (1, 1.25 and 0.1). The CLI table puts the rank before each finding and its saving below the title (`Could save ~$1.23 (~45,678 tokens, estimated).`); `--format csv` repeats `rank`, `saving_tokens`, `saving_usd` and `confidence` on every row.
+An `inferred` saving rests on an assumption: for **Context size**, that the work on the large requests could have run in a fresh session that started at the size of the session's first request. The constants are `DESCRIPTION_TARGET_TOKENS` (40), `BODY_TARGET_TOKENS` (2,000), `LARGE_CONTEXT_TOKENS` (200,000), `MANY_COMPACTIONS` (2), `MIN_HYGIENE_SESSIONS` (3), `MIN_HYGIENE_SHARE` (5%), `CLEAR_PROXY_SECONDS` (60), `DELEGATING_SOURCES` (Claude Code, OpenCode, Copilot CLI), `DELEGATION_MAX_SHARE` (5%), `MIN_DELEGATION_REQUESTS` (20), `CACHE_TTL_5M` (5 minutes) and `CACHE_TTL_1H` (60 minutes) and the weights `INPUT_WEIGHT`, `CACHE_WRITE_WEIGHT` and `CACHE_READ_WEIGHT` (1, 1.25 and 0.1). The CLI table puts the rank before each finding and its saving below the title (`Could save ~$1.23 (~45,678 tokens, estimated).`); `--format csv` repeats `rank`, `saving_tokens`, `saving_usd` and `confidence` on every row.
+
+**Skill quality** lists a skill when at least one signal passes its minimum (constants in `advice.rs`):
+
+| Signal | Passes when | Saving |
+| :-- | :-- | :-- |
+| Repeat loads | `repeat_loads` at least 1 (`MIN_REPEAT_LOADS`) | yes |
+| Misfires | `misfires` at least 2 (`MIN_MISFIRES`) and at least 20% of the skill's model loads (`MIN_MISFIRE_SHARE`) | yes |
+| Only started by `/name` | at least 3 user starts (`MIN_USER_ONLY_STARTS`), no model load, skill installed | yes (its listing) |
+| Errors after it | at least 5 failed calls after it (`MIN_FOLLOW_ON_ERRORS`) at 2 times (`MIN_ERROR_RATE_FACTOR`) the failure rate of the rest of its sessions; a rest without failures passes with 5 | no |
+| Retry loops after it | at least 1 retry loop that begins after it (`MIN_FOLLOW_ON_RETRY_LOOPS`) | no |
+| Compaction soon after | at least 2 (`MIN_COMPACTIONS_SOON`) and at least 25% of its loads (`MIN_COMPACTION_SHARE`) | no |
+
+Items are sorted by saving (skills with a saving signal first), then by the number of passing signals, then by name; the top 10 are listed and `count` is all listed skills. The signals come from the order of events and say that something may be wrong, not that it is.
+
+**Cache expiry** rests on the cache lifetime (TTL) of the session: `CACHE_TTL_1H` (60 minutes) if any of its requests wrote tokens with the 1-hour lifetime (`Usage.cache_write_1h`, which Claude Code reports as `cache_creation.ephemeral_1h_input_tokens`), else `CACHE_TTL_5M` (5 minutes). The lifetime is read from the client's own report where it gives one (Claude Code) and assumed to be 5 minutes elsewhere. A request is expired when it is not the first main-agent request of its session, its model starts with `claude`, it and the request before it have a timestamp, the pause is longer than the lifetime, and `cache_write` is larger than `cache_read`; subagent requests are ignored and a compaction in between does not matter. The price table has one cache-write price (the 5-minute one) and writes with the 1-hour lifetime cost more, so the saving of a 1-hour session is a lower bound. **Context size** counts the volume of a large context, **Cache expiry** the price difference of writing it again: both can name the same session, and their savings are not additive.
 
 A finding says what it cannot know: a skill that is needed only now and then may be worth keeping although it shows up as unused, and the work after a skill is activity, not cost the skill caused. The CLI prints the findings as a table (`--format json` and `--format csv` have all of them), the application has an **Advice** view, and the [MCP server](mcp-server.md) has an `advice` tool, so an agent gets the findings and only has to explain and act on them.
+
+## Tips
+
+```sh
+agentlens tips --limit 5
+```
+
+The few [advice](#advice) findings that pay most, said in one line each. A tip is a view over a finding, computed from the same sessions, never written by a model: the same sessions give the same tips.
+
+- **Threshold.** A finding with a saving becomes a tip only if its saving is at least `MIN_TIP_SHARE` (0.5 %) of the period's cost. Without any price the share is taken of the tokens of the period weighted by class (input 1, cache write 1.25, cache read 0.1). The findings below are counted in `below_threshold`; findings without a saving are no tips. `--limit` (default 5) caps the list; the tips keep the order of the findings.
+- **Targets.** A tip lists the first `TIP_TARGETS` (3) items of its finding, and `more` counts the rest. The headline is a fixed sentence per kind with the numbers; estimates carry a tilde, and the USD saving is always an estimate.
+- **Steps.** Where the client documents the syntax, a target carries a ready step (`client`, `file`, `change`); every other finding and client has the general `action` only. Today only Claude Code has steps: for an unused skill or one that is listed but loaded by hand, add `disable-model-invocation: true` to the front matter of its `SKILL.md` ([documentation](https://code.claude.com/docs/en/skills); the skill stays usable as `/name` and leaves the listing; skills supplied by plugins get no step); for a costly MCP server, move it from the user scope (`~/.claude.json`) to the `.mcp.json` of the projects that call it ([documentation](https://code.claude.com/docs/en/mcp)).
+
+`--format json` prints the report (`period_cost_usd`, `threshold`, `tips`, `below_threshold`), `--format csv` one row per target (`rank`, `kind`, `target`, `saving_tokens`, `saving_usd`, `confidence`, `step`). The [MCP server](mcp-server.md) has a `tips` tool and a `tips` prompt.
+
+### Did a change pay off
+
+```sh
+agentlens tips --changed-at 2026-10-01
+```
+
+Name the date of a change and AgentLens compares the tips from before it with the same findings after it. Nothing is stored: the windows come from the date.
+
+- **Windows.** The window after is `[changed_at, until)` (`--until`, default now); the window before has the same length right before the date. The sessions are read once and split by the rule of the [trend](#trend): a session belongs to the window in which it ends. `--since` is ignored with a warning, since the date defines the windows; `--source` and `--project` apply to both. `--changed-at` takes the forms of `--since`. A date in the future, or fewer than 1 day between the date and `until`, is an error.
+- **What is checked.** The tips of the window before (same threshold and `--limit`), each against the finding of the same kind after the date; a finding that is gone has a saving of 0. Findings that are tips only after the date are listed as `new`, without a verdict.
+- **Verdict.** It compares the saving per 1,000 requests (in USD, or in tokens weighted by class where a window has no price), so a busier window with the same saving per request is `unchanged`. `improved` if the value dropped by at least `CHECK_CHANGE` (20 %), `worse` if it rose by at least 20 %, else `unchanged`; a finding that is gone after the date with enough data is `improved`. With fewer than `MIN_CHECK_REQUESTS` (50) requests in either window the verdict is `too-little-data`. The values per day are shown next to it but do not decide.
+- **Targets.** Each of the (up to three) targets of a tip is `resolved` if its name is not among the items of the finding after the date, `open` if it is, and `unknown` if it is not listed but the items of the finding are cut (it may be beyond the top). The summary reads "2 of 3 resolved".
+
+`--format json` prints `windows` (`current` is after the date, `against` before it), `checks` (the `tip`, `unit` (`usd` or `tokens`, the unit of the per-1k and per-day values), `before_per_1k`, `after_per_1k`, `before_per_day`, `after_per_day`, `change_pct`, `verdict` and `targets`) and `new`; `--format csv` has one row per target (`rank`, `kind`, `verdict`, `target`, `status`, `unit`, `before_per_1k`, `after_per_1k`, `change_pct`).
 
 ## Context
 

@@ -8,21 +8,15 @@ export interface LegendItem {
 @Component({
   selector: "app-legend",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="legend">
-      @for (i of items(); track i.label) {
-        <span><i [style.background]="i.color"></i>{{ i.label }}</span>
-      }
-    </div>
-  `,
+  templateUrl: "./legend.html",
   styles: `
     .legend {
       display: flex;
       flex-wrap: wrap;
       gap: 6px 16px;
       margin: 8px 0;
-      color: var(--muted);
-      font-size: 0.85rem;
+      color: var(--h-text-muted-color);
+      font-size: var(--h-font-size-sm);
     }
     i {
       display: inline-block;

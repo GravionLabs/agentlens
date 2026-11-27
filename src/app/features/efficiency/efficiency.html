@@ -1,0 +1,100 @@
+<section class="view">
+  <app-page-header
+    exportView="efficiency"
+    [exportFormats]="['json', 'csv']"
+    [exportOptions]="{ by: by() }"
+    title="Efficiency"
+    summary="How well the prompt cache works and how much subagents contribute."
+  >
+    <p>
+      <app-term id="hit-rate">Cache hit rate</app-term> = cache read / all input tokens (measured).
+      “n/a”: the client reports no cache tokens.
+    </p>
+  </app-page-header>
+  <div class="by">
+    <hx-field label="Group the cache table by">
+      <hx-select fluid [options]="options" [value]="by()" (valueChange)="setBy($event)" />
+    </hx-field>
+  </div>
+  <app-status
+    [loading]="res.isLoading()"
+    [error]="res.error()"
+    [warnings]="answer()?.warnings ?? 0"
+    [errors]="answer()?.errors ?? []"
+    (retry)="res.reload()"
+  />
+  @if (compare()) {
+    <app-trend-cards
+      [stats]="trendStats()"
+      [note]="note()"
+      [loading]="trend.isLoading()"
+      [error]="trend.error()"
+      (retry)="trend.reload()"
+    />
+  }
+  <hx-data-table
+    [value]="cacheViews()"
+    [sortFunction]="sort"
+    [columns]="cacheColumns"
+    filterDisplay="row"
+    sortField="requests"
+    [sortOrder]="-1"
+    [paginator]="cache().length > 25"
+    [rows]="25"
+    [rowsPerPageOptions]="[25, 'all']"
+    allLabel="Show all"
+    emptyMessage="No usage found."
+    ariaLabel="Cache efficiency"
+  >
+    <ng-template hxColumnHeader="requests"
+      ><app-help-link term="request" label="Requests"
+    /></ng-template>
+    <ng-template hxColumnHeader="cache_read"
+      ><app-help-link term="cache-read" label="Cache read"
+    /></ng-template>
+    <ng-template hxColumnHeader="cache_write"
+      ><app-help-link term="cache-write" label="Cache write"
+    /></ng-template>
+    <ng-template hxColumnHeader="hit_rate"
+      ><app-help-link term="hit-rate" label="Hit rate"
+    /></ng-template>
+    <ng-template hxCell="groupName" let-row>
+      <span [attr.title]="row.key">{{ row.groupName }}</span>
+    </ng-template>
+    <ng-template hxCell="source" let-value="value">{{ label(value) }}</ng-template>
+    <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+    <ng-template hxCell="input" let-value="value">
+      <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+    </ng-template>
+    <ng-template hxCell="cache_read" let-value="value">
+      <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+    </ng-template>
+    <ng-template hxCell="cache_write" let-value="value">
+      <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+    </ng-template>
+    <ng-template hxCell="hit_rate" let-value="value">{{ percent(value) }}</ng-template>
+  </hx-data-table>
+  <h3>Subagent share</h3>
+  <p class="muted">
+    Cost shares only cover requests with a price (reported or from the price table).
+  </p>
+  <hx-data-table
+    [value]="subagentViews()"
+    [sortFunction]="sort"
+    [columns]="subagentColumns"
+    emptyMessage="No usage found."
+    ariaLabel="Subagent share"
+  >
+    <ng-template hxColumnHeader="requests"
+      ><app-help-link term="request" label="Requests"
+    /></ng-template>
+    <ng-template hxColumnHeader="unpriced"
+      ><app-help-link term="unpriced" label="Unpriced requests"
+    /></ng-template>
+    <ng-template hxCell="source" let-value="value">{{ label(value) }}</ng-template>
+    <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+    <ng-template hxCell="subRequests" let-value="value">{{ percent(value) }}</ng-template>
+    <ng-template hxCell="subTokens" let-value="value">{{ percent(value) }}</ng-template>
+    <ng-template hxCell="subCost" let-value="value">{{ percent(value) }}</ng-template>
+  </hx-data-table>
+</section>

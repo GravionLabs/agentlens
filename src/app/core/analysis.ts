@@ -32,6 +32,11 @@ export function analysis<T>(
   return res;
 }
 
+/** The answer of an analysis, absent while loading and after a failure (`value()` of a failed resource throws). */
+export function answerOf<T>(res: { hasValue(): boolean; value(): T | undefined }): T | undefined {
+  return res.hasValue() ? res.value() : undefined;
+}
+
 /** A readable message for a failed command. */
 export function messageOf(error: unknown): string {
   if (typeof error === "string") return error;

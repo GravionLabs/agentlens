@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from "@angular/core";
+import { ChangeDetectionStrategy, Component, input, output } from "@angular/core";
 import { Status } from "./status";
 import { type Stat, StatCards } from "./stat-cards";
 
@@ -7,16 +7,12 @@ import { type Stat, StatCards } from "./stat-cards";
   selector: "app-trend-cards",
   imports: [Status, StatCards],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section aria-label="Change against the previous period">
-      <app-status [loading]="loading()" [error]="error()" [warnings]="0" [errors]="[]" />
-      <app-stat-cards [stats]="stats()" [note]="note()" />
-    </section>
-  `,
+  templateUrl: "./trend-cards.html",
 })
 export class TrendCards {
   readonly stats = input.required<Stat[]>();
   readonly note = input("");
   readonly loading = input(false);
   readonly error = input<unknown>(undefined);
+  readonly retry = output<void>();
 }

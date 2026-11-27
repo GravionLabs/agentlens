@@ -74,6 +74,19 @@ export interface SkillStats {
   follow_on: UsageSum;
   attributed: UsageSum;
   baseline: { requests: number; tokens: Tokens };
+  /** Signals of main-agent loads; hints, not proof. */
+  quality: QualitySignals;
+}
+
+export interface QualitySignals {
+  repeat_loads: number;
+  misfires: number;
+  compactions_soon: number;
+  follow_on_calls: number;
+  follow_on_errors: number;
+  baseline_calls: number;
+  baseline_errors: number;
+  follow_on_retry_loops: number;
 }
 
 export interface SessionContext {
@@ -118,7 +131,9 @@ export type FindingKind =
   | "retry-loops"
   | "model-mix"
   | "delegation"
-  | "context-hygiene";
+  | "context-hygiene"
+  | "cache-expiry"
+  | "skill-quality";
 
 export interface Reference {
   kind: "agent" | "command" | "skill";
@@ -168,6 +183,77 @@ export interface AdviceReport {
   baseline_total: Tokens;
   total_tokens: Tokens;
   findings: Finding[];
+}
+
+/** A ready change for one client, only where the client documents the syntax. */
+export interface TipStep {
+  client: string;
+  file: string | null;
+  change: string;
+}
+
+export interface TipTarget {
+  name: string;
+  detail: string;
+  steps: TipStep[];
+}
+
+export interface Tip {
+  /** The rank of the finding in the advice report. */
+  rank: number;
+  kind: FindingKind;
+  headline: string;
+  saving: Tokens;
+  saving_usd: number | null;
+  /** The saving over the period's cost (over the weighted tokens without prices). */
+  share: number | null;
+  confidence: Confidence;
+  action: string;
+  targets: TipTarget[];
+  /** Items of the finding that are not listed. */
+  more: number;
+}
+
+export interface TipsReport {
+  period_cost_usd: number | null;
+  threshold: number;
+  tips: Tip[];
+  below_threshold: number;
+}
+
+export type Verdict = "improved" | "unchanged" | "worse" | "too-little-data";
+
+/** resolved: gone after the date; open: still there; unknown: not listed, but the items are cut. */
+export type TargetStatus = "resolved" | "open" | "unknown";
+
+export interface TargetCheck {
+  name: string;
+  status: TargetStatus;
+}
+
+export type CheckUnit = "usd" | "tokens";
+
+export interface TipCheckEntry {
+  /** The tip as it was before the date. */
+  tip: Tip;
+  /** The unit of the per-1,000-request and per-day figures. */
+  unit: CheckUnit;
+  /** The saving per 1,000 requests: in ~USD where both windows are priced, else in weighted tokens. */
+  before_per_1k: number | null;
+  after_per_1k: number | null;
+  before_per_day: number | null;
+  after_per_day: number | null;
+  change_pct: number | null;
+  verdict: Verdict;
+  targets: TargetCheck[];
+}
+
+/** `tips` with `changed_at`: `windows.current` is after the date, `windows.against` before it. */
+export interface TipCheck {
+  windows: TrendWindows;
+  checks: TipCheckEntry[];
+  /** Tips after the date whose finding was no tip before; no verdict. */
+  new: Tip[];
 }
 
 export interface SkillsData {
@@ -543,7 +629,13 @@ export interface UpdateInfo {
 export type CliToolMethod = "symlink" | "copy" | "user_path" | "unsupported";
 export type CliToolState = "missing" | "installed" | "stale" | "foreign";
 export type CliToolAction =
-  "created" | "repaired" | "kept" | "removed" | "absent" | "skipped_foreign" | "failed";
+  | "created"
+  | "repaired"
+  | "kept"
+  | "removed"
+  | "absent"
+  | "skipped_foreign"
+  | "failed";
 
 /** One command line tool: where its link goes and what is there now. */
 export interface CliTool {

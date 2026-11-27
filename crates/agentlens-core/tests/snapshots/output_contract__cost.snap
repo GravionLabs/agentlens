@@ -8,6 +8,18 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
     "report": {
       "rows": [
         {
+          "key": "claude-opus-4-8",
+          "requests": 3,
+          "input": 300,
+          "output": 150,
+          "cache_read": 20000,
+          "cache_write": 41000,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.27149999999999996,
+          "unpriced_requests": 0,
+          "premium_requests": 0.0
+        },
+        {
           "key": "claude-test-1",
           "requests": 29,
           "input": 5740,
@@ -34,13 +46,13 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       ],
       "total": {
         "key": "total",
-        "requests": 30,
-        "input": 105739,
-        "output": 10879,
-        "cache_read": 304800,
-        "cache_write": 41850,
+        "requests": 33,
+        "input": 106039,
+        "output": 11029,
+        "cache_read": 324800,
+        "cache_write": 82850,
         "measured_usd": 0.0,
-        "estimated_usd": 0.0,
+        "estimated_usd": 0.27149999999999996,
         "unpriced_requests": 30,
         "premium_requests": 1.0
       },

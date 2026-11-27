@@ -1,0 +1,61 @@
+<section class="view">
+  <app-page-header
+    exportView="overview"
+    title="Sources"
+    summary="Which coding agents left sessions on this machine."
+  >
+    <p>
+      Which coding agents left sessions on this machine, for the selected filters. Sources that are
+      not found show where AgentLens looked.
+    </p>
+  </app-page-header>
+  <app-status
+    [loading]="res.isLoading()"
+    [error]="res.error()"
+    [warnings]="answer()?.warnings ?? 0"
+    [errors]="answer()?.errors ?? []"
+    (retry)="res.reload()"
+  />
+  @if (compare()) {
+    <app-trend-cards
+      [stats]="trendStats()"
+      [note]="note()"
+      [loading]="trend.isLoading()"
+      [error]="trend.error()"
+      (retry)="trend.reload()"
+    />
+  }
+  @if (topTip(); as tip) {
+    <article class="card top-tip">
+      <h3>Top tip</h3>
+      <p>{{ tip.headline }}</p>
+      <p class="big">{{ saving(tip) }}</p>
+      <p><a routerLink="/advice">See the tips</a></p>
+    </article>
+  }
+  <div class="cards">
+    @for (s of sources(); track s.source) {
+      <article class="card" [class.missing]="!s.found">
+        <h3>{{ label(s.source) }}</h3>
+        @if (s.found) {
+          <p class="big">{{ n(s.sessions) }} <span>sessions</span></p>
+          <p class="muted">{{ n(s.events) }} events</p>
+          @if (s.warnings > 0) {
+            <p class="warn">{{ s.warnings }} warnings</p>
+          }
+          @for (e of s.errors; track $index) {
+            <p class="error">{{ e }}</p>
+          }
+          @for (r of s.roots; track r) {
+            <p class="path">{{ r }}</p>
+          }
+        } @else {
+          <p class="muted">Not found.</p>
+          @if (s.note) {
+            <p class="path">{{ s.note }}</p>
+          }
+        }
+      </article>
+    }
+  </div>
+</section>

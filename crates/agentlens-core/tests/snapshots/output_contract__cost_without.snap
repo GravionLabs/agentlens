@@ -8,6 +8,18 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
     "report": {
       "rows": [
         {
+          "key": "claude-opus-4-8",
+          "requests": 3,
+          "input": 300,
+          "output": 150,
+          "cache_read": 20000,
+          "cache_write": 41000,
+          "measured_usd": 0.0,
+          "estimated_usd": 0.27149999999999996,
+          "unpriced_requests": 0,
+          "premium_requests": 0.0
+        },
+        {
           "key": "claude-test-1",
           "requests": 29,
           "input": 5740,
@@ -34,13 +46,13 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       ],
       "total": {
         "key": "total",
-        "requests": 30,
-        "input": 105739,
-        "output": 10879,
-        "cache_read": 304800,
-        "cache_write": 41850,
+        "requests": 33,
+        "input": 106039,
+        "output": 11029,
+        "cache_read": 324800,
+        "cache_write": 82850,
         "measured_usd": 0.0,
-        "estimated_usd": 0.0,
+        "estimated_usd": 0.27149999999999996,
         "unpriced_requests": 30,
         "premium_requests": 1.0
       },
@@ -52,6 +64,13 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
     "what_if": {
       "target": "claude-haiku-4-5",
       "rows": [
+        {
+          "model": "claude-opus-4-8",
+          "requests": 3,
+          "actual_usd": 0.27149999999999996,
+          "what_if_usd": 0.0543,
+          "excluded_requests": 0
+        },
         {
           "model": "claude-test-1",
           "requests": 0,
@@ -69,9 +88,9 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       ],
       "total": {
         "model": "total",
-        "requests": 0,
-        "actual_usd": 0.0,
-        "what_if_usd": 0.0,
+        "requests": 3,
+        "actual_usd": 0.27149999999999996,
+        "what_if_usd": 0.0543,
         "excluded_requests": 30
       }
     },
@@ -81,36 +100,36 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
           "item": "demo",
           "kind": "skill",
           "installations": 1,
-          "requests": 30,
+          "requests": 33,
           "tokens": {
-            "count": 180,
+            "count": 198,
             "measured": false
           },
-          "cost_usd": 0.0,
+          "cost_usd": 0.00007889472540211563,
           "unpriced_requests": 30,
-          "detail": "1 installation, 30 requests"
+          "detail": "1 installation, 33 requests"
         },
         {
           "item": "reviewer",
           "kind": "agent",
           "installations": 1,
-          "requests": 29,
+          "requests": 32,
           "tokens": {
-            "count": 145,
+            "count": 160,
             "measured": false
           },
-          "cost_usd": 0.0,
+          "cost_usd": 0.00006574560450176302,
           "unpriced_requests": 29,
-          "detail": "1 installation, 29 requests"
+          "detail": "1 installation, 32 requests"
         }
       ],
       "total": {
-        "requests": 59,
+        "requests": 65,
         "tokens": {
-          "count": 325,
+          "count": 358,
           "measured": false
         },
-        "cost_usd": 0.0,
+        "cost_usd": 0.00014464032990387865,
         "unpriced_requests": 59
       },
       "notes": [

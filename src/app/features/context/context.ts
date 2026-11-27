@@ -1,12 +1,18 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { answerOf, analysis } from "../../core/analysis";
 import { exactTokens, number, pathLabel, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { ContextKind, ContextReport, ContextRow, Tokens } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
 import { Status } from "../../ui/status";
-import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  HxSelectButton,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 export interface Note {
   text: string;
@@ -42,6 +48,11 @@ const VIEWS: { id: View; label: string }[] = [
 ];
 
 type Grouping = "owner" | "project";
+
+const GROUPINGS: { id: Grouping; label: string }[] = [
+  { id: "owner", label: "By owner" },
+  { id: "project", label: "By project" },
+];
 
 /** Adds two counts; the sum is measured only if both are. */
 function add(a: Tokens, b: Tokens): Tokens {
@@ -108,142 +119,62 @@ export function inView(kind: ContextKind, view: View): boolean {
 
 @Component({
   selector: "app-context",
-  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
+  imports: [
+    PageHeader,
+    Term,
+    Status,
+    HxDataTable,
+    HxCell,
+    HxColumnHeader,
+    HxSelectButton,
+    HelpLink,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="view">
-      <app-page-header
-        exportView="context"
-        [exportFormats]="['json', 'csv']"
-        title="Context"
-        summary="Static content the clients add to every request."
-      >
-        <p>
-          Static content the clients add to every request (<app-term id="context"
-            >static context</app-term
-          >). <app-term id="overhead">Overhead</app-term> = tokens × the requests that followed;
-          <span class="est">~</span> marks estimates.
-        </p>
-      </app-page-header>
-      <app-status
-        [loading]="res.isLoading()"
-        [error]="res.error()"
-        [warnings]="res.value()?.warnings ?? 0"
-        [errors]="res.value()?.errors ?? []"
-      />
-      <div class="views" role="group" aria-label="Kind of context">
-        @for (v of views; track v.id) {
-          <button type="button" [class.on]="view() === v.id" (click)="view.set(v.id)">
-            {{ v.label }}
-          </button>
-        }
-      </div>
-      <div class="views" role="group" aria-label="Grouping">
-        <button type="button" [class.on]="grouping() === 'owner'" (click)="grouping.set('owner')">
-          By owner
-        </button>
-        <button
-          type="button"
-          [class.on]="grouping() === 'project'"
-          (click)="grouping.set('project')"
-        >
-          By project
-        </button>
-      </div>
-      <hx-data-table
-        [value]="rows()"
-        [columns]="columns()"
-        sortField="overheadCount"
-        [sortOrder]="-1"
-        [paginator]="rows().length > 100"
-        [rows]="100"
-        [rowsPerPageOptions]="[100, 'all']"
-        allLabel="Show all"
-        emptyMessage="No context items found."
-        ariaLabel="Context"
-      >
-        <ng-template hxColumnHeader="kind"><app-help-link term="kind" label="Kind" /></ng-template>
-        <ng-template hxColumnHeader="ownerLabel"
-          ><app-help-link term="owner" label="Owner"
-        /></ng-template>
-        <ng-template hxColumnHeader="tokenCount"
-          ><app-help-link term="token" label="Tokens"
-        /></ng-template>
-        <ng-template hxColumnHeader="requests"
-          ><app-help-link term="request" label="Requests"
-        /></ng-template>
-        <ng-template hxColumnHeader="overheadCount"
-          ><app-help-link term="overhead" label="Overhead"
-        /></ng-template>
-        <ng-template hxCell="source" let-value="value">{{ source(value) }}</ng-template>
-        <ng-template hxCell="project" let-row>
-          <span [attr.title]="row.project">{{ shortPath(row.project) }}</span>
-        </ng-template>
-        <ng-template hxCell="ownerLabel" let-row>
-          <span [attr.title]="row.owner">{{ row.ownerLabel }}</span>
-        </ng-template>
-        <ng-template hxCell="tokenCount" let-row>
-          <span [class.est]="row.tokensEstimated" [attr.title]="exact(row.tokenCount)">{{
-            row.tokenText
-          }}</span>
-        </ng-template>
-        <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
-        <ng-template hxCell="overheadCount" let-row>
-          <span [class.est]="row.overheadEstimated" [attr.title]="exact(row.overheadCount)">{{
-            row.overheadText
-          }}</span>
-        </ng-template>
-      </hx-data-table>
-      @for (n of notes(); track n.text) {
-        <p class="muted" [attr.title]="n.title">{{ n.text }}</p>
-      }
-    </section>
-  `,
+  templateUrl: "./context.html",
   styles: `
-    .views {
+    hx-select-button {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      margin: 8px 0;
-    }
-    .views button {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      height: auto;
-      padding: 3px 12px;
-      cursor: pointer;
-    }
-    .views button.on {
-      border-color: var(--accent);
-      color: var(--accent);
-      font-weight: 600;
+      width: fit-content;
+      margin: var(--h-space-2) 0;
     }
     .est {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })
 export class Context {
   protected readonly res = analysis<ContextReport>("context");
+  protected readonly answer = computed(() => answerOf(this.res));
   protected readonly view = signal<View>("all");
   protected readonly views = VIEWS;
 
   protected readonly grouping = signal<Grouping>("owner");
+  protected readonly groupings = GROUPINGS;
 
   protected readonly source = sourceLabel;
   protected readonly shortPath = shortPath;
   protected readonly n = number;
   protected readonly exact = exactTokens;
 
+  /** `hx-select-button` reports an untyped value; only one of the offered options sets the signal. */
+  protected selectView(value: unknown): void {
+    const chosen = VIEWS.find((v) => v.id === value);
+    if (chosen) this.view.set(chosen.id);
+  }
+
+  protected selectGrouping(value: unknown): void {
+    const chosen = GROUPINGS.find((g) => g.id === value);
+    if (chosen) this.grouping.set(chosen.id);
+  }
+
   protected readonly rows = computed(() => {
-    const shown = (this.res.value()?.data.rows ?? []).filter((r) => inView(r.kind, this.view()));
+    const shown = (answerOf(this.res)?.data.rows ?? []).filter((r) => inView(r.kind, this.view()));
     return (this.grouping() === "owner" ? byOwner(shown) : shown).map(contextView);
   });
 
   protected readonly notes = computed(() => {
-    const d = this.res.value()?.data;
+    const d = answerOf(this.res)?.data;
     if (!d) return [];
     const out: Note[] = [];
     for (const [source, f] of Object.entries(d.first_request)) {

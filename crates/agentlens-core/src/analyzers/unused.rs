@@ -251,6 +251,7 @@ mod tests {
             carry: Default::default(),
             follow_on: Default::default(),
             attributed: Default::default(),
+            quality: Default::default(),
             baseline: BaselineCost {
                 requests: 4,
                 tokens: Tokens::estimated(baseline),

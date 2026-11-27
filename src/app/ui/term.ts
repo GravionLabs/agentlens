@@ -7,18 +7,16 @@ import { glossaryEntry } from "../core/glossary";
   selector: "app-term",
   imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<a class="term" routerLink="/glossary" [queryParams]="{ term: id() }" [title]="short()"
-    ><ng-content
-  /></a>`,
+  templateUrl: "./term.html",
   styles: `
     .term {
       color: inherit;
-      text-decoration: underline dotted var(--muted);
+      text-decoration: underline dotted var(--h-text-muted-color);
       text-underline-offset: 3px;
       cursor: help;
     }
     .term:hover {
-      color: var(--accent);
+      color: var(--h-primary-color);
     }
   `,
 })

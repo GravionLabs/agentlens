@@ -1,6 +1,6 @@
 import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { answerOf, analysis } from "../../core/analysis";
 import { exactTokens, minutes, number, percent, sourceLabel, tokens } from "../../core/format";
 import type { CompareReport, SourceStats } from "../../core/types";
 import { Status } from "../../ui/status";
@@ -49,50 +49,7 @@ export const METRICS: Metric[] = [
   selector: "app-compare",
   imports: [PageHeader, Status, HxDataTable, HxTableBody],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="view">
-      <app-page-header
-        exportView="compare"
-        [exportFormats]="['json', 'csv']"
-        title="Compare"
-        summary="The clients side by side over the same sessions."
-      >
-        <p>
-          “n/a”: the client does not record it. <span class="est">~</span> marks estimates; session
-          time runs from the first to the last event, so idle time is included.
-        </p>
-      </app-page-header>
-      <app-status
-        [loading]="res.isLoading()"
-        [error]="res.error()"
-        [warnings]="res.value()?.warnings ?? 0"
-        [errors]="res.value()?.errors ?? []"
-      />
-      @if (sources().length > 0) {
-        <hx-data-table
-          [value]="rows"
-          [columns]="columns()"
-          emptyMessage="No sessions for the selected filters."
-          ariaLabel="Compare"
-        >
-          <ng-template hxTableBody let-row>
-            <th scope="row" class="metric">{{ row.label }}</th>
-            @for (s of sources(); track s.source) {
-              <td
-                class="num"
-                [class.est]="row.estimated && !row.value(s).startsWith('n/a')"
-                [attr.title]="exact(row, s)"
-              >
-                {{ row.value(s) }}
-              </td>
-            }
-          </ng-template>
-        </hx-data-table>
-      } @else if (!res.isLoading()) {
-        <p class="muted">No sessions for the selected filters.</p>
-      }
-    </section>
-  `,
+  templateUrl: "./compare.html",
   styles: `
     hx-data-table {
       display: block;
@@ -107,7 +64,7 @@ export const METRICS: Metric[] = [
       font-variant-numeric: tabular-nums;
     }
     .est {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })
@@ -117,7 +74,8 @@ export class Compare {
   }
 
   protected readonly res = analysis<CompareReport>("compare");
-  protected readonly sources = computed(() => this.res.value()?.data.sources ?? []);
+  protected readonly answer = computed(() => answerOf(this.res));
+  protected readonly sources = computed(() => answerOf(this.res)?.data.sources ?? []);
   protected readonly rows = METRICS;
   protected readonly columns = computed<HxColumn[]>(() => [
     { field: "label", header: "Metric" },

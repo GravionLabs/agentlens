@@ -1,30 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, input } from "@angular/core";
-import { HxMessage, HxProgressSpinner } from "@gravionlabs/helix-ui";
+import { ChangeDetectionStrategy, Component, computed, input, output } from "@angular/core";
+import { HxButton, HxMessage, HxProgressSpinner } from "@gravionlabs/helix-ui";
 import { messageOf } from "../core/analysis";
 
 /** Loading, failure and the warnings of reading the sessions for one analysis. */
 @Component({
   selector: "app-status",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HxMessage, HxProgressSpinner],
-  template: `
-    @if (loading()) {
-      <hx-message severity="secondary" variant="simple" size="small">
-        <hx-progress-spinner class="spinner" ariaLabel="Loading" />Reading sessions…
-      </hx-message>
-    }
-    @if (failure(); as message) {
-      <hx-message severity="error" variant="simple" size="small">{{ message }}</hx-message>
-    }
-    @if (warnings() > 0) {
-      <hx-message severity="warn" variant="simple" size="small"
-        >{{ warnings() }} warnings while reading sessions.</hx-message
-      >
-    }
-    @for (e of errors(); track $index) {
-      <hx-message severity="error" variant="simple" size="small">{{ e }}</hx-message>
-    }
-  `,
+  imports: [HxButton, HxMessage, HxProgressSpinner],
+  templateUrl: "./status.html",
   styles: `
     :host {
       display: block;
@@ -32,6 +15,9 @@ import { messageOf } from "../core/analysis";
     hx-message {
       display: block;
       margin: 8px 0;
+    }
+    .retry {
+      margin-left: var(--h-space-2);
     }
     .spinner {
       display: inline-block;
@@ -47,6 +33,8 @@ export class Status {
   readonly error = input<unknown>(undefined);
   readonly warnings = input(0);
   readonly errors = input<string[]>([]);
+  /** *Try again* in the failure message: the view runs the failed analysis again. */
+  readonly retry = output<void>();
 
   protected readonly failure = computed(() => {
     const e = this.error();

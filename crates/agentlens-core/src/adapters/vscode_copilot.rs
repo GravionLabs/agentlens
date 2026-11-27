@@ -330,6 +330,7 @@ fn tool(part: &Value, at: Option<Timestamp>, canceled: bool, se: &mut SessionEve
     } else if name == "skill" {
         let data = part.get("toolSpecificData").unwrap_or(&Value::Null);
         match str_of(data, "skillName").or_else(|| str_of(data, "name")) {
+            // `subagent` stays false: the source does not mark loads inside a subagent.
             Some(skill) => se.push(
                 at,
                 EventKind::SkillInvoked(SkillInvoked::new(skill, SkillTrigger::Model)),

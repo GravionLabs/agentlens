@@ -540,3 +540,24 @@ fn a_parent_cycle_gives_no_run_and_no_guess() {
         assert!(runs(se).is_empty());
     }
 }
+
+#[test]
+fn skill_loads_in_a_child_session_are_flagged_as_subagent() {
+    let home = legacy_home();
+    put(
+        &home,
+        "part/msg_s/prt_sk.json",
+        r#"{"id":"prt_sk","messageID":"msg_s","sessionID":"ses_legacy_sub","type":"tool","tool":"skill","state":{"status":"completed","input":{"name":"child-skill"},"output":"0123","time":{"start":1780000032000,"end":1780000033000}}}"#,
+    );
+    let all = read(&home, &SessionFilter::default());
+    let flags: Vec<_> = all[0]
+        .events
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EventKind::SkillInvoked(s) => Some((s.name.as_str(), s.subagent)),
+            _ => None,
+        })
+        .collect();
+    assert!(flags.contains(&("demo-skill", false)));
+    assert!(flags.contains(&("child-skill", true)));
+}

@@ -70,7 +70,7 @@ pub struct PriceTable {
 }
 
 /// `Claude-Sonnet-4.6` and `claude-sonnet-4-6` name the same model.
-fn normalize(model: &str) -> String {
+pub(crate) fn normalize(model: &str) -> String {
     model.trim().to_lowercase().replace('.', "-")
 }
 

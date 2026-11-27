@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { TestBed } from "@angular/core/testing";
-import { provideRouter } from "@angular/router";
+import { provideRouter, Router, type Routes } from "@angular/router";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./app";
 import { NAV, routes } from "./app.routes";
@@ -32,10 +32,11 @@ function render(
     // The role filter asks for the efficiency roles of the period; the rest answers the version.
     command === "efficiency" ? { data: { roles: [] } } : "0.1.0",
   ),
+  testRoutes: Routes = [],
 ) {
   TestBed.configureTestingModule({
     providers: [
-      provideRouter([]),
+      provideRouter(testRoutes),
       { provide: Ipc, useValue: { invoke } },
       { provide: SAMPLE_MODE, useValue: false },
     ],
@@ -48,6 +49,20 @@ function render(
 describe("app", () => {
   it("has a router configuration", () => {
     expect(Array.isArray(routes)).toBe(true);
+  });
+
+  it("leaves every key to the page except the zoom shortcuts", () => {
+    render();
+    const press = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+      document.body.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    // A prevented keydown blocks typing and the submission of a form by Enter.
+    expect(press({ key: "a" })).toBe(false);
+    expect(press({ key: "Enter" })).toBe(false);
+    expect(press({ key: "=", ctrlKey: true })).toBe(true);
+    TestBed.inject(ZoomService).reset();
   });
 
   it("links every view in the navigation, in group order", () => {
@@ -124,10 +139,47 @@ describe("app", () => {
     expect(bar.querySelector('app-status-bar button[aria-label="Larger"]')).not.toBeNull();
   });
 
-  it("renders the filter bar once, in the topbar slot", () => {
+  it("renders the filter bar once, in the page header of the content panel", () => {
     const { el } = render();
     expect(el.querySelectorAll("app-filter-bar")).toHaveLength(1);
-    expect(el.querySelector("helix-topbar .layout-topbar-slot > app-filter-bar")).not.toBeNull();
+    expect(
+      el.querySelector(".layout-panel helix-topbar .layout-topbar-end > app-filter-bar"),
+    ).not.toBeNull();
+  });
+
+  it("has only the filter bar and Refresh as global actions", () => {
+    const { el } = render();
+    const end = el.querySelector(".layout-topbar-end")!;
+    expect([...end.children].map((c) => c.tagName)).toEqual(["APP-FILTER-BAR", "BUTTON"]);
+    expect(el.querySelector(".layout-topbar-center")).toBeNull();
+  });
+
+  it("keeps the filter bar while an analysis loads and when the window gets narrow", () => {
+    let narrow = false;
+    const listeners: ((event: { matches: boolean }) => void)[] = [];
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      get matches() {
+        return narrow && query.includes("991");
+      },
+      media: query,
+      addEventListener: (_: string, l: (event: { matches: boolean }) => void) => listeners.push(l),
+      removeEventListener: () => undefined,
+    }));
+    const { fixture, el } = render();
+    const bar = el.querySelector("app-filter-bar");
+    TestBed.inject(LoadingService).set(Symbol("t"), true);
+    narrow = true;
+    listeners.forEach((l) => l({ matches: true }));
+    fixture.detectChanges();
+    expect(el.querySelector(".layout-topbar-narrow")).not.toBeNull();
+    expect(el.querySelector("app-filter-bar")).toBe(bar);
+  });
+
+  it("names the open view in the page header", async () => {
+    const { fixture, el } = render(undefined, [{ path: "cost", children: [] }]);
+    await TestBed.inject(Router).navigateByUrl("/cost");
+    fixture.detectChanges();
+    expect(el.querySelector(".layout-topbar-title")?.textContent?.trim()).toBe("Cost");
   });
 
   it("shows the progress bar only while loading", () => {

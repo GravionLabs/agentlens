@@ -15,44 +15,15 @@ import { GLOSSARY_GROUPS, searchGlossary } from "../../core/glossary";
   selector: "app-glossary",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HxInput],
-  template: `
-    <section class="view">
-      <h2>Glossary</h2>
-      <p class="muted">What the terms in the tables and charts mean.</p>
-      <input
-        hx-input
-        type="search"
-        placeholder="Search terms"
-        aria-label="Search terms"
-        [value]="query()"
-        (input)="query.set(asInput($event).value)"
-      />
-      @for (g of groups(); track g.name) {
-        <h3>{{ g.name }}</h3>
-        <dl>
-          @for (e of g.entries; track e.id) {
-            <div class="entry" [id]="e.id" [class.target]="e.id === focus()">
-              <dt>{{ e.term }}</dt>
-              <dd>
-                <strong>{{ e.short }}</strong>
-                <span class="muted">{{ e.long }}</span>
-              </dd>
-            </div>
-          }
-        </dl>
-      } @empty {
-        <p class="muted">No term matches.</p>
-      }
-    </section>
-  `,
+  templateUrl: "./glossary.html",
   styles: `
-    input {
-      margin: 8px 0 4px;
-      width: min(320px, 100%);
+    .search {
+      margin: var(--h-space-2) 0 var(--h-space-1);
+      width: min(20rem, 100%);
     }
     h3 {
       margin: 18px 0 6px;
-      font-size: 1.05rem;
+      font-size: var(--h-font-size-md);
     }
     dl {
       margin: 0;
@@ -61,14 +32,14 @@ import { GLOSSARY_GROUPS, searchGlossary } from "../../core/glossary";
       gap: 8px;
     }
     .entry {
-      background: var(--panel);
-      border: 1px solid var(--line);
+      background: var(--h-surface-card);
+      border: 1px solid var(--h-border-panel);
       border-radius: 8px;
       padding: 8px 12px;
       scroll-margin-top: 12px;
     }
     .entry.target {
-      border-color: var(--accent);
+      border-color: var(--h-primary-color);
     }
     dt {
       font-weight: 650;
@@ -78,7 +49,7 @@ import { GLOSSARY_GROUPS, searchGlossary } from "../../core/glossary";
       display: flex;
       flex-direction: column;
       gap: 2px;
-      font-size: 0.9rem;
+      font-size: var(--h-font-size-sm);
     }
   `,
 })

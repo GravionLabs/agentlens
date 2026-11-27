@@ -12,7 +12,7 @@ AgentLens is **before 1.0**: the rules below hold, but a breaking change is allo
 | **JSON of the analyses**           | Field names and types of the reports (`--format json`, the `data` of an MCP result, the JSON export). A field is not renamed, removed or retyped without raising the schema version.                 |
 | **The `schema_version`**           | The envelope of the MCP results and of the application's commands says which layout of `data` it has. A new field does **not** raise it, a renamed, removed or retyped one does.                     |
 | **CSV**                            | The columns that exist keep their name and their position. A new column is appended at the end of the table.                                                                                        |
-| **MCP**                            | The names and parameters of the tools, the name and argument of the prompt `optimize-skills` and the address `agentlens://glossary` of the resource.                                                |
+| **MCP**                            | The names and parameters of the tools, the names and arguments of the prompts `optimize-skills` and `tips` and the address `agentlens://glossary` of the resource.                                                |
 | **Measured or estimated**          | A count that can be an estimate carries a `measured` flag, or sits in a field that is measured by definition (the usage a client reports). The [rule](measured-and-estimated.md) does not change.     |
 
 The layout is guarded by snapshots of the JSON of every analysis (`crates/agentlens-core/tests/output_contract.rs`): a change of shape fails the tests until someone decides what kind of change it is.

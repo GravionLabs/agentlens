@@ -1,0 +1,178 @@
+<section class="view">
+  <app-page-header
+    exportView="cost"
+    [exportFormats]="['json', 'csv']"
+    [exportOptions]="{ by: by(), whatIf: whatIf() || null, without: without.items() }"
+    title="Cost"
+    summary="What the usage costs, grouped by model, project, branch or issue."
+  >
+    <p>
+      Cost the client reported is shown as is; <span class="est">~</span> was computed from the
+      price table. Cache writes are priced as 5-minute writes.
+      <app-term id="premium">Premium requests</app-term> are a plan allowance, not money.
+    </p>
+  </app-page-header>
+  <form class="controls" (submit)="apply($event)">
+    <hx-field label="Group by">
+      <hx-select
+        fluid
+        [options]="groups"
+        optionLabel="label"
+        optionValue="id"
+        [value]="by()"
+        (valueChange)="by.set($any($event))"
+      />
+    </hx-field>
+    <hx-field
+      label="What if everything ran on…"
+      hint="A model id prefix, for example claude-haiku-4-5."
+      [error]="entryError()"
+    >
+      <input
+        hx-input
+        fluid
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        [value]="draft()"
+        (input)="edit($event)"
+      />
+    </hx-field>
+    <div class="actions">
+      <button hx-button type="submit">Compare</button>
+      <button
+        hx-button
+        type="button"
+        variant="text"
+        severity="secondary"
+        [disabled]="!draft() && !whatIf() && !entryError()"
+        (click)="clearWhatIf()"
+      >
+        Clear
+      </button>
+    </div>
+  </form>
+  @if (without.items().length > 0) {
+    <ul class="chips" aria-label="What if removed">
+      @for (item of without.items(); track item) {
+        <li>
+          <hx-chip
+            class="chip"
+            removable
+            [label]="item"
+            [removeLabel]="'Remove ' + item"
+            (remove)="without.remove(item)"
+          />
+        </li>
+      }
+    </ul>
+  }
+  <app-status
+    [loading]="res.isLoading()"
+    [error]="res.error()"
+    [warnings]="answer()?.warnings ?? 0"
+    [errors]="answer()?.errors ?? []"
+    (retry)="res.reload()"
+  />
+  @if (compare()) {
+    <app-trend-cards
+      [stats]="trendStats()"
+      [note]="note()"
+      [loading]="trend.isLoading()"
+      [error]="trend.error()"
+      (retry)="trend.reload()"
+    />
+  }
+  <hx-data-table
+    [value]="views()"
+    [columns]="columns()"
+    dataKey="key"
+    [sortField]="'cost'"
+    [sortOrder]="-1"
+    [paginator]="views().length > 50"
+    [rows]="50"
+    [loading]="res.isLoading()"
+    [emptyMessage]="emptyMessage()"
+    ariaLabel="Cost"
+  >
+    <ng-template hxCell="key" let-row>
+      <span [attr.title]="row.key">{{ row.label }}</span>
+    </ng-template>
+    <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+    <ng-template hxCell="input" let-value="value">
+      <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+    </ng-template>
+    <ng-template hxCell="output" let-value="value">
+      <span [attr.title]="tip(value)">{{ tokens(value) }}</span>
+    </ng-template>
+    <ng-template hxCell="cost" let-row>
+      <span [class.est]="row.estimated">{{ row.costText }}</span>
+    </ng-template>
+    <ng-template hxCell="premium" let-value="value">{{ value > 0 ? value : "" }}</ng-template>
+  </hx-data-table>
+  @if (total(); as t) {
+    <p class="total">
+      <strong>Total</strong>: {{ n(t.requests) }} requests,
+      <span [class.est]="t.estimated_usd > 0 && t.measured_usd === 0">{{ money(t) }}</span>
+      @if (t.premium_requests > 0) {
+        , {{ t.premium_requests }} premium requests
+      }
+    </p>
+  }
+  @if (unpriced().length > 0) {
+    <p class="muted">
+      No price for: {{ unpriced().join(", ") }}. Add prices to ~/.config/agentlens/prices.json (per
+      million tokens, keyed by model-id prefix).
+    </p>
+  }
+  @if (answer()?.data?.what_if; as w) {
+    <h3>What if everything ran on {{ w.target }}?</h3>
+    <hx-data-table
+      [value]="whatIfRows()"
+      [columns]="whatIfColumns"
+      [sortFunction]="sort"
+      emptyMessage="Nothing to compare."
+      [ariaLabel]="'What if everything ran on ' + w.target"
+    >
+      <ng-template hxCell="actual_usd" let-value="value">
+        <span [class.est]="value !== null">{{ usd(value, true) }}</span>
+      </ng-template>
+      <ng-template hxCell="what_if_usd" let-value="value">
+        <span [class.est]="value !== null">{{ usd(value, true) }}</span>
+      </ng-template>
+      <ng-template hxCell="diff" let-value="value">
+        <span [class.est]="value !== null">{{ signedUsd(value, true) }}</span>
+      </ng-template>
+    </hx-data-table>
+    <p class="muted">
+      Same tokens priced with the prices of {{ w.target }}. “Excluded” requests have no actual price
+      and are left out of both sides.
+    </p>
+  }
+  @if (answer()?.data?.without; as w) {
+    <h3>What if removed</h3>
+    <hx-data-table
+      [value]="withoutRows()"
+      [columns]="withoutColumns"
+      emptyMessage="Nothing matched."
+      ariaLabel="What if removed"
+    >
+      <ng-template hxCell="installations" let-value="value">{{
+        value === null ? "" : n(value)
+      }}</ng-template>
+      <ng-template hxCell="requests" let-value="value">{{ n(value) }}</ng-template>
+      <ng-template hxCell="tokens" let-row>
+        <span class="est" [attr.title]="tip(row.tokens)">{{ tokens(row.tokens, true) }}</span>
+      </ng-template>
+      <ng-template hxCell="cost" let-row>
+        <span [class.est]="row.costText !== 'n/a'">{{ row.costText }}</span>
+      </ng-template>
+    </hx-data-table>
+    @for (note of w.notes; track note) {
+      <p class="muted">{{ note }}</p>
+    }
+    @for (warning of w.warnings; track warning) {
+      <p class="warning">{{ warning }}</p>
+    }
+  }
+</section>

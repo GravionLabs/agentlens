@@ -1,7 +1,7 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
-import { analysis, trendAnalysis } from "../../core/analysis";
+import { answerOf, analysis, trendAnalysis } from "../../core/analysis";
 import { type DeltaView, deltaView, sumDeltas, trendNote } from "../../core/delta";
 import { FiltersService } from "../../core/filters.service";
 import { WithoutService } from "../../core/without.service";
@@ -14,7 +14,15 @@ import { StatCards, trendStat } from "../../ui/stat-cards";
 import { TrendCards } from "../../ui/trend-cards";
 import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
-import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxButton,
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  HxField,
+  HxSwitch,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 const COLORS = { baseline: "var(--c-baseline)", load: "var(--c-load)", carry: "var(--c-carry)" };
 
@@ -81,199 +89,53 @@ export function skillView(s: SkillStats): SkillView {
     Status,
     StatCards,
     TrendCards,
+    HxButton,
     HxDataTable,
     HxCell,
     HxColumnHeader,
+    HxField,
+    HxSwitch,
     HelpLink,
     StackedBars,
     Legend,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="view">
-      <app-page-header
-        exportView="skills"
-        [exportFormats]="['json', 'html', 'csv']"
-        title="Skills"
-        summary="Which skills are used and what they cost in tokens."
-      >
-        <p>
-          <span class="est">~</span> marks <app-term id="measured">estimates</app-term>; unmarked
-          values were measured by the client.
-        </p>
-        <p>
-          <app-term id="overhead">Overhead</app-term> =
-          <app-term id="baseline">baseline</app-term> + <app-term id="load">load</app-term> +
-          <app-term id="carry">carry</app-term>.
-        </p>
-      </app-page-header>
-      <app-status
-        [loading]="res.isLoading()"
-        [error]="res.error()"
-        [warnings]="res.value()?.warnings ?? 0"
-        [errors]="res.value()?.errors ?? []"
-      />
-      <app-stat-cards [stats]="stats()" />
-      @if (compare()) {
-        <app-trend-cards
-          [stats]="trendStats()"
-          [note]="note()"
-          [loading]="trend.isLoading()"
-          [error]="trend.error()"
-        />
-      }
-
-      <h3>Cost split</h3>
-      <p class="muted">
-        Top 15 skills by overhead. Hatched segments are estimates, solid ones were measured.
-      </p>
-      <app-legend [items]="legend" />
-      <app-stacked-bars
-        [rows]="bars()"
-        label="Skill overhead split into baseline, load and carry"
-      />
-
-      <h3>All skills</h3>
-      <label class="check">
-        <input type="checkbox" [checked]="usedOnly()" (change)="usedOnly.set(!usedOnly())" />
-        Used skills only
-      </label>
-      <hx-data-table
-        [value]="views()"
-        [sortFunction]="sort"
-        [columns]="columns()"
-        filterDisplay="row"
-        sortField="overhead"
-        [sortOrder]="-1"
-        [rowClass]="rowClass"
-        [paginator]="views().length > 100"
-        [rows]="100"
-        [rowsPerPageOptions]="[100, 'all']"
-        allLabel="Show all"
-        emptyMessage="No skills match."
-        ariaLabel="All skills"
-      >
-        <ng-template hxColumnHeader="file_uses"
-          ><app-help-link term="file-use" label="File uses"
-        /></ng-template>
-        <ng-template hxColumnHeader="load"><app-help-link term="load" label="Load" /></ng-template>
-        <ng-template hxColumnHeader="carry"
-          ><app-help-link term="carry" label="Carry"
-        /></ng-template>
-        <ng-template hxColumnHeader="baseline"
-          ><app-help-link term="baseline" label="Baseline"
-        /></ng-template>
-        <ng-template hxColumnHeader="overhead"
-          ><app-help-link term="overhead" label="Overhead"
-        /></ng-template>
-        <ng-template hxColumnHeader="attributed"
-          ><app-help-link term="attributed" label="Attributed"
-        /></ng-template>
-        <ng-template hxColumnHeader="follow_on"
-          ><app-help-link term="follow-on" label="Follow-on"
-        /></ng-template>
-        <ng-template hxCell="load" let-row>
-          <span [class.est]="row.loadEst" [attr.title]="tip(row.load)">{{
-            tokens(row.load, row.loadEst)
-          }}</span>
-        </ng-template>
-        <ng-template hxCell="carry" let-row>
-          <span [class.est]="row.carryEst" [attr.title]="tip(row.carry)">{{
-            tokens(row.carry, row.carryEst)
-          }}</span>
-        </ng-template>
-        <ng-template hxCell="baseline" let-row>
-          <span [class.est]="row.baselineEst" [attr.title]="tip(row.baseline)">{{
-            tokens(row.baseline, row.baselineEst)
-          }}</span>
-        </ng-template>
-        <ng-template hxCell="overhead" let-row>
-          <span [class.est]="row.overheadEst" [attr.title]="tip(row.overhead)">{{
-            tokens(row.overhead, row.overheadEst)
-          }}</span>
-        </ng-template>
-        <ng-template hxCell="attributed" let-row>
-          <span [attr.title]="tip(row.attributed)">{{
-            row.attributed === null ? "-" : tokens(row.attributed)
-          }}</span>
-        </ng-template>
-        <ng-template hxCell="follow_on" let-row>
-          <span [attr.title]="tip(row.follow_on)">{{ tokens(row.follow_on) }}</span>
-        </ng-template>
-        <ng-template hxCell="loadChange" let-row>
-          @if (row.loadDelta; as d) {
-            <span class="change" [class.good]="d.tone === 'good'" [class.bad]="d.tone === 'bad'">
-              @if (d.arrow) {
-                <span aria-hidden="true">{{ d.arrow }}</span>
-              }
-              {{ d.text }}
-            </span>
-          } @else {
-            -
-          }
-        </ng-template>
-        <ng-template hxCell="last_used" let-value="value">{{ day(value) }}</ng-template>
-        <ng-template hxCell="action" let-row>
-          <button
-            type="button"
-            class="what-if"
-            [disabled]="without.has('skill', row.name)"
-            (click)="without.add('skill', row.name)"
-          >
-            {{ without.has("skill", row.name) ? "Added" : "What if removed" }}
-          </button>
-        </ng-template>
-      </hx-data-table>
-    </section>
-  `,
+  templateUrl: "./skills.html",
   styles: `
     h3 {
       margin: 20px 0 4px;
-      font-size: 1.05rem;
+      font-size: var(--h-font-size-md);
     }
-    .check {
-      display: inline-flex;
-      gap: 6px;
-      margin: 4px 16px 8px 0;
-      color: var(--muted);
-      align-items: center;
-    }
-    .est {
-      color: var(--warn);
+    .toggle {
+      margin: var(--h-space-1) var(--h-space-4) var(--h-space-2) 0;
     }
     .what-if {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 2px 8px;
-      cursor: pointer;
       white-space: nowrap;
     }
-    .what-if:disabled {
-      color: var(--muted);
-      cursor: default;
+    .est {
+      color: var(--h-tag-warn-color);
     }
     .change {
       font-variant-numeric: tabular-nums;
     }
     .change.good {
-      color: var(--good);
+      color: var(--h-tag-success-color);
     }
     .change.bad {
-      color: var(--bad);
+      color: var(--h-tag-danger-color);
     }
     :host ::ng-deep tr.unused td {
-      color: var(--muted);
+      color: var(--h-text-muted-color);
     }
   `,
 })
 export class Skills {
   protected readonly res = analysis<SkillsData>("skills");
+  protected readonly answer = computed(() => answerOf(this.res));
   protected readonly usedOnly = signal(false);
   protected readonly without = inject(WithoutService);
 
-  private readonly all = computed(() => this.res.value()?.data.report.skills ?? []);
+  private readonly all = computed(() => answerOf(this.res)?.data.report.skills ?? []);
 
   protected readonly rows = computed(() =>
     this.usedOnly() ? this.all().filter((s) => s.invocations > 0) : this.all(),
@@ -286,7 +148,7 @@ export class Skills {
   ];
 
   protected readonly stats = computed(() => {
-    const data = this.res.value()?.data;
+    const data = answerOf(this.res)?.data;
     const skills = this.all();
     const used = skills.filter((s) => s.invocations > 0);
     const idleBaseline = skills
@@ -341,11 +203,11 @@ export class Skills {
   protected readonly compare = inject(FiltersService).compare;
   protected readonly trend = trendAnalysis();
   protected readonly note = computed(() => {
-    const w = this.trend.value()?.data.windows;
+    const w = answerOf(this.trend)?.data.windows;
     return w ? trendNote(w) : "";
   });
   protected readonly trendStats = computed(() => {
-    const t = this.trend.value()?.data;
+    const t = answerOf(this.trend)?.data;
     if (!t) return [];
     const perDay = t.windows.normalized;
     return [
@@ -373,7 +235,7 @@ export class Skills {
   });
 
   protected readonly views = computed(() => {
-    const t = this.compare() ? this.trend.value()?.data : undefined;
+    const t = this.compare() ? answerOf(this.trend)?.data : undefined;
     const byName = new Map(t?.skills.map((s) => [s.name, s]));
     return this.rows().map((s) => {
       const view = skillView(s);

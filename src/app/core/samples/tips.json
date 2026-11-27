@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "data": {
+    "period_cost_usd": 0.007582500000000001,
+    "threshold": 0.005,
+    "tips": [
+      {
+        "rank": 1,
+        "kind": "costly-mcp-servers",
+        "headline": "1 MCP server cost ~$0.00 in the period (1.4 %)",
+        "saving": {
+          "count": 363,
+          "measured": false
+        },
+        "saving_usd": 0.00010889999999999999,
+        "share": 0.0143620178041543,
+        "confidence": "estimated",
+        "action": "Enable the server only in the projects that need it, or switch it off when it is not in use.",
+        "targets": [
+          {
+            "name": "srv",
+            "detail": "60 tokens per request, 363 in total; 0 tool calls, 363 tokens per call",
+            "steps": [
+              {
+                "client": "claude-code",
+                "file": ".mcp.json",
+                "change": "In Claude Code, remove `srv` from the user scope (`~/.claude.json`) and add it to `.mcp.json` in the root of each project that calls it."
+              }
+            ]
+          }
+        ],
+        "more": 0
+      }
+    ],
+    "below_threshold": 1
+  },
+  "warnings": 2,
+  "errors": []
+}

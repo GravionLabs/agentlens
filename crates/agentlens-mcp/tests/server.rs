@@ -130,10 +130,11 @@ impl Drop for Client {
     }
 }
 
-const TOOLS: [&str; 12] = [
+const TOOLS: [&str; 13] = [
     "sources",
     "skills",
     "advice",
+    "tips",
     "context",
     "unused",
     "flow",
@@ -407,6 +408,80 @@ fn announces_tools_prompts_and_resources() {
             .unwrap()
             .contains("agentlens://glossary")
     );
+    let instructions = init["result"]["instructions"].as_str().unwrap();
+    assert!(instructions.contains("prompt tips"), "{instructions}");
+}
+
+#[test]
+fn the_tips_tool_caps_the_tips_and_the_prompt_names_the_tools_to_use() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    let result = client.call("tips", json!({"sources": ["claude-code"], "limit": 1}));
+    assert_eq!(result["isError"], false, "{result}");
+    let data = &result["structuredContent"]["data"];
+    assert_eq!(data["threshold"], 0.005);
+    assert!(data["tips"].as_array().unwrap().len() <= 1);
+
+    let list = client.request("prompts/list", json!({}));
+    let prompt = list["result"]["prompts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"] == "tips")
+        .expect("tips prompt");
+    assert!(
+        prompt["arguments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["name"] == "since")
+    );
+    let got = client.request(
+        "prompts/get",
+        json!({"name": "tips", "arguments": {"since": "4w"}}),
+    );
+    let text = got["result"]["messages"][0]["content"]["text"]
+        .as_str()
+        .unwrap();
+    assert!(text.contains("last 4w"), "{text}");
+    for needle in [
+        "Call `tips`",
+        "`advice`",
+        "`skills`",
+        "`context`",
+        "`timeline`",
+        "`steps`",
+        "`changed_at`",
+        "`verdict`",
+        "Do not change anything",
+    ] {
+        assert!(text.contains(needle), "{needle} missing in {text}");
+    }
+    let default = client.request("prompts/get", json!({"name": "tips"}));
+    assert!(
+        default["result"]["messages"][0]["content"]["text"]
+            .as_str()
+            .unwrap()
+            .contains("last 30d")
+    );
+}
+
+#[test]
+fn the_tips_tool_checks_a_change_with_changed_at() {
+    let home = home();
+    let mut client = Client::start(home.path());
+    let result = client.call(
+        "tips",
+        json!({"sources": ["claude-code"], "changed_at": "2026-10-03", "until": "2026-10-05"}),
+    );
+    assert_eq!(result["isError"], false, "{result}");
+    let data = &result["structuredContent"]["data"];
+    assert_eq!(data["windows"]["current"]["since"], "2026-10-03T00:00:00Z");
+    assert!(data["checks"].is_array());
+    assert!(data["new"].is_array());
+
+    let result = client.call("tips", json!({"changed_at": "2999-01-01"}));
+    assert_eq!(result["isError"], true, "{result}");
 }
 
 #[test]

@@ -154,6 +154,20 @@ export const GLOSSARY: GlossaryEntry[] = [
     long: "Once loaded, the skill text stays in the conversation and is re-sent with every following request until a compaction removes it. Carry is that repeated cost and always an estimate.",
   },
   {
+    id: "repeat-load",
+    term: "Repeat load",
+    group: "Skills",
+    short: "A skill the main agent loaded again with no compaction in between.",
+    long: "The skill text was already in the context, so a second load puts the body in twice. It is a signal, not proof: the first load may have been out of reach of the model, or the user asked for it again.",
+  },
+  {
+    id: "misfire",
+    term: "Misfire",
+    group: "Skills",
+    short: "A skill the model loaded and then did nothing with before the next user turn.",
+    long: "A model-triggered load whose follow-on window ends at a user turn without a tool call or a use of the skill's files. A dispatch to another skill or a compaction counts as work, and a load at the end of a session is undecidable and not counted. It is a signal, not proof.",
+  },
+  {
     id: "attributed",
     term: "Attributed",
     group: "Skills",
@@ -208,6 +222,20 @@ export const GLOSSARY: GlossaryEntry[] = [
     group: "Cost",
     short: "What an advice finding could have saved: tokens, ~USD and a confidence.",
     long: "Every advice finding has an impact: its saving in tokens, the saving in USD (always an estimate, computed from the price table) and the confidence of the saving. The findings are ranked by it: by the USD saving, without any price by the tokens weighted by class (input 1, cache write 1.25, cache read 0.1); findings without a saving come last.",
+  },
+  {
+    id: "tip",
+    term: "Tip",
+    group: "Cost",
+    short: "One advice finding that pays most, in one line, with its targets and a ready step.",
+    long: "A tip is a view over a finding of the advice: its headline, saving, share of the period's cost and confidence, the general action, and up to three targets (the first items of the finding). Only findings that save at least 0.5% of the period's cost (without any price: of the tokens weighted by class) are tips; the others are counted in below_threshold. Where a client documents the syntax, a target carries a step with the file and the change (Claude Code: disable-model-invocation in the front matter of a skill, the project scope .mcp.json for an MCP server). Tips are computed, never written by a model.",
+  },
+  {
+    id: "verdict",
+    term: "Verdict",
+    group: "Cost",
+    short: "Whether a tip paid off after a change: improved, unchanged, worse or too little data.",
+    long: "agentlens tips --changed-at DATE compares the tips of the window before the date with the same findings in the window after it, as the saving per 1,000 requests (so a busier window does not count as worse). Improved: the value dropped by at least 20%, a finding gone after the date included. Worse: it rose by at least 20%. Unchanged: anything between. Too little data: a window has fewer than 50 requests. The per-day values are shown but do not decide. Each target of the tip is resolved (gone from the finding after the date), open (still there) or unknown (not listed, but the finding's items are cut). Tips that appear only after the date are listed as new, without a verdict.",
   },
   {
     id: "saving",
@@ -315,6 +343,29 @@ export const GLOSSARY: GlossaryEntry[] = [
     group: "Cost",
     short: "Work on a large context with almost no requests made by subagents.",
     long: "Research and long reads in the main context are carried on every later request; a subagent reads them in its own context and returns a summary. The finding appears for Claude Code, OpenCode and Copilot CLI when a client has a subagent share below 5% of its requests and at least 20 main-agent requests with 200,000 tokens of input or more. No saving is estimated.",
+  },
+  {
+    id: "cache-expiry",
+    term: "Cache expiry",
+    group: "Cost",
+    short:
+      "A request after a pause longer than the cache lifetime, which wrote its context again instead of reading it.",
+    long: "The provider keeps a prompt cache entry only for a while after its last use (the TTL). After a longer pause the whole context is written to the cache again at the write price instead of being read at the read price. The Cache expiry finding counts main-agent requests of Anthropic models that came later than the session's TTL after the previous main-agent request and wrote more tokens than they read; the saving is an inferred lower bound. It overlaps with Context size, so the two savings are not additive.",
+  },
+  {
+    id: "skill-quality",
+    term: "Skill quality",
+    group: "Skills",
+    short:
+      "Signs in the order of events that a skill misfires, is loaded twice or leads into failing work.",
+    long: "The Skill quality finding lists skills whose signals pass a minimum: loaded again into the same context (a repeat load), loaded by the model without any work after it (a misfire: at least 2 and 20% of its model loads), only ever started by the user as /name (at least 3 times, never by the model), followed by failing calls (at least 5, at twice the rate of the rest of its sessions), followed by a retry loop, or followed by a compaction (at least 2 and 25% of its loads). Only loads by the main agent count. These are signals, not proof. The saving covers repeat loads, misfires and the listing of a skill only the user starts; the other signals have none. It can overlap with Costly descriptions and Large skill bodies, so the savings are not additive.",
+  },
+  {
+    id: "ttl",
+    term: "TTL",
+    group: "Cost",
+    short: "How long the provider keeps a prompt cache entry after its last use.",
+    long: "Anthropic's default is 5 minutes; a client can ask for 1 hour. Claude Code reports the tokens written with the 1-hour lifetime, so a session in which any request did is read as 60 minutes; every other session, and every other client, is assumed to have 5 minutes.",
   },
   {
     id: "permission-wait",

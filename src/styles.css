@@ -1,0 +1,88 @@
+/* The root size is the small step of the type scale (14px): the rem of the whole app follows it. */
+html {
+  font: var(--h-font-size-sm) / 1.5 var(--helix-font-sans);
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--h-surface-frame);
+  color: var(--h-text-color);
+}
+
+.muted {
+  color: var(--h-text-muted-color);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h2 {
+  margin: 0 0 4px;
+  font-size: var(--h-font-size-xl);
+}
+
+.view {
+  display: block;
+}
+
+th,
+td {
+  vertical-align: middle;
+}
+
+/* The view being reloaded stays visible but quiet. */
+main.busy > router-outlet ~ * {
+  opacity: 0.55;
+  transition: opacity 0.15s 0.2s;
+}
+
+main > router-outlet ~ * {
+  transition: opacity 0.1s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main > router-outlet ~ * {
+    transition: none;
+  }
+}
+
+/*
+ * The page header of the shell holds the filter bar as an action of its end zone: the title takes
+ * what it needs and the end zone the rest (the shell splits the free width between the two).
+ */
+.layout-wrapper .layout-panel helix-topbar .layout-topbar {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.layout-wrapper .layout-topbar .layout-topbar-end {
+  grid-column: 2;
+}
+
+/* The command line tools open a panel above the status bar; the shell's bar would clip it. */
+.layout-wrapper helix-status-bar .helix-status-bar {
+  overflow: visible;
+}
+
+/* A phone-sized window: the status bar keeps its controls and drops the texts. */
+@media (max-width: 479px) {
+  .layout-wrapper helix-status-bar :is(.helix-status-bar-brand, .helix-status-bar-note),
+  .layout-wrapper helix-status-bar :is(.helix-status-bar-versions, app-status-bar .demo-link) {
+    display: none;
+  }
+}
+
+/*
+ * Narrow window: the overlay nav rail is flush with the window. The shell means the same, but the
+ * rail's own style wins over it (helix-shell 22.10.0) and leaves a strip of the closed rail visible.
+ */
+@media (max-width: 991px) {
+  .layout-wrapper helix-nav-rail .helix-nav-rail {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    border-width: 0 1px 0 0;
+    border-radius: 0;
+  }
+}

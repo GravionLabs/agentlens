@@ -31,7 +31,7 @@ Download the archive for your platform (and the installer of the application) fr
 
 ## Agent skills
 
-The stack skills from [GravionLabs/skills](https://github.com/GravionLabs/skills) are committed in `.agents/skills` and `.claude/skills` and pinned in `skills-lock.json`. Update them with `npx skills update`; `/skills-manage` installs the skills of a new stack.
+The stack skills are committed (`.claude/skills`, `.agents/skills`, `skills-lock.json`), so a fresh clone has them. Update them with `npx skills update`; `/skills-install` adds groups.
 
 ## Usage
 

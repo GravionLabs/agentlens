@@ -21,8 +21,8 @@ export default defineConfig({
   base,
   // The site is the documentation of the repository: its pages are the files of `docs`.
   srcDir: "../docs",
-  // Decisions, and anything not listed as a page, stay on GitHub.
-  srcExclude: ["adr/**"],
+  // Decisions, the style guide for contributors, and anything not listed as a page, stay on GitHub.
+  srcExclude: ["adr/**", "STYLEGUIDE.md"],
   // `docs/guide/README.md` is what GitHub shows for the folder, and the home of the guide here.
   rewrites: { "guide/README.md": "guide/index.md" },
   cleanUrls: true,

@@ -22,9 +22,10 @@ use std::path::PathBuf;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
+use crate::analyzers::flow::{LoopSpan, retry_loops};
 use crate::inventory::{Inventory, SkillEntry};
 use crate::model::{
-    ContextKind, EventKind, SessionEvents, SkillInvoked, SkillTrigger, Source, Usage,
+    ContextKind, EventKind, SessionEvents, SkillInvoked, SkillTrigger, Source, ToolStatus, Usage,
 };
 use crate::tokens::{TokenEstimator, Tokens};
 
@@ -74,6 +75,28 @@ pub struct BaselineCost {
     pub tokens: Tokens,
 }
 
+/// Signals of how a skill behaves after it was loaded. They count loads of the main agent only
+/// (`SkillInvoked.subagent == false`) and are hints, not proof that a skill works badly.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QualitySignals {
+    /// Loads of a skill the main agent had already loaded in the same session with no compaction in between.
+    pub repeat_loads: u32,
+    /// Model loads whose follow-on window ends at a user turn without a tool call or a skill file use.
+    pub misfires: u32,
+    /// Loads whose follow-on window ends at a compaction.
+    pub compactions_soon: u32,
+    /// Tool calls in the follow-on windows.
+    pub follow_on_calls: u64,
+    /// Tool calls with an error in the follow-on windows.
+    pub follow_on_errors: u64,
+    /// Tool calls of the same sessions outside the follow-on windows of this skill.
+    pub baseline_calls: u64,
+    /// Tool calls with an error of the same sessions outside the follow-on windows of this skill.
+    pub baseline_errors: u64,
+    /// Retry loops whose first call lies inside a follow-on window.
+    pub follow_on_retry_loops: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillStats {
     pub name: String,
@@ -107,6 +130,9 @@ pub struct SkillStats {
     #[serde(default)]
     pub attributed: UsageSum,
     pub baseline: BaselineCost,
+    /// Quality signals of main-agent loads.
+    #[serde(default)]
+    pub quality: QualitySignals,
 }
 
 impl SkillStats {
@@ -281,7 +307,15 @@ pub fn analyze_traced(
             }
         }
 
+        // Quality signals: skills the main agent has in its context, the loops of the session (found
+        // once) and the follow-on windows per skill.
+        let mut in_context: BTreeSet<&str> = BTreeSet::new();
+        let mut loops: Option<Vec<LoopSpan>> = None;
+        let mut windows: BTreeMap<&str, Vec<(usize, usize)>> = BTreeMap::new();
         for (i, e) in se.events.iter().enumerate() {
+            if matches!(e.kind, EventKind::Compaction) {
+                in_context.clear();
+            }
             let EventKind::SkillInvoked(skill) = &e.kind else {
                 continue;
             };
@@ -294,6 +328,27 @@ pub fn analyze_traced(
                 .entry(skill.name.clone())
                 .or_insert_with(|| Acc::new(&skill.name, false, Vec::new()));
             acc.record(si, se, i, e.at, skill, inventory, estimator);
+            if !skill.subagent {
+                let repeat = !in_context.insert(skill.name.as_str());
+                let loops = loops.get_or_insert_with(|| retry_loops(&se.events));
+                let window = acc.record_quality(se, i, skill, repeat, loops);
+                windows.entry(skill.name.as_str()).or_default().push(window);
+            }
+        }
+        for (name, spans) in windows {
+            let (mut calls, mut errors) = (0, 0);
+            for (k, e) in se.events.iter().enumerate() {
+                if let EventKind::ToolCall(c) = &e.kind
+                    && !spans.iter().any(|&(a, b)| (a..b).contains(&k))
+                {
+                    calls += 1;
+                    errors += u64::from(c.status == ToolStatus::Error);
+                }
+            }
+            if let Some(acc) = accs.get_mut(name) {
+                acc.stats.quality.baseline_calls += calls;
+                acc.stats.quality.baseline_errors += errors;
+            }
         }
 
         // Tool calls that read or run files in the folder of an installed skill: use without loading.
@@ -386,6 +441,7 @@ impl Acc {
                     requests: 0,
                     tokens: Tokens::estimated(0),
                 },
+                quality: QualitySignals::default(),
             },
             sessions: BTreeSet::new(),
             projects: BTreeSet::new(),
@@ -498,20 +554,48 @@ impl Acc {
         }
 
         // Follow-on: until the next turn, skill or compaction.
-        let end = se.events[i + 1..]
-            .iter()
-            .position(|e| {
-                matches!(
-                    e.kind,
-                    EventKind::UserTurn | EventKind::SkillInvoked(_) | EventKind::Compaction
-                )
-            })
-            .map_or(se.events.len(), |p| i + 1 + p);
+        let end = follow_on_end(se, i);
         for e in &se.events[i + 1..end] {
             if let EventKind::Usage(u) = &e.kind {
                 s.follow_on.add(u);
             }
         }
+    }
+
+    /// Quality signals of one main-agent load at event `i`; returns its follow-on window `i + 1 .. end`.
+    fn record_quality(
+        &mut self,
+        se: &SessionEvents,
+        i: usize,
+        skill: &SkillInvoked,
+        repeat: bool,
+        loops: &[LoopSpan],
+    ) -> (usize, usize) {
+        let q = &mut self.stats.quality;
+        let end = follow_on_end(se, i);
+        let window = &se.events[i + 1..end];
+        q.repeat_loads += u32::from(repeat);
+        let ender = se.events.get(end).map(|e| &e.kind);
+        q.compactions_soon += u32::from(matches!(ender, Some(EventKind::Compaction)));
+        let worked = window
+            .iter()
+            .any(|e| matches!(e.kind, EventKind::ToolCall(_) | EventKind::SkillFileUse(_)));
+        q.misfires += u32::from(
+            skill.trigger == SkillTrigger::Model
+                && matches!(ender, Some(EventKind::UserTurn))
+                && !worked,
+        );
+        for e in window {
+            if let EventKind::ToolCall(c) = &e.kind {
+                q.follow_on_calls += 1;
+                q.follow_on_errors += u64::from(c.status == ToolStatus::Error);
+            }
+        }
+        q.follow_on_retry_loops += loops
+            .iter()
+            .filter(|l| (i + 1..end).contains(&l.first))
+            .count() as u32;
+        (i + 1, end)
     }
 
     fn finish(mut self) -> SkillStats {
@@ -520,6 +604,20 @@ impl Acc {
         self.stats.load.measured = self.all_loads_measured;
         self.stats
     }
+}
+
+/// End (exclusive) of the follow-on window of the load at event `i`: the next user turn, skill load or
+/// compaction, else the end of the session.
+fn follow_on_end(se: &SessionEvents, i: usize) -> usize {
+    se.events[i + 1..]
+        .iter()
+        .position(|e| {
+            matches!(
+                e.kind,
+                EventKind::UserTurn | EventKind::SkillInvoked(_) | EventKind::Compaction
+            )
+        })
+        .map_or(se.events.len(), |p| i + 1 + p)
 }
 
 /// Listing tokens × the requests of every session in which the skill is listed.
@@ -1147,6 +1245,194 @@ mod tests {
             Tokens::estimated(0),
             "nothing counted stays an estimate"
         );
+    }
+
+    fn call(status: ToolStatus) -> EventKind {
+        call_of("Bash", Some("x"), status)
+    }
+
+    fn call_of(name: &str, input: Option<&str>, status: ToolStatus) -> EventKind {
+        EventKind::ToolCall(crate::model::ToolCall {
+            name: name.into(),
+            input_summary: input.map(str::to_owned),
+            status,
+            duration_ms: None,
+        })
+    }
+
+    fn model(name: &str) -> EventKind {
+        skill(name, SkillTrigger::Model, Some(10))
+    }
+
+    fn quality(kinds: Vec<EventKind>) -> QualitySignals {
+        let se = session("s", Source::ClaudeCode, "/p", kinds);
+        let inv = inventory(vec![entry(
+            "demo",
+            1,
+            10,
+            LocationKind::UserClaude,
+            "/h/.claude/skills/demo/SKILL.md",
+        )]);
+        let r = analyze(&inv, &[se], &CharsPerToken);
+        r.skills
+            .into_iter()
+            .find(|s| s.name == "demo")
+            .unwrap()
+            .quality
+    }
+
+    #[test]
+    fn a_second_load_without_a_compaction_is_a_repeat() {
+        let q = quality(vec![
+            model("demo"),
+            call(ToolStatus::Ok),
+            EventKind::UserTurn,
+            model("demo"),
+            call(ToolStatus::Ok),
+        ]);
+        assert_eq!(q.repeat_loads, 1);
+    }
+
+    #[test]
+    fn a_load_after_a_compaction_is_no_repeat() {
+        let q = quality(vec![
+            model("demo"),
+            call(ToolStatus::Ok),
+            EventKind::Compaction,
+            model("demo"),
+            call(ToolStatus::Ok),
+        ]);
+        assert_eq!(q.repeat_loads, 0);
+    }
+
+    #[test]
+    fn a_user_load_after_a_model_load_is_a_repeat() {
+        let q = quality(vec![
+            model("demo"),
+            call(ToolStatus::Ok),
+            skill("demo", SkillTrigger::User, Some(10)),
+            call(ToolStatus::Ok),
+        ]);
+        assert_eq!(q.repeat_loads, 1);
+    }
+
+    #[test]
+    fn a_model_load_with_no_work_before_the_next_user_turn_is_a_misfire() {
+        let q = quality(vec![model("demo"), EventKind::UserTurn]);
+        assert_eq!(q.misfires, 1);
+    }
+
+    #[test]
+    fn a_dispatch_to_another_skill_is_no_misfire() {
+        let q = quality(vec![model("demo"), model("other"), EventKind::UserTurn]);
+        assert_eq!(q.misfires, 0);
+    }
+
+    #[test]
+    fn a_load_at_the_end_of_the_session_is_no_misfire() {
+        let q = quality(vec![model("demo")]);
+        assert_eq!(q.misfires, 0);
+    }
+
+    #[test]
+    fn a_user_started_load_without_work_is_no_misfire() {
+        let q = quality(vec![
+            skill("demo", SkillTrigger::User, Some(10)),
+            EventKind::UserTurn,
+        ]);
+        assert_eq!(q.misfires, 0);
+        let w = quality(vec![
+            model("demo"),
+            call(ToolStatus::Ok),
+            EventKind::UserTurn,
+        ]);
+        assert_eq!(w.misfires, 0);
+        let f = quality(vec![
+            model("demo"),
+            EventKind::SkillFileUse("demo".into()),
+            EventKind::UserTurn,
+        ]);
+        assert_eq!(f.misfires, 0);
+    }
+
+    #[test]
+    fn a_compaction_in_the_window_counts_as_soon_and_as_work() {
+        let q = quality(vec![
+            model("demo"),
+            EventKind::Compaction,
+            EventKind::UserTurn,
+        ]);
+        assert_eq!(q.compactions_soon, 1);
+        assert_eq!(q.misfires, 0);
+    }
+
+    #[test]
+    fn errors_are_counted_inside_and_outside_the_window_and_unknown_is_no_error() {
+        let q = quality(vec![
+            call(ToolStatus::Error),
+            call(ToolStatus::Ok),
+            model("demo"),
+            call(ToolStatus::Error),
+            call(ToolStatus::Unknown),
+            call(ToolStatus::Ok),
+            EventKind::UserTurn,
+            call(ToolStatus::Error),
+        ]);
+        assert_eq!((q.follow_on_calls, q.follow_on_errors), (3, 1));
+        assert_eq!((q.baseline_calls, q.baseline_errors), (3, 2));
+    }
+
+    fn looping(first: ToolStatus) -> Vec<EventKind> {
+        vec![
+            call_of("Bash", Some("make"), first),
+            call_of("Bash", Some("make"), ToolStatus::Error),
+            call_of("Bash", Some("make"), ToolStatus::Ok),
+        ]
+    }
+
+    #[test]
+    fn a_retry_loop_starting_inside_the_window_counts() {
+        let mut kinds = vec![model("demo")];
+        kinds.extend(looping(ToolStatus::Error));
+        assert_eq!(quality(kinds).follow_on_retry_loops, 1);
+    }
+
+    #[test]
+    fn a_retry_loop_starting_before_the_window_does_not_count() {
+        let mut kinds = vec![call_of("Bash", Some("make"), ToolStatus::Error)];
+        kinds.push(model("demo"));
+        kinds.push(call_of("Bash", Some("make"), ToolStatus::Error));
+        kinds.push(call_of("Bash", Some("make"), ToolStatus::Ok));
+        // The skill load is not a call: the run started before it and spans the window.
+        assert_eq!(quality(kinds).follow_on_retry_loops, 0);
+    }
+
+    #[test]
+    fn a_subagent_load_gets_no_signals_and_is_no_repeat() {
+        let mut sub = SkillInvoked::new("demo", SkillTrigger::Model);
+        sub.subagent = true;
+        let q = quality(vec![
+            model("demo"),
+            call(ToolStatus::Ok),
+            EventKind::SkillInvoked(sub),
+            EventKind::UserTurn,
+        ]);
+        assert_eq!(q.repeat_loads, 0);
+        assert_eq!(q.misfires, 0);
+        // Only the call in the window of the main-agent load counts.
+        assert_eq!(q.follow_on_calls, 1);
+    }
+
+    #[test]
+    fn a_subagent_load_alone_leaves_all_signals_zero() {
+        let mut sub = SkillInvoked::new("demo", SkillTrigger::Model);
+        sub.subagent = true;
+        let q = quality(vec![
+            EventKind::SkillInvoked(sub),
+            EventKind::UserTurn,
+            call(ToolStatus::Error),
+        ]);
+        assert_eq!(q, QualitySignals::default());
     }
 }
 

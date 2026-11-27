@@ -9,26 +9,26 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       "rows": [
         {
           "key": "/work/demo",
-          "requests": 30,
-          "input": 105739,
-          "output": 10879,
-          "cache_read": 304800,
-          "cache_write": 41850,
+          "requests": 33,
+          "input": 106039,
+          "output": 11029,
+          "cache_read": 324800,
+          "cache_write": 82850,
           "measured_usd": 0.0,
-          "estimated_usd": 0.0,
+          "estimated_usd": 0.27149999999999996,
           "unpriced_requests": 30,
           "premium_requests": 1.0
         }
       ],
       "total": {
         "key": "total",
-        "requests": 30,
-        "input": 105739,
-        "output": 10879,
-        "cache_read": 304800,
-        "cache_write": 41850,
+        "requests": 33,
+        "input": 106039,
+        "output": 11029,
+        "cache_read": 324800,
+        "cache_write": 82850,
         "measured_usd": 0.0,
-        "estimated_usd": 0.0,
+        "estimated_usd": 0.27149999999999996,
         "unpriced_requests": 30,
         "premium_requests": 1.0
       },
@@ -40,6 +40,13 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
     "what_if": {
       "target": "claude-haiku-4-5",
       "rows": [
+        {
+          "model": "claude-opus-4-8",
+          "requests": 3,
+          "actual_usd": 0.27149999999999996,
+          "what_if_usd": 0.0543,
+          "excluded_requests": 0
+        },
         {
           "model": "claude-test-1",
           "requests": 0,
@@ -57,9 +64,9 @@ description: "A change here changes the CLI JSON, the MCP results and the applic
       ],
       "total": {
         "model": "total",
-        "requests": 0,
-        "actual_usd": 0.0,
-        "what_if_usd": 0.0,
+        "requests": 3,
+        "actual_usd": 0.27149999999999996,
+        "what_if_usd": 0.0543,
         "excluded_requests": 30
       }
     },

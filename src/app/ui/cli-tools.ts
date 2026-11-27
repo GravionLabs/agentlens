@@ -15,127 +15,7 @@ type Busy = "install" | "remove" | null;
   selector: "app-cli-tools",
   imports: [HxButton, HxMessage],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    @if (offered()) {
-      <button
-        hx-button
-        type="button"
-        variant="link"
-        size="small"
-        [attr.aria-expanded]="open()"
-        (click)="open.set(!open())"
-      >
-        Command line tools
-      </button>
-      @if (open()) {
-        <div class="panel" role="dialog" aria-label="Command line tools">
-          <div class="actions">
-            <button
-              hx-button
-              type="button"
-              variant="outlined"
-              size="small"
-              [disabled]="busy() !== null"
-              (click)="run('install')"
-            >
-              Install command line tools
-            </button>
-            <button
-              hx-button
-              type="button"
-              variant="outlined"
-              size="small"
-              [disabled]="busy() !== null"
-              (click)="run('remove')"
-            >
-              Remove command line tools
-            </button>
-          </div>
-          @if (busy() === "install") {
-            <hx-message severity="info" variant="simple" size="small"
-              >Installing the command line tools…</hx-message
-            >
-          } @else if (busy() === "remove") {
-            <hx-message severity="info" variant="simple" size="small"
-              >Removing the command line tools…</hx-message
-            >
-          }
-          @if (state(); as s) {
-            <ul class="tools">
-              @for (t of s.tools; track t.name) {
-                <li>
-                  <code>{{ t.name }}</code>
-                  <span class="note">{{ describe(t, s) }}</span>
-                  <span class="note path">{{ t.path }}</span>
-                  @if (t.error) {
-                    <span class="note err">{{ t.error }}</span>
-                  }
-                </li>
-              }
-            </ul>
-            @if (s.created_dir) {
-              <hx-message severity="info" variant="simple" size="small"
-                >Created the folder {{ s.dir }}.</hx-message
-              >
-            }
-            @for (f of s.foreign; track f) {
-              @if (userPath(s)) {
-                <hx-message severity="warn" variant="simple" size="small">
-                  {{ f }} on your PATH also holds the command line tools (another installation). It
-                  stays as it is; remove it from PATH by hand if it is out of date.
-                </hx-message>
-              } @else {
-                <hx-message severity="warn" variant="simple" size="small">
-                  Not touched: {{ f }} is a file AgentLens did not create. Remove or rename it by
-                  hand to install the tool there.
-                </hx-message>
-              }
-            }
-            @if (userPath(s)) {
-              @if (s.on_path) {
-                <hx-message severity="info" variant="simple" size="small"
-                  >{{ s.dir }} is on your user PATH.</hx-message
-                >
-              } @else {
-                <hx-message severity="info" variant="simple" size="small"
-                  >{{ s.dir }} is not on your user PATH.</hx-message
-                >
-              }
-              @if (changed(s)) {
-                <hx-message severity="info" variant="simple" size="small">
-                  Open a new terminal to use the change: programs that are already running, such as
-                  open terminals and editors, keep the old PATH.
-                </hx-message>
-              }
-            } @else if (s.on_path) {
-              <hx-message severity="info" variant="simple" size="small"
-                >{{ s.dir }} is on your PATH.</hx-message
-              >
-            } @else {
-              <hx-message severity="warn" variant="simple" size="small">
-                {{ s.dir }} is not on the PATH AgentLens was started with. If your shell does not
-                have it either, add this line to your shell profile:
-              </hx-message>
-              <ul class="lines">
-                @for (p of s.profile_lines; track p.shell) {
-                  <li>
-                    <span class="note">{{ p.shell }} ({{ p.file }})</span>
-                    <code class="line">{{ p.line }}</code>
-                  </li>
-                }
-              </ul>
-            }
-            @if (s.note) {
-              <hx-message severity="info" variant="simple" size="small">{{ s.note }}</hx-message>
-            }
-          }
-          @for (e of errors(); track $index) {
-            <hx-message severity="error" variant="simple" size="small">{{ e }}</hx-message>
-          }
-        </div>
-      }
-    }
-  `,
+  templateUrl: "./cli-tools.html",
   styles: `
     :host {
       position: relative;
@@ -150,10 +30,12 @@ type Busy = "install" | "remove" | null;
       margin-bottom: 6px;
       padding: 10px 12px;
       width: min(480px, 90vw);
-      background: var(--panel);
-      border: 1px solid var(--line);
+      /* The status bar does not wrap its text; the panel does. */
+      white-space: normal;
+      background: var(--h-surface-overlay);
+      border: 1px solid var(--h-border-panel);
       border-radius: 6px;
-      color: var(--text);
+      color: var(--h-text-color);
       user-select: text;
     }
     .actions {
@@ -179,15 +61,15 @@ type Busy = "install" | "remove" | null;
       margin: 6px 0;
     }
     .note {
-      font-size: 0.85rem;
-      color: var(--muted);
+      font-size: var(--h-font-size-sm);
+      color: var(--h-text-muted-color);
     }
     .path,
     .line {
       overflow-wrap: anywhere;
     }
     .err {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })

@@ -23,3 +23,8 @@ Rules:
 ## Delegation
 
 - `claude_code/large_context_no_subagents.jsonl`: one session (`deleg-1`, whose id the test sees as the file name) with 20 main-agent requests of `claude-test-1`, each with more than 200,000 tokens of input, and no subagent request. Not part of the output-contract home; the Delegation tests lay it out themselves.
+
+## Cache expiry
+
+- `claude_code/cache_expiry.jsonl`: one session (`cache-1`) of `claude-opus-4-8` with three requests and no 1-hour cache write: the second follows after 2 minutes and reads the cache, the third after a pause of 30 minutes and writes 20,500 tokens again. Part of the output-contract home.
+- `claude_code/cache_1h.jsonl`: one session (`cache-1h`) whose first request reports `cache_creation.ephemeral_1h_input_tokens` (18,000 of its 20,000 written tokens); the second request, 30 minutes later, carries no split. Only the adapter test reads it.

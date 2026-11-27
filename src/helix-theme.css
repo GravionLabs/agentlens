@@ -1,0 +1,12 @@
+/*
+ * The AgentLens adjustments of the helix tokens: shape and type only. Colors are the Helix default
+ * palette (decided in #557), light and dark by the `app-dark` class that HelixDark sets.
+ *
+ * Loaded after tokens.css and the helix style sheets (angular.json). `:root:root` has the specificity
+ * of helix's `:root.app-dark` / `:root[class*="app-dark"]` rules and wins by coming later.
+ */
+:root:root {
+  --h-border-radius-md: 6px;
+  --h-form-field-shadow: none;
+  --helix-font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}

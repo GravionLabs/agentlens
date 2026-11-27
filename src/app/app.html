@@ -1,0 +1,32 @@
+@if (loading.busy()) {
+  <div class="progress" role="progressbar" aria-label="Reading sessions"></div>
+}
+<helix-app-layout
+  appTitle="AgentLens"
+  brandIcon="favicon.svg"
+  [navGroups]="navGroups"
+  [pageTitle]="pageTitle()"
+  [topbarActions]="topbarActions(filterBarAction, refreshAction)"
+  statusBarBrand="AgentLens"
+  [statusBarNote]="note"
+  [statusBarVersions]="versions()"
+>
+  <app-status-bar hxStatusBarEnd />
+</helix-app-layout>
+<ng-template #filterBarAction>
+  <app-filter-bar />
+</ng-template>
+<ng-template #refreshAction>
+  <button
+    hx-button
+    class="refresh"
+    type="button"
+    variant="text"
+    size="small"
+    [disabled]="loading.busy()"
+    (click)="refresh()"
+  >
+    <i [class]="loading.busy() ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'" aria-hidden="true"></i>
+    {{ loading.busy() ? "Refreshing…" : "Refresh" }}
+  </button>
+</ng-template>

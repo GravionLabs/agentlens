@@ -1,0 +1,64 @@
+{
+  "delivery": [
+    "deliver",
+    "grill-me",
+    "planner",
+    "retro",
+    "skills-install"
+  ],
+  "dotnet": [
+    "dotnet-create-solution",
+    "dotnet-implementation",
+    "dotnet-mcp-server-generator",
+    "dotnet-test"
+  ],
+  "github": [
+    "github-issue",
+    "github-pull-request",
+    "github-release"
+  ],
+  "go": [
+    "go-implementation",
+    "go-test"
+  ],
+  "ng": [
+    "ng-ag-grid-developer",
+    "ng-create-project",
+    "ng-implementation",
+    "ng-test"
+  ],
+  "py": [
+    "py-create-project",
+    "py-implementation",
+    "py-test"
+  ],
+  "rust": [
+    "rust-implementation",
+    "rust-test"
+  ],
+  "shared": [
+    "check-prerequisites",
+    "code-review",
+    "detect-techstack",
+    "diagnose",
+    "implementation",
+    "lessons"
+  ],
+  "skill-tooling": [
+    "skill-audit",
+    "skill-slim",
+    "skill-write"
+  ],
+  "statusline": [
+    "context-statusline"
+  ],
+  "ts": [
+    "setup-biome-husky",
+    "setup-prettier-eslint-husky",
+    "ts-create-project",
+    "ts-implementation",
+    "ts-mcp-server-generator",
+    "ts-pnpm-workflow",
+    "ts-test"
+  ]
+}
