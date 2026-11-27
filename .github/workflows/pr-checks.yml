@@ -15,4 +15,4 @@ jobs:
       contents: read
       issues: read
       pull-requests: read
-    uses: GravionLabs/ci/.github/workflows/pr-checks.yml@main
+    uses: GravionLabs/ci/.github/workflows/pr-checks.yml@v1
