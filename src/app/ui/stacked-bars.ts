@@ -31,12 +31,12 @@ export interface BarRow {
       height: auto;
     }
     text {
-      fill: var(--muted);
-      font-size: 13px;
+      fill: var(--h-text-muted-color);
+      font-size: var(--h-font-size-sm);
       font-family: inherit;
     }
     .lbl {
-      fill: var(--text);
+      fill: var(--h-text-color);
     }
   `,
 })

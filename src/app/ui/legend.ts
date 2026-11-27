@@ -15,8 +15,8 @@ export interface LegendItem {
       flex-wrap: wrap;
       gap: 6px 16px;
       margin: 8px 0;
-      color: var(--muted);
-      font-size: 0.85rem;
+      color: var(--h-text-muted-color);
+      font-size: var(--h-font-size-sm);
     }
     i {
       display: inline-block;

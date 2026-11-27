@@ -104,7 +104,7 @@ export function skillView(s: SkillStats): SkillView {
   styles: `
     h3 {
       margin: 20px 0 4px;
-      font-size: 1.05rem;
+      font-size: var(--h-font-size-md);
     }
     .toggle {
       margin: var(--h-space-1) var(--h-space-4) var(--h-space-2) 0;
@@ -113,19 +113,19 @@ export function skillView(s: SkillStats): SkillView {
       white-space: nowrap;
     }
     .est {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
     .change {
       font-variant-numeric: tabular-nums;
     }
     .change.good {
-      color: var(--good);
+      color: var(--h-tag-success-color);
     }
     .change.bad {
-      color: var(--bad);
+      color: var(--h-tag-danger-color);
     }
     :host ::ng-deep tr.unused td {
-      color: var(--muted);
+      color: var(--h-text-muted-color);
     }
   `,
 })

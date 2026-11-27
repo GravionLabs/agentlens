@@ -23,7 +23,7 @@ import { GLOSSARY_GROUPS, searchGlossary } from "../../core/glossary";
     }
     h3 {
       margin: 18px 0 6px;
-      font-size: 1.05rem;
+      font-size: var(--h-font-size-md);
     }
     dl {
       margin: 0;
@@ -32,14 +32,14 @@ import { GLOSSARY_GROUPS, searchGlossary } from "../../core/glossary";
       gap: 8px;
     }
     .entry {
-      background: var(--panel);
-      border: 1px solid var(--line);
+      background: var(--h-surface-card);
+      border: 1px solid var(--h-border-panel);
       border-radius: 8px;
       padding: 8px 12px;
       scroll-margin-top: 12px;
     }
     .entry.target {
-      border-color: var(--accent);
+      border-color: var(--h-primary-color);
     }
     dt {
       font-weight: 650;
@@ -49,7 +49,7 @@ import { GLOSSARY_GROUPS, searchGlossary } from "../../core/glossary";
       display: flex;
       flex-direction: column;
       gap: 2px;
-      font-size: 0.9rem;
+      font-size: var(--h-font-size-sm);
     }
   `,
 })

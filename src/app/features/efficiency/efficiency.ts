@@ -80,7 +80,7 @@ export function subagentView(s: SubagentShare): SubagentView {
   styles: `
     h3 {
       margin: 20px 0 6px;
-      font-size: 1.05rem;
+      font-size: var(--h-font-size-md);
     }
     .by {
       width: fit-content;

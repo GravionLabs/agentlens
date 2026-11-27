@@ -16,9 +16,9 @@ export function termTitle(term: string): string | undefined {
   styles: `
     .help {
       margin-left: 4px;
-      font-size: 0.7rem;
-      color: var(--muted);
-      border: 1px solid var(--line);
+      font-size: var(--h-font-size-xs);
+      color: var(--h-text-muted-color);
+      border: 1px solid var(--h-border-panel);
       border-radius: 50%;
       width: 14px;
       height: 14px;
@@ -29,8 +29,8 @@ export function termTitle(term: string): string | undefined {
       vertical-align: middle;
     }
     .help:hover {
-      color: var(--accent);
-      border-color: var(--accent);
+      color: var(--h-primary-color);
+      border-color: var(--h-primary-color);
     }
   `,
 })

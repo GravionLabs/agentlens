@@ -68,18 +68,18 @@ import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../c
       z-index: 998;
       margin: 0;
       padding: 4px 8px;
-      background: var(--panel);
-      border: 1px solid var(--line);
+      background: var(--h-surface-overlay);
+      border: 1px solid var(--h-border-panel);
       border-radius: 4px;
-      color: var(--danger, #b00020);
-      font-size: 0.85rem;
+      color: var(--h-tag-danger-color);
+      font-size: var(--h-font-size-sm);
     }
     .compare {
       display: inline-flex;
       flex: 0 0 auto;
       align-items: center;
       gap: 6px;
-      font-size: 0.85rem;
+      font-size: var(--h-font-size-sm);
       white-space: nowrap;
     }
     /* The fields keep their labels for assistive technology; the header has no room to show them. */

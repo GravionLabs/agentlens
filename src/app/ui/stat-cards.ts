@@ -36,20 +36,20 @@ export function trendStat(
   styles: `
     .delta {
       margin: 2px 8px 0;
-      font-size: 0.85rem;
+      font-size: var(--h-font-size-sm);
       font-variant-numeric: tabular-nums;
-      color: var(--muted);
+      color: var(--h-text-muted-color);
     }
     .delta.good {
-      color: var(--good);
+      color: var(--h-tag-success-color);
     }
     .delta.bad {
-      color: var(--bad);
+      color: var(--h-tag-danger-color);
     }
     .note {
       margin: 0 0 8px;
-      font-size: 0.85rem;
-      color: var(--muted);
+      font-size: var(--h-font-size-sm);
+      color: var(--h-text-muted-color);
     }
     .cards {
       display: grid;

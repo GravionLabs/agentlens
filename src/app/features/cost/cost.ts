@@ -150,7 +150,7 @@ export function money(r: CostRow): string {
   styles: `
     h3 {
       margin: 20px 0 6px;
-      font-size: 1.05rem;
+      font-size: var(--h-font-size-md);
     }
     .controls {
       display: flex;
@@ -172,13 +172,13 @@ export function money(r: CostRow): string {
       padding: 0;
     }
     .warning {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
     .total {
       margin: 10px 0;
     }
     .est {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })

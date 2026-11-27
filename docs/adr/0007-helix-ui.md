@@ -47,6 +47,10 @@ Charts:
   - The shell itself is helix `HelixAppLayout`, with the navigation grouped Data, Optimize and Analyze (`app.ts`).
 - Dependencies added: `@gravionlabs/helix-ui`, `@gravionlabs/helix-shell` and `@angular/cdk` (peer). `chart.js` is an optional peer of helix-ui, used only by its secondary entry point `@gravionlabs/helix-ui/chart`; it was added for the spikes and removed again in #413. pnpm still resolves it in `pnpm-lock.yaml` as an optional peer of helix-ui, but it is not a dependency of the application and not part of any chunk.
 
+## Amendment: Helix default palette (#557)
+
+Owner decision of 2026-11-27: the application adopts the Helix default palette. The AgentLens tokens (`--bg`, `--panel`, `--accent`, …) and the theme derived from them, named above and under *Dark mode*, are removed: components read Helix tokens, `src/helix-theme.css` overrides shape and type only, and the only literal colors are the chart series in `src/styles/chart-colors.css`. Dark mode follows the `app-dark` class that `helix-dark.ts` sets.
+
 ## Bundle size
 
 Production `pnpm build`, gzip is `gzip -9` of the `main-*.js` chunk, initial transfer is the "Estimated transfer size" of the initial total that the Angular build prints. All rows were measured on 2026-10-14 in clean git worktrees with `pnpm install --frozen-lockfile`.

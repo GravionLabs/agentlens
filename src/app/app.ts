@@ -45,7 +45,7 @@ const toNavItem = (item: NavItem) => ({ label: item.label, routerLink: `/${item.
       height: 3px;
       z-index: 1000;
       overflow: hidden;
-      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      background: color-mix(in srgb, var(--h-primary-color) 20%, transparent);
       /* Short loads stay quiet: the bar only appears after a moment. */
       opacity: 0;
       animation: appear 0s 200ms forwards;
@@ -55,7 +55,7 @@ const toNavItem = (item: NavItem) => ({ label: item.label, routerLink: `/${item.
       display: block;
       width: 35%;
       height: 100%;
-      background: var(--accent);
+      background: var(--h-primary-color);
       animation: slide 1.1s ease-in-out infinite;
     }
     @keyframes appear {
