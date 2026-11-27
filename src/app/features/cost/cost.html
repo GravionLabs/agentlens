@@ -89,7 +89,8 @@
     [sortOrder]="-1"
     [paginator]="views().length > 50"
     [rows]="50"
-    emptyMessage="No usage found."
+    [loading]="res.isLoading()"
+    [emptyMessage]="emptyMessage()"
     ariaLabel="Cost"
   >
     <ng-template hxCell="key" let-row>
@@ -109,7 +110,8 @@
   </hx-data-table>
   @if (total(); as t) {
     <p class="total">
-      <strong>Total</strong>: {{ n(t.requests) }} requests, {{ money(t) }}
+      <strong>Total</strong>: {{ n(t.requests) }} requests,
+      <span [class.est]="t.estimated_usd > 0 && t.measured_usd === 0">{{ money(t) }}</span>
       @if (t.premium_requests > 0) {
         , {{ t.premium_requests }} premium requests
       }
@@ -126,12 +128,19 @@
     <hx-data-table
       [value]="whatIfRows()"
       [columns]="whatIfColumns"
+      [sortFunction]="sort"
       emptyMessage="Nothing to compare."
       [ariaLabel]="'What if everything ran on ' + w.target"
     >
-      <ng-template hxCell="actual_usd" let-value="value">{{ usd(value, true) }}</ng-template>
-      <ng-template hxCell="what_if_usd" let-value="value">{{ usd(value, true) }}</ng-template>
-      <ng-template hxCell="diff" let-value="value">{{ signedUsd(value) }}</ng-template>
+      <ng-template hxCell="actual_usd" let-value="value">
+        <span [class.est]="value !== null">{{ usd(value, true) }}</span>
+      </ng-template>
+      <ng-template hxCell="what_if_usd" let-value="value">
+        <span [class.est]="value !== null">{{ usd(value, true) }}</span>
+      </ng-template>
+      <ng-template hxCell="diff" let-value="value">
+        <span [class.est]="value !== null">{{ signedUsd(value, true) }}</span>
+      </ng-template>
     </hx-data-table>
     <p class="muted">
       Same tokens priced with the prices of {{ w.target }}. “Excluded” requests have no actual price

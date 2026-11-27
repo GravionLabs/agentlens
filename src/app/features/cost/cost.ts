@@ -15,6 +15,7 @@ import { WithoutService } from "../../core/without.service";
 import { exactTokens, number, pathLabel, tokens, usd } from "../../core/format";
 import type { CostData, CostRow, WhatIfRow, WithoutReport } from "../../core/types";
 import { trendStat } from "../../ui/stat-cards";
+import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
 import { TrendCards } from "../../ui/trend-cards";
 import {
@@ -56,12 +57,18 @@ export function costView(r: CostRow): CostView {
   };
 }
 
-/** A what-if row with the difference computed, so the table can sort it. */
-export interface WhatIfView extends WhatIfRow {
-  diff: number;
+/**
+ * A what-if row with the difference computed, so the table can sort it. A row whose requests are
+ * all excluded has no prices (`null`, n/a), not a price of zero.
+ */
+export interface WhatIfView extends Omit<WhatIfRow, "actual_usd" | "what_if_usd"> {
+  actual_usd: number | null;
+  what_if_usd: number | null;
+  diff: number | null;
 }
 
 export function whatIfView(r: WhatIfRow): WhatIfView {
+  if (r.requests === 0) return { ...r, actual_usd: null, what_if_usd: null, diff: null };
   return { ...r, diff: r.what_if_usd - r.actual_usd };
 }
 
@@ -103,9 +110,10 @@ export function withoutViews(w: WithoutReport): WithoutView[] {
   ];
 }
 
-/** `+$1.20` or `-$0.40`. */
-export function signedUsd(d: number): string {
-  return `${d < 0 ? "-" : "+"}${usd(Math.abs(d))}`;
+/** `+$1.20` or `-$0.40`, with a tilde for an estimate (`-~$0.40`); `n/a` without a value. */
+export function signedUsd(d: number | null, estimated = false): string {
+  if (d === null) return usd(d);
+  return `${d < 0 ? "-" : "+"}${usd(Math.abs(d), estimated)}`;
 }
 
 export type By = "model" | "project" | "branch" | "issue";
@@ -235,13 +243,25 @@ export class Cost {
   });
 
   protected readonly rows = computed(() => this.answer()?.data.report.rows ?? []);
-  protected readonly total = computed(() => this.answer()?.data.report.total ?? null);
+  /** No total without rows: the empty table already says that there is no usage. */
+  protected readonly total = computed(() =>
+    this.rows().length > 0 ? (this.answer()?.data.report.total ?? null) : null,
+  );
+  /**
+   * What the empty row of the table says: while loading and after a failure it does not claim that
+   * there is no usage.
+   */
+  protected readonly emptyMessage = computed(() => {
+    if (this.res.isLoading()) return "Loading cost…";
+    if (this.res.error()) return "Cost could not be loaded. Use Refresh to try again.";
+    return "No usage found. Choose a longer period or other filters.";
+  });
   protected readonly unpriced = computed(() =>
     Object.entries(this.answer()?.data.report.unpriced_models ?? {}).map(([m, n]) => `${m} (${n})`),
   );
   protected readonly whatIfRows = computed(() => {
     const w = this.answer()?.data.what_if;
-    return w ? [...w.rows, w.total].map(whatIfView) : [];
+    return w ? [...w.rows, { ...w.total, model: "Total" }].map(whatIfView) : [];
   });
 
   protected readonly withoutRows = computed(() => {
@@ -268,6 +288,7 @@ export class Cost {
 
   protected readonly usd = usd;
   protected readonly signedUsd = signedUsd;
+  protected readonly sort = nullsLast;
 
   protected readonly withoutColumns: HxColumn[] = [
     { field: "item", header: "Item" },
