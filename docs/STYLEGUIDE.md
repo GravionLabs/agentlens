@@ -42,6 +42,10 @@ The data rule is in [AGENTS.md](../AGENTS.md#rules) (*Measured vs. estimated*); 
 
 - The *What if* form of the cost view (`src/app/features/cost/cost.html`) is the reference form: copy its structure for a new form. It is a single narrow column of `hx-field`s with a text *Clear* next to the submit button, and an entry that the core rejects shows its error below the field.
 
+## Lint
+
+`pnpm lint` and CI enforce the base guide with the Helix lint preset: no raw control in a template, no literal color, font sizes from the type scale, no component CSS for a native control or a `.btn*` class. An exception is an entry with a reason in `scripts/lint/helix-allow.json`: one entry per file and rule, listed under Deviations when it departs from the base guide. See `AGENTS.md`, Lint and format.
+
 ## Deviations
 
 | Base rule | This project | Reason |
@@ -53,3 +57,4 @@ The data rule is in [AGENTS.md](../AGENTS.md#rules) (*Measured vs. estimated*); 
 | STYLEGUIDE.md, Components: a form control sits in an `hx-field` with a `label` | The filter bar has `<label for>` elements that are hidden visually; the comparison switch has a visible label | The page header has no room to show the labels |
 | STYLEGUIDE.md, Tokens: change a look by a token, never the CSS of a Helix component | `src/styles.css` has rules for the shell's top bar, status bar and narrow-window nav rail | The filter bar needs the free width, the command line tools panel would be clipped, and helix-shell 22.10.0 leaves a strip of the closed rail visible |
 | STYLEGUIDE.md, Tokens: light and dark are set through `provideHxTheme` and `HxTheme` | `data-theme` and `prefers-color-scheme` drive the mode; `HelixDark` (`src/app/ui/helix-dark.ts`) passes it to Helix | The application follows the system and has no theme setting ([ADR 0007](adr/0007-helix-ui.md)) |
+| STYLEGUIDE.md, Tokens: component CSS styles no native control | The status bar sets `:host ::ng-deep button { height: 24px; }` (`scripts/lint/helix-allow.json`) | The bar of the shell is 28px high and the buttons must stay inside it |

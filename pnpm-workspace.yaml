@@ -6,3 +6,4 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - "@gravionlabs/helix-shell@22.10.0"
   - "@gravionlabs/helix-ui@22.10.0"
+  - "@gravionlabs/helix-lint@22.10.0"

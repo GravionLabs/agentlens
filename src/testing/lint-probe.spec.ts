@@ -1,5 +1,9 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { ESLint } from "eslint";
+import { helixAllow as eslintAllow } from "@gravionlabs/helix-lint/eslint";
+import { helixAllow as stylelintAllow } from "@gravionlabs/helix-lint/stylelint";
+import stylelint from "stylelint";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -55,8 +59,47 @@ describe("lint probe", () => {
         "@angular-eslint/template/alt-text",
         "@angular-eslint/template/click-events-have-key-events",
         "@angular-eslint/template/interactive-supports-focus",
+        // The raw <button> of the probe (#559).
+        "helix/no-raw-control",
       ]);
     },
     TIMEOUT,
   );
+
+  it(
+    "Stylelint reports the hex color, the off-scale font size, the styled native control and the .btn class in the stylesheet and the inline styles (#559)",
+    async () => {
+      const { results } = await stylelint.lint({ files: `${PROBE}/*.{css,ts}`, ignorePath: [] });
+      const reported = results.flatMap((r) =>
+        r.warnings.map((w) => `${r.source?.replace(/^.*\//, "")} ${w.rule}`),
+      );
+      expect(reported.sort()).toEqual([
+        "probe.component.css color-no-hex",
+        "probe.component.css declaration-property-value-allowed-list",
+        "probe.component.css declaration-property-value-disallowed-list",
+        "probe.component.css selector-disallowed-list",
+        "styles-probe.component.ts color-no-hex",
+        "styles-probe.component.ts declaration-property-value-allowed-list",
+        "styles-probe.component.ts declaration-property-value-disallowed-list",
+        "styles-probe.component.ts selector-disallowed-list",
+        "styles-probe.component.ts selector-disallowed-list",
+      ]);
+    },
+    TIMEOUT,
+  );
+
+  it("every allowlist entry names a reason; an entry without one throws (#559)", () => {
+    const allow = JSON.parse(readFileSync("scripts/lint/helix-allow.json", "utf8")) as {
+      eslint: { files: string[]; rules: string[]; reason: string }[];
+      stylelint: { files: string[]; rules: string[]; reason: string }[];
+    };
+    for (const entry of [...allow.eslint, ...allow.stylelint]) {
+      expect(entry.reason.trim().length).toBeGreaterThan(10);
+      // One entry per file: a glob would hide new violations.
+      for (const file of entry.files) expect(file).not.toMatch(/\*/);
+    }
+    const bare = { files: ["src/**"], rules: ["helix/no-raw-control"] };
+    expect(() => eslintAllow(bare)).toThrow(/reason/);
+    expect(() => stylelintAllow(bare)).toThrow(/reason/);
+  });
 });

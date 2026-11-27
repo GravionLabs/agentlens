@@ -23,3 +23,4 @@ site/.vitepress/cache
 !.agents/skills/
 !.agents/config.json
 !.agents/lessons/
+.postcss-angular/

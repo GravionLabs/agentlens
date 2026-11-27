@@ -29,6 +29,7 @@ import {
   HxCell,
   HxColumnHeader,
   HxDataTable,
+  HxInput,
   type HxColumn,
 } from "@gravionlabs/helix-ui";
 
@@ -122,7 +123,17 @@ const COPIED_MS = 2000;
 
 @Component({
   selector: "app-advice",
-  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink, HxButton],
+  imports: [
+    PageHeader,
+    Term,
+    Status,
+    HxDataTable,
+    HxCell,
+    HxColumnHeader,
+    HelpLink,
+    HxButton,
+    HxInput,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./advice.html",
   styles: `
