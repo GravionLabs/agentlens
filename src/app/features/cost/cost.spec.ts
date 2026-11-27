@@ -16,7 +16,7 @@ import { beforeAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 import { Ipc } from "../../core/ipc";
 import { tokenFormat } from "../../core/token-format.service";
 import type { CostRow } from "../../core/types";
-import type { WhatIfReport, WithoutReport } from "../../core/types";
+import type { CostData, WithoutReport } from "../../core/types";
 import { WithoutService } from "../../core/without.service";
 import { Cost, money, signedUsd, whatIfView, withoutViews } from "./cost";
 
@@ -84,7 +84,7 @@ const baseRows = [
 ];
 
 let withoutReport: WithoutReport | null = null;
-let whatIfReport: WhatIfReport | null = null;
+let whatIfReport: CostData["what_if"] = null;
 /** Keeps every request open, for the loading state. */
 let pending = false;
 let lastArgs: Record<string, unknown> = {};
