@@ -9,6 +9,7 @@ import { HelpLink, termTitle } from "../../ui/help-link";
 import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
 import {
+  HxButton,
   HxCell,
   HxColumnHeader,
   HxDataTable,
@@ -61,6 +62,7 @@ export function unusedView(i: UnusedItem): UnusedView {
     PageHeader,
     Term,
     Status,
+    HxButton,
     HxDataTable,
     HxCell,
     HxColumnHeader,
@@ -74,21 +76,11 @@ export function unusedView(i: UnusedItem): UnusedView {
     .toggle {
       margin: var(--h-space-1) var(--h-space-4) var(--h-space-2) 0;
     }
-    .est {
-      color: var(--warn);
-    }
     .what-if {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 2px 8px;
-      cursor: pointer;
       white-space: nowrap;
     }
-    .what-if:disabled {
-      color: var(--muted);
-      cursor: default;
+    .est {
+      color: var(--warn);
     }
   `,
 })

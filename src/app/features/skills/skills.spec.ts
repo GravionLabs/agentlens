@@ -3,7 +3,14 @@ import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
-import { HxCell, HxColumnHeader, HxDataTable, HxField, HxSwitch } from "@gravionlabs/helix-ui";
+import {
+  HxButton,
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  HxField,
+  HxSwitch,
+} from "@gravionlabs/helix-ui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Ipc } from "../../core/ipc";
 import { tokenFormat } from "../../core/token-format.service";
@@ -27,7 +34,7 @@ class FakeIpc extends Ipc {
 async function render() {
   TestBed.overrideComponent(Skills, {
     set: {
-      imports: [HxDataTable, HxCell, HxColumnHeader, HxField, HxSwitch, HelpLinkStub],
+      imports: [HxButton, HxDataTable, HxCell, HxColumnHeader, HxField, HxSwitch, HelpLinkStub],
       schemas: [NO_ERRORS_SCHEMA],
     },
   });
@@ -243,6 +250,7 @@ describe("Skills what-if action", () => {
   it("adds a skill to the what-if list with the row action, once", async () => {
     const { fixture, el } = await render();
     const buttons = () => [...el.querySelectorAll<HTMLButtonElement>("button.what-if")];
+    expect(buttons().every((b) => b.classList.contains("hx-button-text"))).toBe(true);
     expect(buttons().map((b) => b.textContent!.trim())).toEqual([
       "What if removed",
       "What if removed",

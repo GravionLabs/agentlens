@@ -52,8 +52,12 @@
     </ng-template>
     <ng-template hxCell="action" let-row>
       <button
+        hx-button
         type="button"
         class="what-if"
+        variant="text"
+        severity="secondary"
+        size="small"
         [disabled]="without.has(row.kind, row.name)"
         (click)="without.add(row.kind, row.name)"
       >

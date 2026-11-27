@@ -3,7 +3,7 @@ import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
-import { HxCell, HxColumnHeader, HxDataTable } from "@gravionlabs/helix-ui";
+import { HxCell, HxColumnHeader, HxDataTable, HxSelectButton } from "@gravionlabs/helix-ui";
 import { HelpLinkStub } from "../../ui/help-link.testing";
 import { Ipc } from "../../core/ipc";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -105,7 +105,7 @@ class FakeIpc extends Ipc {
 async function render() {
   TestBed.overrideComponent(Context, {
     set: {
-      imports: [HxDataTable, HxCell, HxColumnHeader, HelpLinkStub],
+      imports: [HxDataTable, HxCell, HxColumnHeader, HxSelectButton, HelpLinkStub],
       schemas: [NO_ERRORS_SCHEMA],
     },
   });
@@ -180,6 +180,44 @@ describe("Context table on helix", () => {
     }
     expect(el.querySelector("hx-data-table thead input")).toBeNull();
     expect(column(el, 0)[0]).toBe("Claude Code");
+  });
+
+  const group = (el: HTMLElement, label: string) => [
+    ...el.querySelectorAll<HTMLButtonElement>(`hx-select-button[aria-label="${label}"] button`),
+  ];
+  const pressed = (el: HTMLElement, label: string) =>
+    group(el, label)
+      .filter((b) => b.getAttribute("aria-pressed") === "true")
+      .map((b) => b.textContent!.trim());
+
+  it("switches the kind of context and keeps one option pressed", async () => {
+    payload = {
+      rows: [item("srv", 10, true, 2), { ...item("skills", 20, true, 2), kind: "skill-listing" }],
+      first_request: {},
+      unavailable: {},
+    };
+    const { fixture, el } = await render();
+    expect(pressed(el, "Kind of context")).toEqual(["All"]);
+    expect(column(el, 2)).toEqual(["skills", "srv"]);
+    const skills = group(el, "Kind of context").find((b) => b.textContent!.trim() === "Skills")!;
+    skills.click();
+    fixture.detectChanges();
+    expect(column(el, 2)).toEqual(["skills"]);
+    skills.click();
+    fixture.detectChanges();
+    expect(pressed(el, "Kind of context")).toEqual(["Skills"]);
+    expect(column(el, 2)).toEqual(["skills"]);
+  });
+
+  it("switches the grouping, adding the project column", async () => {
+    const { fixture, el } = await render();
+    const head = () => el.querySelector("hx-data-table thead")!.textContent!;
+    expect(pressed(el, "Grouping")).toEqual(["By owner"]);
+    expect(head()).not.toContain("Project");
+    group(el, "Grouping")[1].click();
+    fixture.detectChanges();
+    expect(pressed(el, "Grouping")).toEqual(["By project"]);
+    expect(head()).toContain("Project");
   });
 
   it("says so when there is nothing to show", async () => {
