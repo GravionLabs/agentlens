@@ -1,6 +1,6 @@
 import { PageHeader } from "../../ui/page-header";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { answerOf, analysis } from "../../core/analysis";
 import {
   exactTokens,
   number,
@@ -95,6 +95,7 @@ export function errorRate(t: ToolErrors): number | null {
 })
 export class Flow {
   protected readonly res = analysis<FlowData>("flow");
+  protected readonly answer = computed(() => answerOf(this.res));
   protected readonly tab = signal<Tab>("growth");
   protected readonly tabs = TABS;
 
@@ -115,16 +116,16 @@ export class Flow {
   protected readonly tip = exactTokens;
 
   protected readonly growth = computed(() =>
-    (this.res.value()?.data.growth.sessions ?? []).map(growthView),
+    (answerOf(this.res)?.data.growth.sessions ?? []).map(growthView),
   );
   protected readonly errors = computed(() =>
-    (this.res.value()?.data.errors.tools ?? []).map(errorView),
+    (answerOf(this.res)?.data.errors.tools ?? []).map(errorView),
   );
-  protected readonly loops = computed(() => this.res.value()?.data.errors.loops ?? []);
-  protected readonly hooks = computed(() => this.res.value()?.data.hooks.hooks ?? []);
-  protected readonly permissions = computed(() => this.res.value()?.data.hooks.permissions ?? []);
+  protected readonly loops = computed(() => answerOf(this.res)?.data.errors.loops ?? []);
+  protected readonly hooks = computed(() => answerOf(this.res)?.data.hooks.hooks ?? []);
+  protected readonly permissions = computed(() => answerOf(this.res)?.data.hooks.permissions ?? []);
   protected readonly unavailable = computed(() =>
-    Object.entries(this.res.value()?.data.hooks.unavailable ?? {}).map(
+    Object.entries(answerOf(this.res)?.data.hooks.unavailable ?? {}).map(
       ([s, n]) =>
         `${sourceLabel(s)}: not available, the client records neither hooks nor permission prompts (${n} sessions).`,
     ),

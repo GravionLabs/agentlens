@@ -1,7 +1,7 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { answerOf, analysis } from "../../core/analysis";
 import { WithoutService } from "../../core/without.service";
 import { exactTokens, number, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { UnusedItem, UnusedReport } from "../../core/types";
@@ -86,11 +86,12 @@ export function unusedView(i: UnusedItem): UnusedView {
 })
 export class Unused {
   protected readonly res = analysis<UnusedReport>("unused");
+  protected readonly answer = computed(() => answerOf(this.res));
   protected readonly all = signal(false);
   protected readonly without = inject(WithoutService);
 
   protected readonly rows = computed(() =>
-    (this.res.value()?.data.items ?? []).filter((i) => this.all() || i.uses === 0),
+    (answerOf(this.res)?.data.items ?? []).filter((i) => this.all() || i.uses === 0),
   );
 
   protected readonly views = computed(() => this.rows().map(unusedView));

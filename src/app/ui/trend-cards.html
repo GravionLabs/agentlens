@@ -1,4 +1,10 @@
 <section aria-label="Change against the previous period">
-  <app-status [loading]="loading()" [error]="error()" [warnings]="0" [errors]="[]" />
+  <app-status
+    [loading]="loading()"
+    [error]="error()"
+    [warnings]="0"
+    [errors]="[]"
+    (retry)="retry.emit()"
+  />
   <app-stat-cards [stats]="stats()" [note]="note()" />
 </section>

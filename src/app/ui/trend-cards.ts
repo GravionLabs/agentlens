@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from "@angular/core";
+import { ChangeDetectionStrategy, Component, input, output } from "@angular/core";
 import { Status } from "./status";
 import { type Stat, StatCards } from "./stat-cards";
 
@@ -14,4 +14,5 @@ export class TrendCards {
   readonly note = input("");
   readonly loading = input(false);
   readonly error = input<unknown>(undefined);
+  readonly retry = output<void>();
 }

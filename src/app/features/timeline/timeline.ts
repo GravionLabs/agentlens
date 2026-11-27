@@ -1,7 +1,7 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { answerOf, analysis } from "../../core/analysis";
 import { compact, day, number, sourceLabel, timeOfDay, usd } from "../../core/format";
 import type { SessionSummary, Timeline as TimelineData } from "../../core/types";
 import { Legend } from "../../ui/legend";
@@ -108,7 +108,8 @@ const MARKER_LEGEND = [
 })
 export class Timeline {
   protected readonly list = analysis<SessionSummary[]>("sessions");
-  protected readonly sessions = computed(() => this.list.value()?.data ?? []);
+  protected readonly listed = computed(() => answerOf(this.list));
+  protected readonly sessions = computed(() => answerOf(this.list)?.data ?? []);
   private readonly picked = signal<string | null>(null);
 
   /** The chosen session, or the newest one. */
@@ -129,7 +130,7 @@ export class Timeline {
   );
 
   protected readonly timeline = computed(() =>
-    this.current() ? (this.res.value()?.data ?? null) : null,
+    this.current() ? (answerOf(this.res)?.data ?? null) : null,
   );
   private readonly scale = computed(() => scales(this.timeline()?.points ?? []));
 

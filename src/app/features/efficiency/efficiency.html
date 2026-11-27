@@ -19,8 +19,9 @@
   <app-status
     [loading]="res.isLoading()"
     [error]="res.error()"
-    [warnings]="res.value()?.warnings ?? 0"
-    [errors]="res.value()?.errors ?? []"
+    [warnings]="answer()?.warnings ?? 0"
+    [errors]="answer()?.errors ?? []"
+    (retry)="res.reload()"
   />
   @if (compare()) {
     <app-trend-cards
@@ -28,6 +29,7 @@
       [note]="note()"
       [loading]="trend.isLoading()"
       [error]="trend.error()"
+      (retry)="trend.reload()"
     />
   }
   <hx-data-table

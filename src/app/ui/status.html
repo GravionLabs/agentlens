@@ -4,7 +4,20 @@
   </hx-message>
 }
 @if (failure(); as message) {
-  <hx-message severity="error" variant="simple" size="small">{{ message }}</hx-message>
+  <hx-message severity="error" variant="simple" size="small">
+    {{ message }}
+    <button
+      hx-button
+      class="retry"
+      type="button"
+      variant="text"
+      severity="secondary"
+      size="small"
+      (click)="retry.emit()"
+    >
+      Try again
+    </button>
+  </hx-message>
 }
 @if (warnings() > 0) {
   <hx-message severity="warn" variant="simple" size="small"

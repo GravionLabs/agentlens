@@ -11,7 +11,7 @@ import {
   Injector,
   signal,
 } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { answerOf, analysis } from "../../core/analysis";
 import { exactTokens, number, percent, tokens, usd } from "../../core/format";
 import type {
   AdviceItem,
@@ -199,7 +199,8 @@ const COPIED_MS = 2000;
 })
 export class Advice {
   protected readonly res = analysis<AdviceReport>("advice");
-  protected readonly report = computed(() => this.res.value()?.data ?? null);
+  protected readonly answer = computed(() => answerOf(this.res));
+  protected readonly report = computed(() => answerOf(this.res)?.data ?? null);
   protected readonly tipsRes = analysis<TipsReport>("tips");
   protected readonly tipsReport = computed(() =>
     this.tipsRes.hasValue() ? this.tipsRes.value().data : null,

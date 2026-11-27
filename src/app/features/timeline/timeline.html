@@ -8,7 +8,8 @@
   <app-status
     [loading]="list.isLoading()"
     [error]="list.error()"
-    [errors]="list.value()?.errors ?? []"
+    [errors]="listed()?.errors ?? []"
+    (retry)="list.reload()"
   />
   @if (sessions().length > 0) {
     <div class="pick">
@@ -28,7 +29,7 @@
     <p class="muted">No sessions with requests for the selected filters.</p>
   }
 
-  <app-status [loading]="res.isLoading()" [error]="res.error()" />
+  <app-status [loading]="res.isLoading()" [error]="res.error()" (retry)="res.reload()" />
   @if (timeline(); as t) {
     <p class="meta">
       {{ label(t.session.source) }} · {{ t.session.model ?? "unknown model" }} ·

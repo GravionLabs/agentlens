@@ -1,7 +1,7 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
-import { analysis, trendAnalysis } from "../../core/analysis";
+import { answerOf, analysis, trendAnalysis } from "../../core/analysis";
 import { type DeltaView, deltaView, sumDeltas, trendNote } from "../../core/delta";
 import { FiltersService } from "../../core/filters.service";
 import { WithoutService } from "../../core/without.service";
@@ -131,10 +131,11 @@ export function skillView(s: SkillStats): SkillView {
 })
 export class Skills {
   protected readonly res = analysis<SkillsData>("skills");
+  protected readonly answer = computed(() => answerOf(this.res));
   protected readonly usedOnly = signal(false);
   protected readonly without = inject(WithoutService);
 
-  private readonly all = computed(() => this.res.value()?.data.report.skills ?? []);
+  private readonly all = computed(() => answerOf(this.res)?.data.report.skills ?? []);
 
   protected readonly rows = computed(() =>
     this.usedOnly() ? this.all().filter((s) => s.invocations > 0) : this.all(),
@@ -147,7 +148,7 @@ export class Skills {
   ];
 
   protected readonly stats = computed(() => {
-    const data = this.res.value()?.data;
+    const data = answerOf(this.res)?.data;
     const skills = this.all();
     const used = skills.filter((s) => s.invocations > 0);
     const idleBaseline = skills
@@ -202,11 +203,11 @@ export class Skills {
   protected readonly compare = inject(FiltersService).compare;
   protected readonly trend = trendAnalysis();
   protected readonly note = computed(() => {
-    const w = this.trend.value()?.data.windows;
+    const w = answerOf(this.trend)?.data.windows;
     return w ? trendNote(w) : "";
   });
   protected readonly trendStats = computed(() => {
-    const t = this.trend.value()?.data;
+    const t = answerOf(this.trend)?.data;
     if (!t) return [];
     const perDay = t.windows.normalized;
     return [
@@ -234,7 +235,7 @@ export class Skills {
   });
 
   protected readonly views = computed(() => {
-    const t = this.compare() ? this.trend.value()?.data : undefined;
+    const t = this.compare() ? answerOf(this.trend)?.data : undefined;
     const byName = new Map(t?.skills.map((s) => [s.name, s]));
     return this.rows().map((s) => {
       const view = skillView(s);

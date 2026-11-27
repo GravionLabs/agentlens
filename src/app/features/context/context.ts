@@ -1,7 +1,7 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
-import { analysis } from "../../core/analysis";
+import { answerOf, analysis } from "../../core/analysis";
 import { exactTokens, number, pathLabel, shortPath, sourceLabel, tokens } from "../../core/format";
 import type { ContextKind, ContextReport, ContextRow, Tokens } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
@@ -145,6 +145,7 @@ export function inView(kind: ContextKind, view: View): boolean {
 })
 export class Context {
   protected readonly res = analysis<ContextReport>("context");
+  protected readonly answer = computed(() => answerOf(this.res));
   protected readonly view = signal<View>("all");
   protected readonly views = VIEWS;
 
@@ -168,12 +169,12 @@ export class Context {
   }
 
   protected readonly rows = computed(() => {
-    const shown = (this.res.value()?.data.rows ?? []).filter((r) => inView(r.kind, this.view()));
+    const shown = (answerOf(this.res)?.data.rows ?? []).filter((r) => inView(r.kind, this.view()));
     return (this.grouping() === "owner" ? byOwner(shown) : shown).map(contextView);
   });
 
   protected readonly notes = computed(() => {
-    const d = this.res.value()?.data;
+    const d = answerOf(this.res)?.data;
     if (!d) return [];
     const out: Note[] = [];
     for (const [source, f] of Object.entries(d.first_request)) {
