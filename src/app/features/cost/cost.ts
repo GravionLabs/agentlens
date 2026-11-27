@@ -1,7 +1,14 @@
 import { PageHeader } from "../../ui/page-header";
 import { Term } from "../../ui/term";
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
-import { analysis, trendAnalysis } from "../../core/analysis";
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from "@angular/core";
+import { analysis, messageOf, trendAnalysis } from "../../core/analysis";
 import { trendNote } from "../../core/delta";
 import { FiltersService } from "../../core/filters.service";
 import { WithoutService } from "../../core/without.service";
@@ -10,7 +17,16 @@ import type { CostData, CostRow, WhatIfRow, WithoutReport } from "../../core/typ
 import { trendStat } from "../../ui/stat-cards";
 import { Status } from "../../ui/status";
 import { TrendCards } from "../../ui/trend-cards";
-import { HxCell, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxButton,
+  HxCell,
+  HxChip,
+  HxDataTable,
+  HxField,
+  HxInput,
+  HxSelect,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 /** A cost row prepared for the helix table: sortable raw values next to the display text. */
 export interface CostView {
@@ -101,6 +117,9 @@ const GROUPS: { id: By; label: string }[] = [
   { id: "issue", label: "Issue" },
 ];
 
+/** How the core starts the error of a what-if model it cannot price. */
+const WHAT_IF_ERROR = "no price for the what-if model";
+
 /** `$1.50`, `~$1.50` for computed values, `$1.50 + ~$2.00` for a mix, `unpriced` without any price. */
 export function money(r: CostRow): string {
   const measured = r.measured_usd > 0;
@@ -113,7 +132,19 @@ export function money(r: CostRow): string {
 
 @Component({
   selector: "app-cost",
-  imports: [PageHeader, Term, Status, TrendCards, HxDataTable, HxCell],
+  imports: [
+    PageHeader,
+    Term,
+    Status,
+    TrendCards,
+    HxButton,
+    HxCell,
+    HxChip,
+    HxDataTable,
+    HxField,
+    HxInput,
+    HxSelect,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./cost.html",
   styles: `
@@ -123,62 +154,22 @@ export function money(r: CostRow): string {
     }
     .controls {
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      align-items: end;
-      margin: 12px 0;
-    }
-    label {
-      display: flex;
       flex-direction: column;
-      gap: 2px;
-      color: var(--muted);
-      font-size: 0.85rem;
+      gap: var(--h-space-4);
+      max-width: 28rem;
+      margin: var(--h-space-3) 0;
     }
-    select,
-    input {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 5px 8px;
-      min-width: 200px;
-    }
-    button {
-      background: var(--accent);
-      color: #fff;
-      border: 0;
-      border-radius: 6px;
-      padding: 6px 14px;
-      cursor: pointer;
-    }
-    button[type="button"] {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
+    .actions {
+      display: flex;
+      gap: var(--h-space-2);
     }
     .chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: var(--h-space-2);
       list-style: none;
-      margin: 8px 0;
+      margin: var(--h-space-2) 0;
       padding: 0;
-    }
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 2px 4px 2px 10px;
-    }
-    .chip button {
-      background: transparent;
-      color: var(--muted);
-      border: 0;
-      padding: 0 6px;
     }
     .warning {
       color: var(--warn);
@@ -195,6 +186,8 @@ export class Cost {
   protected readonly by = signal<By>("model");
   protected readonly whatIf = signal("");
   protected readonly draft = signal("");
+  /** Why the entry was not applied; shown below its field. */
+  protected readonly entryError = signal<string | null>(null);
   protected readonly groups = GROUPS;
   protected readonly without = inject(WithoutService);
   protected readonly money = money;
@@ -207,6 +200,22 @@ export class Cost {
     whatIf: this.whatIf() || null,
     without: this.without.items(),
   }));
+
+  /** The answer, absent while loading and after a failure (`value()` of a failed resource throws). */
+  protected readonly answer = computed(() => (this.res.hasValue() ? this.res.value() : undefined));
+
+  constructor() {
+    // A model the core cannot price is an error of the entry: it moves to the field, and the view
+    // loads again without the what-if.
+    effect(() => {
+      const error = this.res.error();
+      if (!error) return;
+      const message = messageOf(error);
+      if (!message.startsWith(WHAT_IF_ERROR)) return;
+      this.entryError.set(message);
+      this.whatIf.set("");
+    });
+  }
 
   protected readonly compare = inject(FiltersService).compare;
   protected readonly trend = trendAnalysis();
@@ -225,20 +234,18 @@ export class Cost {
     ];
   });
 
-  protected readonly rows = computed(() => this.res.value()?.data.report.rows ?? []);
-  protected readonly total = computed(() => this.res.value()?.data.report.total ?? null);
+  protected readonly rows = computed(() => this.answer()?.data.report.rows ?? []);
+  protected readonly total = computed(() => this.answer()?.data.report.total ?? null);
   protected readonly unpriced = computed(() =>
-    Object.entries(this.res.value()?.data.report.unpriced_models ?? {}).map(
-      ([m, n]) => `${m} (${n})`,
-    ),
+    Object.entries(this.answer()?.data.report.unpriced_models ?? {}).map(([m, n]) => `${m} (${n})`),
   );
   protected readonly whatIfRows = computed(() => {
-    const w = this.res.value()?.data.what_if;
+    const w = this.answer()?.data.what_if;
     return w ? [...w.rows, w.total].map(whatIfView) : [];
   });
 
   protected readonly withoutRows = computed(() => {
-    const w = this.res.value()?.data.without;
+    const w = this.answer()?.data.without;
     return w ? withoutViews(w) : [];
   });
 
@@ -282,19 +289,23 @@ export class Cost {
 
   protected apply(event: Event): void {
     event.preventDefault();
-    this.whatIf.set(this.draft().trim());
+    const entry = this.draft().trim();
+    if (!entry) {
+      this.entryError.set("Enter a model id prefix.");
+      return;
+    }
+    this.entryError.set(null);
+    this.whatIf.set(entry);
+  }
+
+  protected edit(event: Event): void {
+    this.draft.set((event.target as HTMLInputElement).value);
+    this.entryError.set(null);
   }
 
   protected clearWhatIf(): void {
     this.draft.set("");
+    this.entryError.set(null);
     this.whatIf.set("");
-  }
-
-  protected asSelect(e: Event): { value: By } {
-    return e.target as unknown as { value: By };
-  }
-
-  protected asInput(e: Event): HTMLInputElement {
-    return e.target as HTMLInputElement;
   }
 }
