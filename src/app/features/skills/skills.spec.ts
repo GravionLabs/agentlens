@@ -3,7 +3,7 @@ import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
-import { HxCell, HxColumnHeader, HxDataTable } from "@gravionlabs/helix-ui";
+import { HxCell, HxColumnHeader, HxDataTable, HxField, HxSwitch } from "@gravionlabs/helix-ui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Ipc } from "../../core/ipc";
 import { tokenFormat } from "../../core/token-format.service";
@@ -27,7 +27,7 @@ class FakeIpc extends Ipc {
 async function render() {
   TestBed.overrideComponent(Skills, {
     set: {
-      imports: [HxDataTable, HxCell, HxColumnHeader, HelpLinkStub],
+      imports: [HxDataTable, HxCell, HxColumnHeader, HxField, HxSwitch, HelpLinkStub],
       schemas: [NO_ERRORS_SCHEMA],
     },
   });
@@ -147,9 +147,16 @@ describe("Skills table on helix", () => {
       expect.arrayContaining(["Explain Load", "Explain Overhead", "Explain Follow-on"]),
     );
     expect(column(el, 9)[0]).toBe("-");
-    el.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+    const toggle = el.querySelector<HTMLInputElement>("input[hx-switch]")!;
+    expect(el.querySelector(`label[for="${toggle.id}"]`)!.textContent).toContain(
+      "Used skills only",
+    );
+    toggle.click();
     fixture.detectChanges();
     expect(column(el, 0)).toHaveLength(2);
+    toggle.click();
+    fixture.detectChanges();
+    expect(column(el, 0)).toHaveLength(3);
   });
 
   it("rounds counts with the token format and keeps the exact one as title", async () => {

@@ -8,7 +8,14 @@ import type { UnusedItem, UnusedReport } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
 import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
-import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  HxField,
+  HxSwitch,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 /** “agent dev-workflow, command ship”, empty if nothing names the skill. */
 export function referencedBy(i: UnusedItem): string {
@@ -50,16 +57,22 @@ export function unusedView(i: UnusedItem): UnusedView {
 
 @Component({
   selector: "app-unused",
-  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
+  imports: [
+    PageHeader,
+    Term,
+    Status,
+    HxDataTable,
+    HxCell,
+    HxColumnHeader,
+    HxField,
+    HxSwitch,
+    HelpLink,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./unused.html",
   styles: `
-    .check {
-      display: inline-flex;
-      gap: 6px;
-      margin: 4px 16px 8px 0;
-      color: var(--muted);
-      align-items: center;
+    .toggle {
+      margin: var(--h-space-1) var(--h-space-4) var(--h-space-2) 0;
     }
     .est {
       color: var(--warn);

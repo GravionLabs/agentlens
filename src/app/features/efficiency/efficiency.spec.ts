@@ -3,7 +3,7 @@ import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
-import { HxCell, HxColumnHeader, HxDataTable } from "@gravionlabs/helix-ui";
+import { HxCell, HxColumnHeader, HxDataTable, HxField, HxSelect } from "@gravionlabs/helix-ui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Ipc } from "../../core/ipc";
 import { tokenFormat } from "../../core/token-format.service";
@@ -12,17 +12,19 @@ import { StatusBar } from "../../ui/status-bar";
 import { Efficiency, groupLabel, share, subagentView } from "./efficiency";
 
 let payload: unknown = null;
+let projectPayload: unknown = null;
 
 class FakeIpc extends Ipc {
-  override async invoke<T>(): Promise<T> {
-    return { schema_version: 2, data: payload, warnings: 0, errors: [] } as T;
+  override async invoke<T>(_command: string, args?: Record<string, unknown>): Promise<T> {
+    const data = args?.["by"] === "project" ? projectPayload : payload;
+    return { schema_version: 2, data, warnings: 0, errors: [] } as T;
   }
 }
 
 async function render() {
   TestBed.overrideComponent(Efficiency, {
     set: {
-      imports: [HxDataTable, HxCell, HxColumnHeader, HelpLinkStub],
+      imports: [HxDataTable, HxCell, HxColumnHeader, HxField, HxSelect, HelpLinkStub],
       schemas: [NO_ERRORS_SCHEMA],
     },
   });
@@ -60,7 +62,10 @@ beforeEach(() => {
     providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
   });
 });
-afterEach(() => TestBed.resetTestingModule());
+afterEach(() => {
+  TestBed.resetTestingModule();
+  document.querySelectorAll(".cdk-overlay-container").forEach((e) => e.remove());
+});
 
 describe("efficiency", () => {
   it("shares a total and has no share of nothing", () => {
@@ -151,6 +156,27 @@ describe("Efficiency tables on helix", () => {
     fixture.detectChanges();
     expect(input().textContent!.trim()).toBe("2.11 M");
     expect(input().getAttribute("title")).toBe("2,114,305");
+  });
+
+  it("groups the cache table by the chosen option of the labeled select", async () => {
+    projectPayload = { ...(payload as object), cache: [cache("work/demo", 2)] };
+    const { fixture, el } = await render();
+    const select = el.querySelector<HTMLElement>('hx-select [role="combobox"]')!;
+    const label = el.querySelector<HTMLLabelElement>("hx-field label")!;
+    expect(label.textContent!.trim()).toBe("Group the cache table by");
+    expect(label.getAttribute("for")).toBe(select.id);
+    expect(select.textContent).toContain("source");
+    select.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+    expect(options.map((o) => o.textContent!.trim())).toEqual(["source", "project", "session"]);
+    options[1].click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(select.textContent).toContain("project");
+    expect(column(el, 0)).toEqual(["work/demo"]);
   });
 
   it("shows the subagent shares as percentages", async () => {
