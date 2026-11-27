@@ -6,6 +6,7 @@ Planning asks nothing; it lists the decisions it cannot resolve as `questions[]`
 
 - Only product, scope and risk choices. Anything the repo can answer, answer yourself (explore, do not ask).
 - Questions are independent of each other: no question depends on another question's answer.
+- A new test seam (no existing test at that interface) is such a choice: options are the new seam and the existing one, see `slicing.md`, "Test seams".
 - Answers given in the prompt are final: keep those questions removed and plan accordingly.
 
 ## Fields

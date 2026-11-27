@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if cat | grep -Eq '\"stop_hook_active\"[[:space:]]*:[[:space:]]*true'; then exit 0; fi; out=$(pwsh -NoProfile -File .claude/skills/implementation/scripts/Invoke-Gate.ps1 2>&1) || { printf '%s\\n' \"$out\" >&2; exit 2; }",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

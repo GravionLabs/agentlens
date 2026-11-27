@@ -7,7 +7,7 @@ nothing validates it, and a missed edit is invisible. Native sub-issues drive th
 bar and completion % automatically, so **closing a child is the only action needed** — there is no
 checklist to tick.
 
-Keep a human-readable parent line as the **first line of the child's body** (`Parent Epic: #12`,
+Keep a human-readable parent line as the **first line of the child's body** (`Parent Objective: #3`, `Parent Epic: #12`,
 `Parent Feature: #34`) so the relationship is legible in plain text and in
 search. That line is documentation; the native link is the mechanism. Both must agree.
 
@@ -17,7 +17,17 @@ PBIs and Bugs have no sub-issues. `[Task]` issues (label `task`, first line `Par
 
 ```powershell
 gh api repos/{owner}/{repo}/issues/<pbi>/sub_issues --jq '.[] | select(.state == "open") | select(any(.labels[]; .name == "task")) | .number' |
-  ForEach-Object { gh issue close $_ --comment "Closed with #<pbi>." }
+  ForEach-Object { gh issue comment $_ --body "Closed with #<pbi>."; gh issue close $_ }
+```
+
+## gh 2.94+ short forms
+
+When `gh --version` is 2.94 or newer, prefer the short forms; older `gh` uses the REST calls below (the scripts keep REST):
+
+```powershell
+gh issue create --parent <parent-nr> --blocked-by <a>,<b> ...   # at creation
+gh issue edit <parent-nr> --add-sub-issue <child-nr>
+gh issue edit <child-nr> --add-blocked-by <blocker-nr>
 ```
 
 ## Read the children of an issue
@@ -31,28 +41,29 @@ Epic or PBIs under a Feature (legacy: Tasks under a PBI). An issue with no child
 
 ## Link a child to a parent
 
-Linking is a GraphQL mutation over **node IDs**, not issue numbers:
+Linking is a REST call with the child's **database id** (`.id` of the REST issue, an integer), not
+the issue number and not the GraphQL node id (`node_id`):
 
 ```powershell
-$parentId = gh issue view <parent-nr> --json id --jq .id
-$childId  = gh issue view <child-nr> --json id --jq .id
-
-$query = 'mutation($parentId: ID!, $childId: ID!) { addSubIssue(input: { issueId: $parentId, subIssueId: $childId }) { issue { number } } }'
-gh api graphql -f query=$query -f parentId=$parentId -f childId=$childId
+$childId = gh api repos/{owner}/{repo}/issues/<child-nr> --jq .id
+gh api -X POST repos/{owner}/{repo}/issues/<parent-nr>/sub_issues -F sub_issue_id=$childId
 ```
 
-Re-running on an already-linked pair is harmless, which makes batch scripts safe to resume.
+`-F` (capital) sends the integer. Re-running on an already-linked pair changes nothing but fails
+with HTTP 422 "Issue may not contain duplicate sub-issues and Sub issue may only have one parent".
+The same 422 means the child has another parent, so on a 422 check
+`gh api repos/{owner}/{repo}/issues/<child-nr>/parent --jq .number`: the expected parent → done
+(a resumed batch stays safe), another one → move it (next section).
 
 ## Move a child to a different parent
 
 A child has at most one parent — unlink before re-linking:
 
 ```powershell
-$query = 'mutation($parentId: ID!, $childId: ID!) { removeSubIssue(input: { issueId: $parentId, subIssueId: $childId }) { issue { number } } }'
-gh api graphql -f query=$query -f parentId=$oldParentId -f childId=$childId
+gh api -X DELETE repos/{owner}/{repo}/issues/<old-parent-nr>/sub_issue -F sub_issue_id=$childId
 ```
 
-Then `addSubIssue` against the new parent, and update the child's `Parent …: #N` body line to match.
+`sub_issue` is singular here. Then link it to the new parent, and update the child's `Parent …: #N` body line to match.
 
 ## Blocked-by links
 
@@ -64,25 +75,33 @@ $blockerId = gh api repos/{owner}/{repo}/issues/<blocker-nr> --jq .id
 
 # add
 gh api -X POST repos/{owner}/{repo}/issues/<nr>/dependencies/blocked_by -F issue_id=$blockerId
-# read
-gh api repos/{owner}/{repo}/issues/<nr>/dependencies/blocked_by --jq '.[] | "\(.number) \(.state)"'
+# read: always with the repository, a blocker may live in another repo with the same number
+gh api repos/{owner}/{repo}/issues/<nr>/dependencies/blocked_by --jq '.[] | "\(.repository_url | sub(".*/repos/"; ""))#\(.number) \(.state)"'
 # remove
 gh api -X DELETE repos/{owner}/{repo}/issues/<nr>/dependencies/blocked_by/$blockerId
 ```
 
+Open blockers as one number (`0` = startable):
+
+```powershell
+gh api repos/{owner}/{repo}/issues/<nr> --jq .issue_dependencies_summary.blocked_by
+```
+
 `-F` (capital) sends `issue_id` as the integer the API expects. Adding an existing link
 fails with HTTP 422 "Target issue has already been taken": read the links first or treat that error
-as done, so a resumed run stays safe. The `Depends on` / `Blocked by #N` body line documents the link.
+as done, so a resumed run stays safe. A blocker from another repository: `$blockerId = gh api repos/<owner>/<repo>/issues/<blocker-nr> --jq .id`
+(the database id of the foreign issue), then the same POST. A read without `repository_url` confuses `#<n>` of
+another repo with a local number; `Get-Milestones.ps1` keeps `owner/repo` in `blockedBy[].repository`. The `Depends on` / `Blocked by #N` body line documents the link.
 
 ## Verify
 
 After any batch that creates or moves issues, confirm the two sources agree — the native link and
-the body line — and that every non-Epic issue has exactly one parent:
+the body line — and that every issue except an Objective or a top-level Epic has exactly one parent:
 
 ```powershell
 gh api repos/{owner}/{repo}/issues/<parent-nr>/sub_issues --jq 'length'
-gh issue view <child-nr> --json body --jq '.body | split("\n")[0]'
-gh api repos/{owner}/{repo}/issues/<child-nr>/dependencies/blocked_by --jq '[.[].number]'
+gh api repos/{owner}/{repo}/issues/<child-nr> --jq '.body | split("\n")[0]'
+gh api repos/{owner}/{repo}/issues/<child-nr>/dependencies/blocked_by --jq '[.[] | "\(.repository_url | sub(".*/repos/"; ""))#\(.number)"]'
 ```
 
 An issue that was created but never linked looks completely normal in `gh issue list`. Silent
@@ -91,9 +110,10 @@ the create step linked anything.
 
 ## gh CLI gotchas
 
-- `gh api graphql -f query=@file.graphql` **silently fails to read the file**. Use `-F query=@file.graphql`
-  (capital `F`). Inline `-f query='...'` works fine.
-- `-f` sends every value as a String. Typed variables need `-F` (e.g. `-F number=42` for an `Int!`).
+- Reads and links go through REST (`gh api repos/...`, own budget of 5000/h); `gh issue view/list` and
+  `gh pr view/list/checks` run on GraphQL. REST issue lists include PRs: filter with
+  `select(.pull_request == null)` and pass `--paginate`.
+- `-f` sends every value as a String. Integers (ids) need `-F`.
 - `gh issue view` / `gh issue edit` need `--repo <owner>/<repo>` when run outside a git worktree
   (for example from a scratch directory).
 - `gh issue create` prints the new issue URL; take the number from its last path segment.
