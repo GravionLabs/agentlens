@@ -21,6 +21,10 @@ One of:
 4. Take the answers. Adjust the remaining questions; an answer may remove questions or add new ones. Start the next round with those.
 5. Repeat until no open question is left.
 
+## Option `--docs`
+
+`/grill-me --docs …`: load `glossary` and apply its rules while grilling: a term that conflicts with `GLOSSARY.md` is challenged, a fuzzy term gets a proposed canonical term, claims are checked against the code. Each resolved term is written with `glossary` (the file is created with the first one). Offer an ADR via `adr` for a decision only when all three hold: it is hard to reverse, it is surprising without context, and it is a real trade-off (alternatives existed). Otherwise no ADR is offered. The ADR is written only after the user agrees; its Status stays `Proposed`. Without `--docs` neither skill is loaded and nothing is written.
+
 ## Clients
 
 - Claude Code: `AskUserQuestion`, at most 4 questions per call; split a larger round into several calls of the same round.

@@ -9,26 +9,38 @@
   <root>/.claude/skills/ or <root>/.agents/skills/ deployment, the client gets its own deployment: Claude Code
   <root>/.claude/skills/context-statusline/scripts, Copilot CLI <root>/.agents/skills/context-statusline/scripts.
   Any other location (project checkout, custom path) is used as is. The installer refuses when the target script does not
-  exist, for example when the skill was deployed for the other client only. Paths under $HOME are written as ~/...
-  -Client claude (default): sets 'statusLine' and 'subagentStatusLine' in ~/.claude/settings.json to
-  node <scripts>/statusline.mjs and node <scripts>/subagent-statusline.mjs.
+  exist, for example when the skill was deployed for the other client only. On Linux/macOS paths under $HOME are written as ~/...;
+  on Windows the home directory is %USERPROFILE% (never Git Bash's HOME) and paths are written absolute in forward-slash form
+  (C:/Users/<user>/.claude/...), quoted when they contain whitespace; re-running migrates ~/... entries to that form.
+  -Client claude (default): sets 'statusLine' in ~/.claude/settings.json to
+  node <scripts>/statusline.mjs and removes our own 'subagentStatusLine' of an older version
+  (Claude Code 2.1.323 removed that setting).
   -Client copilot: sets 'statusLine' (with padding 1) in <copilot home>/settings.json plus the feature flag STATUS_LINE
   in feature_flags.enabled (added once, other flags kept). <copilot home> is $COPILOT_HOME when set, else ~/.copilot.
   Copilot CLI has no subagent status line. -Client all does both.
   Every other key is kept (order and values). A backup settings.json.bak-<timestamp> is written before any change.
   Idempotent. Entries of older versions (node <client home>/apm-hub/statusline/<file>.mjs) are migrated and their copies
   removed. An entry that is neither is foreign and only replaced with -Force.
+  Context warning hook: unless -NoContextWarning, the installer also registers <scripts>/context-warning.sh (npx skills
+  installs no hooks): Claude Code gets a UserPromptSubmit hook in settings.json (hooks.UserPromptSubmit), Copilot CLI a
+  postToolUse hook (hooks.postToolUse) in its settings.json. Foreign hooks are kept; our entry is found by its command.
   -Uninstall removes only our entries and the copies of older versions; the STATUS_LINE flag is left in place (it may be
   wanted by another status line). The skill files are never touched. Supports -WhatIf and -Confirm.
 .PARAMETER Client     claude (default), copilot or all.
-.PARAMETER Force      Replace foreign statusLine / subagentStatusLine entries.
-.PARAMETER Uninstall  Remove our entries and the copies of older versions.
+.PARAMETER Force      Replace a foreign statusLine entry.
+.PARAMETER Uninstall  Remove our entries (status lines and hook) and the copies of older versions.
+.PARAMETER NoContextWarning  Do not register the context warning hook.
 #>
 [CmdletBinding(SupportsShouldProcess)]
-param([ValidateSet('claude', 'copilot', 'all')][string]$Client = 'claude', [switch]$Force, [switch]$Uninstall)
+param([ValidateSet('claude', 'copilot', 'all')][string]$Client = 'claude', [switch]$Force, [switch]$Uninstall, [switch]$NoContextWarning)
 $ErrorActionPreference = 'Stop'
 
 $script:SkillRel = 'skills/context-statusline/scripts'
+
+# Platform decision in one place; GRAVIONLABS_TEST_WINDOWS=1 forces Windows (test seam, undocumented).
+function Test-Windows { [bool]$IsWindows -or $env:GRAVIONLABS_TEST_WINDOWS -eq '1' }
+# Home directory: %USERPROFILE% on Windows (Git Bash's HOME may differ), else $HOME.
+function Get-UserHome { if ((Test-Windows) -and $env:USERPROFILE) { $env:USERPROFILE } else { $HOME } }
 
 function ConvertTo-Slash([string]$p) { ($p -replace '\\', '/').TrimEnd('/') }
 
@@ -39,22 +51,81 @@ function Get-ScriptDir([string]$clientDir) {
   $here
 }
 
-# Command path: ~/... under $HOME, else absolute; quoted when it contains whitespace (then always absolute).
+# Command path: Windows always absolute (a ~ would expand against Git Bash's HOME); else ~/... under $HOME, else absolute;
+# quoted when it contains whitespace (then always absolute).
 function Get-CommandPath([string]$dir) {
-  $home2 = ConvertTo-Slash $HOME
-  $cmp = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+  $dir = ConvertTo-Slash $dir
   if ($dir -match '\s') { return '"' + $dir + '"' }
+  if (Test-Windows) { return $dir }
+  $home2 = ConvertTo-Slash $HOME
+  $cmp = [StringComparison]::Ordinal
   if ($home2 -and $dir.StartsWith("$home2/", $cmp)) { return '~' + $dir.Substring($home2.Length) }
   $dir
 }
 
+$script:HookRx = '^bash\s.*context-warning\.sh"?\s*$'
+
+function Get-Str($node, [string]$field) { try { $node[$field].GetValue[string]() } catch { $null } }
+
+# Registers (or removes) our hook command under hooks.<event>. Nested = Claude Code groups {hooks:[{type,command}]},
+# else flat entries {type,bash,timeoutSec} (Copilot CLI). Foreign hooks stay; ours is found by its command.
+function Set-Hook($root, [string]$hookEvent, [bool]$nested, [string]$cmd, [bool]$install) {
+  $field = if ($nested) { 'command' } else { 'bash' }
+  $hooks = $root['hooks']
+  if ($null -ne $hooks -and $hooks -isnot [System.Text.Json.Nodes.JsonObject]) { throw "hooks in settings.json is not an object." }
+  $arr = $null
+  if ($hooks) { $arr = $hooks[$hookEvent] }  # assignment, not an if-expression: that would unroll the array
+  if ($null -ne $arr -and $arr -isnot [System.Text.Json.Nodes.JsonArray]) { throw "hooks.$hookEvent in settings.json is not an array." }
+  $found = $false
+  if ($arr) {
+    for ($i = $arr.Count - 1; $i -ge 0; $i--) {
+      $item = $arr[$i]
+      if ($item -isnot [System.Text.Json.Nodes.JsonObject]) { continue }
+      $inner = $null
+      if ($nested) { $inner = $item['hooks'] }
+      if ($nested -and $inner -isnot [System.Text.Json.Nodes.JsonArray]) { continue }
+      if ($nested) {
+        for ($j = $inner.Count - 1; $j -ge 0; $j--) {
+          $c = Get-Str $inner[$j] $field
+          if (-not ($c -match $script:HookRx)) { continue }
+          if ($install) { $found = $true; if ($c -cne $cmd) { $inner[$j][$field] = $cmd } }
+          else { $inner.RemoveAt($j) }
+        }
+        if (-not $install -and $inner.Count -eq 0 -and $item.Count -eq 1) { $arr.RemoveAt($i) }
+      } else {
+        $c = Get-Str $item $field
+        if (-not ($c -match $script:HookRx)) { continue }
+        if ($install) { $found = $true; if ($c -cne $cmd) { $item[$field] = $cmd } }
+        else { $arr.RemoveAt($i) }
+      }
+    }
+  }
+  if ($install) {
+    if ($found) { return }
+    if ($null -eq $hooks) { $hooks = [System.Text.Json.Nodes.JsonObject]::new(); $root['hooks'] = $hooks }
+    if ($null -eq $arr) { $arr = [System.Text.Json.Nodes.JsonArray]::new(); $hooks[$hookEvent] = $arr }
+    $leaf = [System.Text.Json.Nodes.JsonObject]::new()
+    $leaf['type'] = 'command'
+    $leaf[$field] = $cmd
+    if ($nested) {
+      $leaf['timeout'] = 5
+      $group = [System.Text.Json.Nodes.JsonObject]::new()
+      $group['hooks'] = [System.Text.Json.Nodes.JsonArray]::new($leaf)
+      $arr.Add($group)
+    } else { $leaf['timeoutSec'] = 5; $arr.Add($leaf) }
+  } elseif ($hooks) {
+    if ($arr -and $arr.Count -eq 0) { [void]$hooks.Remove($hookEvent) }
+    if ($hooks.Count -eq 0) { [void]$root.Remove('hooks') }
+  }
+}
+
 function Get-Cfg([string]$name) {
   if ($name -eq 'claude') {
-    @{ Name = 'claude'; Dir = (Join-Path $HOME '.claude'); Scripts = (Get-ScriptDir '.claude'); Padding = $false
-       Keys = [ordered]@{ statusLine = 'statusline.mjs'; subagentStatusLine = 'subagent-statusline.mjs' } }
+    @{ Name = 'claude'; Dir = (Join-Path (Get-UserHome) '.claude'); Scripts = (Get-ScriptDir '.claude'); Padding = $false; HookEvent = 'UserPromptSubmit'; Nested = $true
+       Keys = [ordered]@{ statusLine = 'statusline.mjs' } }
   } else {
-    $dir = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
-    @{ Name = 'copilot'; Dir = $dir; Scripts = (Get-ScriptDir '.agents'); Padding = $true; Keys = [ordered]@{ statusLine = 'statusline.mjs' } }
+    $dir = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path (Get-UserHome) '.copilot' }
+    @{ Name = 'copilot'; Dir = $dir; Scripts = (Get-ScriptDir '.agents'); Padding = $true; HookEvent = 'postToolUse'; Nested = $false; Keys = [ordered]@{ statusLine = 'statusline.mjs' } }
   }
 }
 
@@ -66,10 +137,11 @@ $settings = Join-Path $clientDir 'settings.json'
 $oldDir = Join-Path $clientDir 'apm-hub/statusline'
 $cmdPath = Get-CommandPath $cfg.Scripts
 $isOurs = { param($node)
-  try { $cmd = $node['command'].GetValue[string](); $cmd -match '(apm-hub/statusline|context-statusline/scripts)/(statusline|subagent-statusline)\.mjs"?\s*$' } catch { $false } }
+  try { $cmd = $node['command'].GetValue[string](); $cmd -match '(apm-hub/statusline|context-statusline/scripts)"?/(statusline|subagent-statusline)\.mjs"?\s*$' } catch { $false } }
 
 if (-not $Uninstall) {
-  foreach ($f in $files) {
+  $needed = if ($NoContextWarning) { $files } else { $files + 'context-warning.sh' }
+  foreach ($f in $needed) {
     if (-not (Test-Path -LiteralPath (Join-Path $cfg.Scripts $f))) {
       throw "[$($cfg.Name)] $($cfg.Scripts)/$f not found. The context-statusline skill is not installed for this client (deployed for another target only?). Install it with npx skills for $($cfg.Name) and run the installer from that copy."
     }
@@ -92,6 +164,9 @@ if (-not $root) { $root = [System.Text.Json.Nodes.JsonObject]::new() }
 $before = $root.ToJsonString()
 
 # Decide changes
+# subagentStatusLine was removed in Claude Code 2.1.323: no longer written, our own entry of an older version is removed.
+$legacy = if ($cfg.Name -eq 'claude' -and $null -ne $root['subagentStatusLine'] -and (& $isOurs $root['subagentStatusLine'])) { @('subagentStatusLine') } else { @() }
+foreach ($k in $legacy) { [void]$root.Remove($k) }
 $foreign = @()
 foreach ($k in $keys.Keys) {
   $cur = $root[$k]
@@ -120,6 +195,9 @@ if (-not $Uninstall -and $cfg.Name -eq 'copilot') {
   if ($en -isnot [System.Text.Json.Nodes.JsonArray]) { throw "feature_flags.enabled in $settings is not an array." }
   if (-not ($en | Where-Object { $_ -is [System.Text.Json.Nodes.JsonValue] -and $_.ToJsonString() -ceq '"STATUS_LINE"' })) { $en.Add('STATUS_LINE') }
 }
+if ($Uninstall -or -not $NoContextWarning) {
+  Set-Hook $root $cfg.HookEvent $cfg.Nested "bash $cmdPath/context-warning.sh" (-not $Uninstall)
+}
 $settingsChanged = $root.ToJsonString() -cne $before
 
 if ($settingsChanged) {
@@ -127,7 +205,7 @@ if ($settingsChanged) {
   $so.WriteIndented = $true
   $so.Encoder = [System.Text.Encodings.Web.JavaScriptEncoder]::UnsafeRelaxedJsonEscaping
   $out = $root.ToJsonString($so) + "`n"
-  if ($PSCmdlet.ShouldProcess($settings, 'Update statusLine / subagentStatusLine')) {
+  if ($PSCmdlet.ShouldProcess($settings, 'Update statusLine / context warning hook')) {
     New-Item -ItemType Directory -Path $clientDir -Force | Out-Null
     if (Test-Path -LiteralPath $settings) {
       $bak = "$settings.bak-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'))"
