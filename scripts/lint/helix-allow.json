@@ -1,15 +1,10 @@
 {
-  "comment": "Exceptions to the helix-lint preset (#559). Every entry needs `files` (globs), `rules` and a `reason`; helixAllow throws without one and so fails `pnpm lint`. One entry per file and rule, no directory globs. Remove an entry when its file migrates. Stylelint rules and `helix/no-raw-control` are listed under their own key.",
+  "comment": "Exceptions to the helix-lint preset (#559). Every entry needs `files` (file paths, no globs), `rules` and a `reason`; helixAllow throws without one and so fails `pnpm lint`. One entry per file and rule, no directory globs. Remove an entry when its file migrates. Stylelint rules and `helix/no-raw-control` are listed under their own key.",
   "stylelint": [
     {
       "files": ["src/styles/chart-colors.css"],
       "rules": ["color-no-hex"],
       "reason": "The chart series colors (--c-baseline, --c-load, --c-carry, --c-follow) are literals because Helix has no chart tokens (decision of #557)"
-    },
-    {
-      "files": ["src/app/ui/status-bar.ts"],
-      "rules": ["selector-disallowed-list"],
-      "reason": "The status bar of the shell is 28px high: `:host ::ng-deep button` sets its hx-button children to 24px so they stay inside it"
     }
   ],
   "eslint": []

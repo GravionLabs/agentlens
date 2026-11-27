@@ -19,7 +19,7 @@ export default {
     // A type selector only (not `.button`, `#input`, `hx-select` or an attribute value), and no
     // `.btn*` class: the hand-built button system is gone (#557).
     "selector-disallowed-list": [
-      /(^|[\s>+~(,])(button|input|select|textarea|progress|\.btn[\w-]*)(?![\w-])/i,
+      /(^|[\s>+~(,])(button|input|select|textarea|progress)(?![\w-])|\.btn(?![a-z0-9])[\w-]*/i,
     ],
     "declaration-property-value-disallowed-list": { font: [/\d(px|rem)\b/i] },
   },

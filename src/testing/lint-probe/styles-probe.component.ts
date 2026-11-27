@@ -18,6 +18,9 @@ import { ChangeDetectionStrategy, Component } from "@angular/core";
     .btn-probe {
       margin: 0;
     }
+    a.btn-probe {
+      margin: 0;
+    }
     button {
       font: 600 13px sans-serif;
     }

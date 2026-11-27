@@ -83,6 +83,7 @@ describe("lint probe", () => {
         "styles-probe.component.ts declaration-property-value-disallowed-list",
         "styles-probe.component.ts selector-disallowed-list",
         "styles-probe.component.ts selector-disallowed-list",
+        "styles-probe.component.ts selector-disallowed-list",
       ]);
     },
     TIMEOUT,

@@ -16,12 +16,13 @@ import { UpdateStatus } from "./update-status";
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./status-bar.html",
   styles: `
-    /* The bar of the shell is 28px high with 12px text: the controls stay inside it. */
+    /*
+     * The bar of the shell is 28px high with 12px text: the small buttons of this bar, of the
+     * command line tools and of the update check stay inside it through the Helix size token.
+     */
     :host {
       display: block;
-    }
-    :host ::ng-deep button {
-      height: 24px;
+      --h-button-sm-padding-y: 1px;
     }
 
     .end,

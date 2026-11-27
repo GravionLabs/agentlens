@@ -94,10 +94,10 @@ importers:
         specifier: 7.0.2007
         version: 7.0.2007
       postcss-angular:
-        specifier: ^2.0.0
+        specifier: 2.0.0
         version: 2.0.0(typescript@6.0.3)
       stylelint:
-        specifier: ^18.1.0
+        specifier: 18.1.0
         version: 18.1.0
       typescript:
         specifier: ~6.0.3
