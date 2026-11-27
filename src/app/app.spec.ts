@@ -51,6 +51,20 @@ describe("app", () => {
     expect(Array.isArray(routes)).toBe(true);
   });
 
+  it("leaves every key to the page except the zoom shortcuts", () => {
+    render();
+    const press = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+      document.body.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    // A prevented keydown blocks typing and the submission of a form by Enter.
+    expect(press({ key: "a" })).toBe(false);
+    expect(press({ key: "Enter" })).toBe(false);
+    expect(press({ key: "=", ctrlKey: true })).toBe(true);
+    TestBed.inject(ZoomService).reset();
+  });
+
   it("links every view in the navigation, in group order", () => {
     const { el } = render();
     const links = [...el.querySelectorAll<HTMLAnchorElement>("helix-nav-rail a[href]")].filter(
