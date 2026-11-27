@@ -23,7 +23,16 @@ describe("helix theme", () => {
     expect(used(theme).filter((name) => !known.has(name))).toEqual([]);
   });
 
-  it("binds the status bar chrome to the app panel, so there is no seam", () => {
-    expect(theme).toMatch(/--helix-surface-chrome:\s*var\(--panel\)/);
+  it("puts the inset panels on a frame of the app background", () => {
+    expect(theme).toMatch(/--helix-surface-chrome:\s*var\(--bg\)/);
+    expect(theme).toMatch(/--h-content-background:\s*var\(--panel\)/);
+  });
+
+  it("binds every surface and border role of the tokens", () => {
+    const roles = [...declared(tokens)].filter((name) =>
+      /^--h-(surface-(frame|panel|card|overlay|hover)|border-(panel|divider))$/.test(name),
+    );
+    expect(roles).toHaveLength(7);
+    expect(roles.filter((name) => !overrides.includes(name))).toEqual([]);
   });
 });

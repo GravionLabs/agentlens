@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from "@angular/c
 import { HxButton, HxMessage } from "@gravionlabs/helix-ui";
 import { UpdateService } from "../core/update.service";
 
-/** The update check in the header: a button, and what the check found. */
+/** The update check in the status bar: a button, and what the check found. */
 @Component({
   selector: "app-update-status",
   imports: [HxButton, HxMessage],
@@ -19,7 +19,8 @@ import { UpdateService } from "../core/update.service";
       cursor: text;
       overflow-wrap: anywhere;
       max-width: 40ch;
-      max-height: 4.5em;
+      max-height: 1.5em;
+      white-space: normal;
       overflow-y: auto;
       display: inline-block;
       vertical-align: top;

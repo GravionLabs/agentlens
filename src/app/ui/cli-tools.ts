@@ -30,6 +30,8 @@ type Busy = "install" | "remove" | null;
       margin-bottom: 6px;
       padding: 10px 12px;
       width: min(480px, 90vw);
+      /* The status bar does not wrap its text; the panel does. */
+      white-space: normal;
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 6px;
