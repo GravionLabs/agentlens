@@ -16,7 +16,7 @@ import { beforeAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 import { Ipc } from "../../core/ipc";
 import { tokenFormat } from "../../core/token-format.service";
 import type { CostRow } from "../../core/types";
-import type { WithoutReport } from "../../core/types";
+import type { WhatIfReport, WithoutReport } from "../../core/types";
 import { WithoutService } from "../../core/without.service";
 import { Cost, money, signedUsd, whatIfView, withoutViews } from "./cost";
 
@@ -59,6 +59,20 @@ describe("cost what-if", () => {
     expect(v.diff).toBe(-2);
     expect(signedUsd(v.diff)).toBe("-$2.00");
     expect(signedUsd(1.5)).toBe("+$1.50");
+    expect(signedUsd(-2, true)).toBe("-~$2.00");
+  });
+
+  it("has no prices and no difference for a row whose requests are all excluded", () => {
+    const v = whatIfView({
+      model: "m",
+      requests: 0,
+      actual_usd: 0,
+      what_if_usd: 0,
+      excluded_requests: 2,
+    });
+    expect([v.actual_usd, v.what_if_usd, v.diff]).toEqual([null, null, null]);
+    expect(signedUsd(v.diff, true)).toBe("n/a");
+    expect(v.excluded_requests).toBe(2);
   });
 });
 
@@ -70,6 +84,9 @@ const baseRows = [
 ];
 
 let withoutReport: WithoutReport | null = null;
+let whatIfReport: WhatIfReport | null = null;
+/** Keeps every request open, for the loading state. */
+let pending = false;
 let lastArgs: Record<string, unknown> = {};
 let failure = "";
 
@@ -78,9 +95,10 @@ class FakeIpc extends Ipc {
     lastArgs = args ?? {};
     if (lastArgs["whatIf"] === "nope") throw "no price for the what-if model `nope`";
     if (failure) throw failure;
+    if (pending) await new Promise(() => undefined);
     const data = {
       report: { rows, total: rows[0], unpriced_models: {} },
-      what_if: null,
+      what_if: whatIfReport,
       without: withoutReport,
     };
     return { schema_version: 2, data, warnings: 0, errors: [] } as T;
@@ -96,6 +114,8 @@ describe("Cost table on helix", () => {
     tokenFormat.set("rounded");
     rows = baseRows;
     withoutReport = null;
+    whatIfReport = null;
+    pending = false;
     lastArgs = {};
     failure = "";
     TestBed.configureTestingModule({
@@ -389,6 +409,97 @@ describe("Cost table on helix", () => {
     ]);
     expect(el.textContent).toContain("Estimated: from listing sizes.");
     expect(el.textContent).toContain("`skill:gone` matched nothing installed");
+  });
+});
+
+describe("Cost states and estimates", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    rows = baseRows;
+    withoutReport = null;
+    whatIfReport = null;
+    pending = false;
+    failure = "";
+    TestBed.configureTestingModule({
+      providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
+    });
+    TestBed.overrideComponent(Cost, {
+      set: {
+        imports: [HxDataTable, HxCell, HxField, HxSelect, HxInput, HxButton, HxChip],
+        schemas: [NO_ERRORS_SCHEMA],
+      },
+    });
+  });
+  afterEach(() => TestBed.resetTestingModule());
+
+  async function render(wait = true) {
+    const fixture = TestBed.createComponent(Cost);
+    fixture.detectChanges();
+    if (wait) await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  const table = (el: HTMLElement) => el.querySelector("hx-data-table")!;
+
+  it("shows the table as busy while loading, not as empty", async () => {
+    pending = true;
+    const el = await render(false);
+    expect(table(el).querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(table(el).textContent).not.toContain("No usage found");
+  });
+
+  it("names the next action when there is no usage and shows no total", async () => {
+    rows = [];
+    const el = await render();
+    expect(table(el).textContent).toContain(
+      "No usage found. Choose a longer period or other filters.",
+    );
+    expect(el.querySelector(".total")).toBeNull();
+  });
+
+  it("does not claim there is no usage after a failure", async () => {
+    failure = "cannot read the price table";
+    const el = await render();
+    expect(table(el).textContent).toContain("Cost could not be loaded. Use Refresh to try again.");
+    expect(table(el).textContent).not.toContain("No usage found");
+  });
+
+  it("marks an estimated total", async () => {
+    rows = [row({ estimated_usd: 2 })];
+    const el = await render();
+    expect(el.querySelector(".total .est")!.textContent).toBe("~$2.00");
+  });
+
+  it("leaves a measured total unmarked", async () => {
+    rows = [row({ measured_usd: 2 })];
+    const el = await render();
+    expect(el.querySelector(".total")!.textContent).toContain("$2.00");
+    expect(el.querySelector(".total .est")).toBeNull();
+  });
+
+  it("writes the what-if result with tildes, n/a for excluded rows and a Total row", async () => {
+    whatIfReport = {
+      target: "model-x",
+      rows: [
+        { model: "model-a", requests: 2, actual_usd: 3, what_if_usd: 1, excluded_requests: 0 },
+        { model: "model-c", requests: 0, actual_usd: 0, what_if_usd: 0, excluded_requests: 3 },
+      ],
+      total: { model: "total", requests: 2, actual_usd: 3, what_if_usd: 1, excluded_requests: 3 },
+    };
+    const el = await render();
+    const result = el.querySelectorAll("hx-data-table")[1];
+    const cells = [...result.querySelectorAll("tbody tr")].map((r) =>
+      [...r.querySelectorAll("td")].map((c) => c.textContent!.trim()),
+    );
+    expect(cells).toEqual([
+      ["model-a", "2", "~$3.00", "~$1.00", "-~$2.00", "0"],
+      ["model-c", "0", "n/a", "n/a", "n/a", "3"],
+      ["Total", "2", "~$3.00", "~$1.00", "-~$2.00", "3"],
+    ]);
+    const marked = [...result.querySelectorAll("tbody .est")].map((s) => s.textContent!.trim());
+    expect(marked).toHaveLength(6);
+    expect(marked).not.toContain("n/a");
   });
 });
 
