@@ -32,7 +32,7 @@ const toNavItem = (item: NavItem) => ({ label: item.label, routerLink: `/${item.
   imports: [HelixAppLayout, HxButton, FilterBar, StatusBar],
   hostDirectives: [HelixDark],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { "(document:keydown)": "zoom.handleKey($event)" },
+  host: { "(document:keydown)": "onKeydown($event)" },
   templateUrl: "./app.html",
   styles: `
     .refresh {
@@ -127,6 +127,11 @@ export class App {
       { action: { id: "filters", template: filters } },
       { action: { id: "refresh", template: refresh } },
     ]);
+  }
+
+  /** Returns nothing: Angular prevents the default of an event whose listener returns `false`. */
+  protected onKeydown(event: KeyboardEvent): void {
+    this.zoom.handleKey(event);
   }
 
   /** Forgets the sessions the backend kept and runs the open view again. */

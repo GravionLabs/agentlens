@@ -13,36 +13,56 @@
     </p>
   </app-page-header>
   <form class="controls" (submit)="apply($event)">
-    <label>
-      <span>Group by</span>
-      <select (change)="by.set(asSelect($event).value)">
-        @for (g of groups; track g.id) {
-          <option [value]="g.id" [selected]="g.id === by()">{{ g.label }}</option>
-        }
-      </select>
-    </label>
-    <label>
-      <span>What if everything ran on…</span>
-      <input
-        type="text"
-        placeholder="model id prefix, e.g. claude-haiku-4-5"
-        [value]="draft()"
-        (input)="draft.set(asInput($event).value)"
+    <hx-field label="Group by">
+      <hx-select
+        fluid
+        [options]="groups"
+        optionLabel="label"
+        optionValue="id"
+        [value]="by()"
+        (valueChange)="by.set($any($event))"
       />
-    </label>
-    <button type="submit">Compare</button>
-    @if (whatIf()) {
-      <button type="button" (click)="clearWhatIf()">Clear</button>
-    }
+    </hx-field>
+    <hx-field
+      label="What if everything ran on…"
+      hint="A model id prefix, for example claude-haiku-4-5."
+      [error]="entryError()"
+    >
+      <input
+        hx-input
+        fluid
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        [value]="draft()"
+        (input)="edit($event)"
+      />
+    </hx-field>
+    <div class="actions">
+      <button hx-button type="submit">Compare</button>
+      <button
+        hx-button
+        type="button"
+        variant="text"
+        severity="secondary"
+        [disabled]="!draft() && !whatIf() && !entryError()"
+        (click)="clearWhatIf()"
+      >
+        Clear
+      </button>
+    </div>
   </form>
   @if (without.items().length > 0) {
     <ul class="chips" aria-label="What if removed">
       @for (item of without.items(); track item) {
-        <li class="chip">
-          {{ item }}
-          <button type="button" [attr.aria-label]="'Remove ' + item" (click)="without.remove(item)">
-            ×
-          </button>
+        <li>
+          <hx-chip
+            class="chip"
+            removable
+            [label]="item"
+            [removeLabel]="'Remove ' + item"
+            (remove)="without.remove(item)"
+          />
         </li>
       }
     </ul>
@@ -50,8 +70,8 @@
   <app-status
     [loading]="res.isLoading()"
     [error]="res.error()"
-    [warnings]="res.value()?.warnings ?? 0"
-    [errors]="res.value()?.errors ?? []"
+    [warnings]="answer()?.warnings ?? 0"
+    [errors]="answer()?.errors ?? []"
   />
   @if (compare()) {
     <app-trend-cards
@@ -101,7 +121,7 @@
       million tokens, keyed by model-id prefix).
     </p>
   }
-  @if (res.value()?.data?.what_if; as w) {
+  @if (answer()?.data?.what_if; as w) {
     <h3>What if everything ran on {{ w.target }}?</h3>
     <hx-data-table
       [value]="whatIfRows()"
@@ -118,7 +138,7 @@
       and are left out of both sides.
     </p>
   }
-  @if (res.value()?.data?.without; as w) {
+  @if (answer()?.data?.without; as w) {
     <h3>What if removed</h3>
     <hx-data-table
       [value]="withoutRows()"

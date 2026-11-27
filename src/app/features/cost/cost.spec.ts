@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { NO_ERRORS_SCHEMA } from "@angular/core";
-import { HxCell, HxDataTable } from "@gravionlabs/helix-ui";
+import {
+  HxButton,
+  HxCell,
+  HxChip,
+  HxDataTable,
+  HxField,
+  HxInput,
+  HxSelect,
+} from "@gravionlabs/helix-ui";
 import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
@@ -63,10 +71,13 @@ const baseRows = [
 
 let withoutReport: WithoutReport | null = null;
 let lastArgs: Record<string, unknown> = {};
+let failure = "";
 
 class FakeIpc extends Ipc {
   override async invoke<T>(_command: string, args?: Record<string, unknown>): Promise<T> {
     lastArgs = args ?? {};
+    if (lastArgs["whatIf"] === "nope") throw "no price for the what-if model `nope`";
+    if (failure) throw failure;
     const data = {
       report: { rows, total: rows[0], unpriced_models: {} },
       what_if: null,
@@ -86,16 +97,23 @@ describe("Cost table on helix", () => {
     rows = baseRows;
     withoutReport = null;
     lastArgs = {};
+    failure = "";
     TestBed.configureTestingModule({
       providers: [{ provide: Ipc, useClass: FakeIpc }, provideRouter([])],
     });
   });
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    document.querySelectorAll(".cdk-overlay-container").forEach((e) => e.remove());
+  });
 
   async function render(before: (w: WithoutService) => void = () => undefined) {
-    // Signal inputs of app components need the Angular compiler plugin; only the table is under test.
+    // Signal inputs of app components need the Angular compiler plugin; only helix is rendered.
     TestBed.overrideComponent(Cost, {
-      set: { imports: [HxDataTable, HxCell], schemas: [NO_ERRORS_SCHEMA] },
+      set: {
+        imports: [HxDataTable, HxCell, HxField, HxSelect, HxInput, HxButton, HxChip],
+        schemas: [NO_ERRORS_SCHEMA],
+      },
     });
     before(TestBed.inject(WithoutService));
     const fixture = TestBed.createComponent(Cost);
@@ -221,7 +239,7 @@ describe("Cost table on helix", () => {
     const chips = [...el.querySelectorAll(".chip")].map((c) =>
       c.textContent!.replace(/\s+/g, " ").trim(),
     );
-    expect(chips).toEqual(["skill:demo ×", "mcp-server:github ×"]);
+    expect(chips).toEqual(["skill:demo", "mcp-server:github"]);
     expect(lastArgs["without"]).toEqual(["skill:demo", "mcp-server:github"]);
     el.querySelector<HTMLButtonElement>('.chip button[aria-label="Remove skill:demo"]')!.click();
     fixture.detectChanges();
@@ -229,6 +247,130 @@ describe("Cost table on helix", () => {
     fixture.detectChanges();
     expect(TestBed.inject(WithoutService).items()).toEqual(["mcp-server:github"]);
     expect(lastArgs["without"]).toEqual(["mcp-server:github"]);
+  });
+
+  type View = Awaited<ReturnType<typeof render>>;
+
+  const settle = async ({ fixture }: View) => {
+    // An error of the analysis resets the what-if, which starts a second request.
+    for (let i = 0; i < 3; i++) {
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+    fixture.detectChanges();
+  };
+
+  const input = (el: HTMLElement) => el.querySelector<HTMLInputElement>("form input[hx-input]")!;
+  const button = (el: HTMLElement, name: string) =>
+    [...el.querySelectorAll<HTMLButtonElement>("form button[hx-button]")].find(
+      (b) => b.textContent!.trim() === name,
+    )!;
+
+  async function type(view: View, text: string) {
+    input(view.el).value = text;
+    input(view.el).dispatchEvent(new Event("input", { bubbles: true }));
+    await settle(view);
+  }
+
+  /** The text of the elements `aria-describedby` of the input names. */
+  const description = (el: HTMLElement) =>
+    (input(el).getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => el.querySelector(`[id="${id}"]`)?.textContent?.trim() ?? "")
+      .join(" ");
+
+  it("labels both fields, describes the input and has one filled primary button", async () => {
+    const view = await render();
+    await settle(view);
+    const { el } = view;
+    const labels = [...el.querySelectorAll("form hx-field label")];
+    expect(labels.map((l) => l.textContent!.trim())).toEqual([
+      "Group by",
+      "What if everything ran on…",
+    ]);
+    expect(labels[1].getAttribute("for")).toBe(input(el).id);
+    expect(description(el)).toContain("model id prefix");
+    expect(input(el).getAttribute("aria-invalid")).toBeNull();
+    const primary = [...el.querySelectorAll("form button[hx-button]")].filter(
+      (b) => !b.classList.contains("hx-button-text"),
+    );
+    expect(primary.map((b) => b.textContent!.trim())).toEqual(["Compare"]);
+    expect(button(el, "Compare").type).toBe("submit");
+    expect(button(el, "Clear").type).toBe("button");
+    expect(button(el, "Clear").disabled).toBe(true);
+  });
+
+  it("regroups by the choice of the select", async () => {
+    const view = await render();
+    view.el.querySelector<HTMLElement>('hx-select [role="combobox"]')!.click();
+    await settle(view);
+    [...document.querySelectorAll<HTMLElement>('[role="option"]')]
+      .find((o) => o.textContent!.trim() === "Branch")!
+      .click();
+    await settle(view);
+    expect(lastArgs["by"]).toBe("branch");
+  });
+
+  it("applies the what-if by Enter, through the submit button of the form", async () => {
+    const view = await render();
+    await type(view, "  model-x ");
+    // jsdom has no implicit submission: Enter submits through the form's submit button.
+    const form = input(view.el).form!;
+    form.requestSubmit(form.querySelector<HTMLButtonElement>('button[type="submit"]'));
+    await settle(view);
+    expect(lastArgs["whatIf"]).toBe("model-x");
+  });
+
+  it("applies the what-if by Compare and resets it by Clear", async () => {
+    const view = await render();
+    await type(view, "model-x");
+    button(view.el, "Compare").click();
+    await settle(view);
+    expect(lastArgs["whatIf"]).toBe("model-x");
+    button(view.el, "Clear").click();
+    await settle(view);
+    expect(lastArgs["whatIf"]).toBeNull();
+    expect(input(view.el).value).toBe("");
+    expect(button(view.el, "Clear").disabled).toBe(true);
+  });
+
+  it("shows the error of an empty entry below the field until the entry changes", async () => {
+    const view = await render();
+    await type(view, "   ");
+    button(view.el, "Compare").click();
+    await settle(view);
+    expect(input(view.el).getAttribute("aria-invalid")).toBe("true");
+    expect(description(view.el)).toContain("Enter a model id prefix.");
+    expect(lastArgs["whatIf"]).toBeNull();
+    await type(view, "m");
+    expect(input(view.el).getAttribute("aria-invalid")).toBeNull();
+    expect(view.el.textContent).not.toContain("Enter a model id prefix.");
+  });
+
+  it("shows a model without a price below the field and keeps the cost table", async () => {
+    const view = await render();
+    await type(view, "nope");
+    button(view.el, "Compare").click();
+    await settle(view);
+    expect(input(view.el).getAttribute("aria-invalid")).toBe("true");
+    expect(description(view.el)).toContain("no price for the what-if model `nope`");
+    expect(input(view.el).value).toBe("nope");
+    expect(lastArgs["whatIf"]).toBeNull();
+    expect(firstColumn(view.el)).toHaveLength(3);
+    expect(button(view.el, "Clear").disabled).toBe(false);
+    button(view.el, "Clear").click();
+    await settle(view);
+    expect(input(view.el).getAttribute("aria-invalid")).toBeNull();
+    expect(input(view.el).value).toBe("");
+  });
+
+  it("leaves a failure that is not about the entry to the status of the view", async () => {
+    failure = "cannot read the price table";
+    const view = await render();
+    await settle(view);
+    expect(input(view.el).getAttribute("aria-invalid")).toBeNull();
+    expect(view.el.textContent).not.toContain("cannot read the price table");
+    expect(firstColumn(view.el)).not.toContain("model-a");
   });
 
   it("shows the without table with tildes, a total row, the notes and the warnings", async () => {
