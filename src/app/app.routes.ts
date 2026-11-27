@@ -75,5 +75,5 @@ const views: Routes = [
   { path: "**", redirectTo: "overview" },
 ];
 
-/** Every view sits in the frame with the filter toolbar; the shell (topbar, nav, status bar) is in `App`. */
+/** Every view sits in the frame with the filter toolbar; the shell (page header with the filters, nav, status bar) is in `App`. */
 export const routes: Routes = [{ path: "", component: ViewFrame, children: views }];

@@ -25,23 +25,31 @@ import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../c
   imports: [HxSelect, HxMultiSelect, HxInput, HxDateTimeRangePicker, HxSwitch],
   templateUrl: "./filter-bar.html",
   styles: `
-    /* Projected into the topbar (helixTopbarEnd): it takes the free width there. */
+    /* A topbar action in the page header: it takes the free width there. */
     :host {
       display: block;
       flex: 1 1 auto;
       min-width: 0;
     }
-    /* The topbar has a fixed height: one row that shrinks, never wraps. */
+    /* The page header has a fixed height: one row that shrinks, never wraps. */
     .bar {
       display: flex;
       flex-wrap: nowrap;
       align-items: center;
       gap: 8px;
+      /* Where the fields do not fit side by side, the row scrolls inside the header. */
+      overflow-x: auto;
+      padding: 3px;
+      scrollbar-width: thin;
     }
     .field {
       flex: 1 1 11rem;
       min-width: 7rem;
       max-width: 18rem;
+    }
+    /* The number and the unit stay readable when the row scrolls. */
+    .field.last {
+      min-width: 11rem;
     }
     .pair {
       display: grid;
@@ -52,10 +60,10 @@ import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../c
       min-width: 14rem;
       max-width: 24rem;
     }
-    /* Below the topbar, so it never changes the topbar height. */
+    /* Below the page header, so it never changes the header height. */
     .error {
       position: fixed;
-      top: calc(var(--helix-topbar-height, 4rem) + 4px);
+      top: calc(var(--helix-topbar-height, 3rem) + 2 * var(--helix-panel-gap, 4px) + 4px);
       right: 1rem;
       z-index: 998;
       margin: 0;
@@ -74,7 +82,7 @@ import { SOURCES, type Answer, type EfficiencyReport, type SourceId } from "../c
       font-size: 0.85rem;
       white-space: nowrap;
     }
-    /* The fields keep their labels for assistive technology; the topbar has no room to show them. */
+    /* The fields keep their labels for assistive technology; the header has no room to show them. */
     label:not(.compare) {
       position: absolute;
       width: 1px;

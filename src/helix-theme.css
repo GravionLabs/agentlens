@@ -75,13 +75,23 @@
   --h-navigation-item-focus-background: color-mix(in srgb, var(--panel), var(--text) 6%);
   --h-navigation-item-active-background: color-mix(in srgb, var(--panel), var(--text) 6%);
 
-  /* Shell: ground, chrome (status bar), cards and borders are the app's own */
+  /* Surface roles (22.3): the frame around the inset panels, the panels, cards, overlays, borders */
+  --h-surface-frame: var(--bg);
+  --h-surface-panel: var(--panel);
+  --h-surface-card: var(--panel);
+  --h-surface-overlay: var(--panel);
+  --h-surface-hover: color-mix(in srgb, var(--panel), var(--text) 6%);
+  --h-border-panel: var(--line);
+  --h-border-divider: var(--line);
+
+  /* Shell: ground, chrome (the frame with the status bar), cards and borders are the app's own */
   --helix-surface-ground: var(--bg);
-  --helix-surface-chrome: var(--panel);
+  --helix-surface-chrome: var(--bg);
   --helix-surface-card: var(--panel);
   --helix-surface-overlay: var(--panel);
   --helix-surface-hover: color-mix(in srgb, var(--panel), var(--text) 6%);
   --helix-border: var(--line);
+  --helix-divider: var(--line);
   --surface-ground: var(--helix-surface-ground);
   --surface-card: var(--helix-surface-card);
   --surface-overlay: var(--helix-surface-overlay);

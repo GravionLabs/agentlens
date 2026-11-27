@@ -30,7 +30,7 @@ The Sources view shows the top tip in a card above the source cards (headline, s
 
 ## Filters and refresh
 
-The filter bar in the top bar sets the period, the sources and the project for every view. The application keeps the sessions it has read for a few minutes so that switching views is quick; **Refresh** in the top bar forgets them and reads the files again. On a narrow window the top bar folds Refresh into its menu.
+The filter bar in the page header, above the view, sets the period, the sources and the project for every view. The application keeps the sessions it has read for a few minutes so that switching views is quick; **Refresh** next to the filter bar forgets them and reads the files again. On a narrow window the navigation opens with the menu button in the page header, and the filter bar scrolls sideways.
 
 ### Period
 
@@ -55,7 +55,7 @@ The comparison window is always the previous period; choosing another one is a C
 
 ## Tables
 
-Tables are sortable by their column headers. Where a table has a filter (for example the group of the cache efficiency table or the skill and kind columns), it is a filter row under the headers, one field per filterable column, instead of a single search box. Filtering by source is left to the filter bar in the top bar. Long tables have a paginator; its rows-per-page list ends with **Show all**.
+Tables are sortable by their column headers. Where a table has a filter (for example the group of the cache efficiency table or the skill and kind columns), it is a filter row under the headers, one field per filterable column, instead of a single search box. Filtering by source is left to the filter bar in the page header. Long tables have a paginator; its rows-per-page list ends with **Show all**.
 
 ## Explaining the numbers
 

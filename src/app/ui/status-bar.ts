@@ -16,10 +16,14 @@ import { UpdateStatus } from "./update-status";
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./status-bar.html",
   styles: `
+    /* The bar of the shell is 28px high with 12px text: the controls stay inside it. */
     :host {
       display: block;
-      font-size: 0.85rem;
     }
+    :host ::ng-deep button {
+      height: 24px;
+    }
+
     .end,
     .zoom {
       display: inline-flex;

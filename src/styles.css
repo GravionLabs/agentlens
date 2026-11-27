@@ -216,3 +216,42 @@ main > router-outlet ~ * {
 .btn-sm.btn-link {
   padding: 0 4px;
 }
+
+/*
+ * The page header of the shell holds the filter bar as an action of its end zone: the title takes
+ * what it needs and the end zone the rest (the shell splits the free width between the two).
+ */
+.layout-wrapper .layout-panel helix-topbar .layout-topbar {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.layout-wrapper .layout-topbar .layout-topbar-end {
+  grid-column: 2;
+}
+
+/* The command line tools open a panel above the status bar; the shell's bar would clip it. */
+.layout-wrapper helix-status-bar .helix-status-bar {
+  overflow: visible;
+}
+
+/* A phone-sized window: the status bar keeps its controls and drops the texts. */
+@media (max-width: 479px) {
+  .layout-wrapper helix-status-bar :is(.helix-status-bar-brand, .helix-status-bar-note),
+  .layout-wrapper helix-status-bar :is(.helix-status-bar-versions, app-status-bar .demo-link) {
+    display: none;
+  }
+}
+
+/*
+ * Narrow window: the overlay nav rail is flush with the window. The shell means the same, but the
+ * rail's own style wins over it (helix-shell 22.10.0) and leaves a strip of the closed rail visible.
+ */
+@media (max-width: 991px) {
+  .layout-wrapper helix-nav-rail .helix-nav-rail {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    border-width: 0 1px 0 0;
+    border-radius: 0;
+  }
+}
