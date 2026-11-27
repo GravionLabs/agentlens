@@ -139,7 +139,7 @@ export function inView(kind: ContextKind, view: View): boolean {
       margin: var(--h-space-2) 0;
     }
     .est {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })

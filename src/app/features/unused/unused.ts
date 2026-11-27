@@ -80,7 +80,7 @@ export function unusedView(i: UnusedItem): UnusedView {
       white-space: nowrap;
     }
     .est {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })

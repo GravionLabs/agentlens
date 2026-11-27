@@ -64,7 +64,7 @@ export const METRICS: Metric[] = [
       font-variant-numeric: tabular-nums;
     }
     .est {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })

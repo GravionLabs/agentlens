@@ -79,7 +79,7 @@ export function errorRate(t: ToolErrors): number | null {
   styles: `
     h3 {
       margin: 20px 0 6px;
-      font-size: 1.05rem;
+      font-size: var(--h-font-size-md);
     }
     hx-tabs {
       display: block;

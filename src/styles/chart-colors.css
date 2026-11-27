@@ -1,0 +1,17 @@
+/*
+ * The chart series of AgentLens. The only literal colors of the app: Helix has no chart tokens
+ * (#557, deviation in docs/STYLEGUIDE.md). `app-dark` is set on <html> by HelixDark.
+ */
+:root {
+  --c-baseline: #d97706;
+  --c-load: #2563eb;
+  --c-carry: #7c3aed;
+  --c-follow: #059669;
+}
+
+:root.app-dark {
+  --c-baseline: #f59e0b;
+  --c-load: #60a5fa;
+  --c-carry: #a78bfa;
+  --c-follow: #34d399;
+}

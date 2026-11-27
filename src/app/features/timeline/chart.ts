@@ -67,11 +67,11 @@ export function markerLabel(kind: MarkerKind): string {
 
 export const MARKER_COLORS: Record<MarkerKind["type"], string> = {
   skill: "var(--c-load)",
-  compaction: "var(--bad)",
-  "tool-error": "var(--warn)",
+  compaction: "var(--h-tag-danger-color)",
+  "tool-error": "var(--h-tag-warn-color)",
   "hook-failed": "var(--c-carry)",
-  "permission-prompt": "var(--muted)",
-  "model-switch": "var(--accent)",
+  "permission-prompt": "var(--h-text-muted-color)",
+  "model-switch": "var(--h-primary-color)",
 };
 
 /** Markers sit between two requests: the x of the gap before request `request`. */

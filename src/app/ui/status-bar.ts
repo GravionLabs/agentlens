@@ -34,7 +34,7 @@ import { UpdateStatus } from "./update-status";
       gap: 2px;
     }
     .demo-link {
-      color: var(--accent);
+      color: var(--h-primary-color);
       white-space: nowrap;
     }
   `,

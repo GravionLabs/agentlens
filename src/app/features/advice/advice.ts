@@ -133,20 +133,20 @@ const COPIED_MS = 2000;
       margin: 12px 0 8px;
     }
     .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
+      background: var(--h-surface-card);
+      border: 1px solid var(--h-border-panel);
       border-radius: 10px;
       padding: 12px 16px;
       margin: 0 0 10px;
     }
     .card h4 {
       margin: 0 0 6px;
-      font-size: 1rem;
+      font-size: var(--h-font-size-md);
     }
     .confidence {
       margin-left: 8px;
-      font-size: 0.8rem;
-      color: var(--muted);
+      font-size: var(--h-font-size-xs);
+      color: var(--h-text-muted-color);
     }
     .target {
       margin: 6px 0;
@@ -162,12 +162,12 @@ const COPIED_MS = 2000;
       margin: 2px 0 2px 12px;
     }
     .client {
-      color: var(--muted);
-      font-size: 0.85rem;
+      color: var(--h-text-muted-color);
+      font-size: var(--h-font-size-sm);
     }
     code {
       font-family: ui-monospace, monospace;
-      font-size: 0.85rem;
+      font-size: var(--h-font-size-sm);
       word-break: break-all;
     }
     .manual {
@@ -186,14 +186,14 @@ const COPIED_MS = 2000;
       margin: 6px 0;
     }
     .rank {
-      color: var(--muted);
+      color: var(--h-text-muted-color);
     }
     .note {
       margin: 2px 0;
-      font-size: 0.85rem;
+      font-size: var(--h-font-size-sm);
     }
     .est {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })

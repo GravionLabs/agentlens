@@ -30,6 +30,7 @@
               "node_modules/@gravionlabs/helix-ui/styles.css",
               "node_modules/@gravionlabs/helix-shell/styles.css",
               "src/styles.css",
+              "src/styles/chart-colors.css",
               "src/helix-theme.css"
             ]
           },

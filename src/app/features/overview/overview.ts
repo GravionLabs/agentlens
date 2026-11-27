@@ -24,14 +24,14 @@ import { Status } from "../../ui/status";
       margin-top: 12px;
     }
     .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
+      background: var(--h-surface-card);
+      border: 1px solid var(--h-border-panel);
       border-radius: 10px;
       padding: 12px 16px;
     }
     .card h3 {
       margin: 0 0 6px;
-      font-size: 1rem;
+      font-size: var(--h-font-size-md);
     }
     .top-tip {
       margin-top: 12px;
@@ -43,27 +43,27 @@ import { Status } from "../../ui/status";
       opacity: 0.65;
     }
     .big {
-      font-size: 1.6rem;
+      font-size: var(--h-font-size-2xl);
       font-weight: 650;
       margin: 0;
       font-variant-numeric: tabular-nums;
     }
     .big span {
-      font-size: 0.9rem;
+      font-size: var(--h-font-size-sm);
       font-weight: 400;
-      color: var(--muted);
+      color: var(--h-text-muted-color);
     }
     .path {
-      font-size: 0.8rem;
-      color: var(--muted);
+      font-size: var(--h-font-size-xs);
+      color: var(--h-text-muted-color);
       word-break: break-all;
       margin: 4px 0 0;
     }
     .warn {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
     .error {
-      color: var(--bad);
+      color: var(--h-tag-danger-color);
     }
   `,
 })

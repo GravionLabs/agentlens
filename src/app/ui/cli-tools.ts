@@ -32,10 +32,10 @@ type Busy = "install" | "remove" | null;
       width: min(480px, 90vw);
       /* The status bar does not wrap its text; the panel does. */
       white-space: normal;
-      background: var(--panel);
-      border: 1px solid var(--line);
+      background: var(--h-surface-overlay);
+      border: 1px solid var(--h-border-panel);
       border-radius: 6px;
-      color: var(--text);
+      color: var(--h-text-color);
       user-select: text;
     }
     .actions {
@@ -61,15 +61,15 @@ type Busy = "install" | "remove" | null;
       margin: 6px 0;
     }
     .note {
-      font-size: 0.85rem;
-      color: var(--muted);
+      font-size: var(--h-font-size-sm);
+      color: var(--h-text-muted-color);
     }
     .path,
     .line {
       overflow-wrap: anywhere;
     }
     .err {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })

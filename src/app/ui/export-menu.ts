@@ -22,15 +22,15 @@ const LABELS: Record<ExportFormat, string> = {
       gap: 8px;
     }
     .note {
-      font-size: 0.85rem;
-      color: var(--muted);
+      font-size: var(--h-font-size-sm);
+      color: var(--h-text-muted-color);
       max-width: 340px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .err {
-      color: var(--warn);
+      color: var(--h-tag-warn-color);
     }
   `,
 })

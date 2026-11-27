@@ -37,7 +37,7 @@ const MARKER_LEGEND = [
   styles: `
     h3 {
       margin: 16px 0 4px;
-      font-size: 1.05rem;
+      font-size: var(--h-font-size-md);
     }
     .pick {
       width: fit-content;
@@ -46,35 +46,35 @@ const MARKER_LEGEND = [
       margin: var(--h-space-2) 0;
     }
     .meta {
-      color: var(--muted);
+      color: var(--h-text-muted-color);
       margin: 8px 0 0;
     }
     svg {
       display: block;
       width: 100%;
       height: auto;
-      background: var(--panel);
-      border: 1px solid var(--line);
+      background: var(--h-surface-card);
+      border: 1px solid var(--h-border-panel);
       border-radius: 10px;
     }
     text {
-      fill: var(--muted);
-      font-size: 11px;
+      fill: var(--h-text-muted-color);
+      font-size: var(--h-font-size-xs);
       font-family: inherit;
     }
     .grid {
-      stroke: var(--line);
+      stroke: var(--h-border-panel);
     }
     .area {
-      fill: color-mix(in srgb, var(--accent) 18%, transparent);
+      fill: color-mix(in srgb, var(--h-primary-color) 18%, transparent);
     }
     .line {
       fill: none;
-      stroke: var(--accent);
+      stroke: var(--h-primary-color);
       stroke-width: 1.5;
     }
     circle {
-      fill: var(--accent);
+      fill: var(--h-primary-color);
     }
     .marker {
       stroke-width: 1;
