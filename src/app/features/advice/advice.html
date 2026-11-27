@@ -69,7 +69,13 @@
                     {{ copied() === tip.rank + "-" + ti + "-" + si ? "Copied" : "Copy" }}
                   </button>
                   @if (failed() === tip.rank + "-" + ti + "-" + si) {
-                    <textarea class="manual" readonly rows="3" [value]="text(step)"></textarea>
+                    <textarea
+                      hx-input
+                      class="manual"
+                      readonly
+                      rows="3"
+                      [value]="text(step)"
+                    ></textarea>
                   }
                 </div>
               }

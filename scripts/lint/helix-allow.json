@@ -1,0 +1,11 @@
+{
+  "comment": "Exceptions to the helix-lint preset (#559). Every entry needs `files` (file paths, no globs), `rules` and a `reason`; helixAllow throws without one and so fails `pnpm lint`. One entry per file and rule, no directory globs. Remove an entry when its file migrates. Stylelint rules and `helix/no-raw-control` are listed under their own key.",
+  "stylelint": [
+    {
+      "files": ["src/styles/chart-colors.css"],
+      "rules": ["color-no-hex"],
+      "reason": "The chart series colors (--c-baseline, --c-load, --c-carry, --c-follow) are literals because Helix has no chart tokens (decision of #557)"
+    }
+  ],
+  "eslint": []
+}

@@ -42,6 +42,10 @@ The data rule is in [AGENTS.md](../AGENTS.md#rules) (*Measured vs. estimated*); 
 
 - The *What if* form of the cost view (`src/app/features/cost/cost.html`) is the reference form: copy its structure for a new form. It is a single narrow column of `hx-field`s with a text *Clear* next to the submit button, and an entry that the core rejects shows its error below the field.
 
+## Lint
+
+`pnpm lint` and CI enforce the base guide with the Helix lint preset: no raw control in a template, no literal color, font sizes from the type scale, no component CSS for a native control or a `.btn*` class. An exception is an entry with a reason in `scripts/lint/helix-allow.json`: one entry per file and rule, listed under Deviations when it departs from the base guide. See `AGENTS.md`, Lint and format.
+
 ## Deviations
 
 | Base rule | This project | Reason |

@@ -58,7 +58,7 @@ jobs:
             echo "windows=false" >> "$GITHUB_OUTPUT"
           fi
           # Same list as the former `paths` filter.
-          pattern='^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|angular\.json|tsconfig[^/]*\.json|eslint\.config\.mjs|\.oxlintrc\.json|\.oxfmtrc\.json|vitest\.[^/]*|src/.*|src-tauri/.*|crates/agentlens-core/.*|\.github/workflows/app\.yml)$'
+          pattern='^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|angular\.json|tsconfig[^/]*\.json|eslint\.config\.mjs|stylelint\.config\.mjs|scripts/lint/.*|\.oxlintrc\.json|\.oxfmtrc\.json|vitest\.[^/]*|src/.*|src-tauri/.*|crates/agentlens-core/.*|\.github/workflows/app\.yml)$'
           git diff --name-only "$BASE_SHA" HEAD > changed.txt
           cat changed.txt
           if grep -Eq "$pattern" changed.txt; then
