@@ -38,10 +38,16 @@
   <app-stacked-bars [rows]="bars()" label="Skill overhead split into baseline, load and carry" />
 
   <h3>All skills</h3>
-  <label class="check">
-    <input type="checkbox" [checked]="usedOnly()" (change)="usedOnly.set(!usedOnly())" />
-    Used skills only
-  </label>
+  <div class="toggle">
+    <hx-field label="Used skills only">
+      <input
+        hx-switch
+        type="checkbox"
+        [checked]="usedOnly()"
+        (change)="usedOnly.set(!usedOnly())"
+      />
+    </hx-field>
+  </div>
   <hx-data-table
     [value]="views()"
     [sortFunction]="sort"

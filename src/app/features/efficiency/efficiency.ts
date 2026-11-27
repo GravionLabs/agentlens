@@ -19,7 +19,14 @@ import { nullsLast } from "../../ui/sort";
 import { trendStat } from "../../ui/stat-cards";
 import { Status } from "../../ui/status";
 import { TrendCards } from "../../ui/trend-cards";
-import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  HxField,
+  HxSelect,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 type By = "source" | "project" | "session";
 
@@ -56,7 +63,18 @@ export function subagentView(s: SubagentShare): SubagentView {
 
 @Component({
   selector: "app-efficiency",
-  imports: [PageHeader, Term, Status, TrendCards, HxDataTable, HxCell, HxColumnHeader, HelpLink],
+  imports: [
+    PageHeader,
+    Term,
+    Status,
+    TrendCards,
+    HxDataTable,
+    HxCell,
+    HxColumnHeader,
+    HxField,
+    HxSelect,
+    HelpLink,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./efficiency.html",
   styles: `
@@ -65,19 +83,10 @@ export function subagentView(s: SubagentShare): SubagentView {
       font-size: 1.05rem;
     }
     .by {
-      display: inline-flex;
-      flex-direction: column;
-      gap: 2px;
-      color: var(--muted);
-      font-size: 0.85rem;
-      margin: 8px 0;
-    }
-    select {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 5px 8px;
+      width: fit-content;
+      min-width: 16rem;
+      max-width: 100%;
+      margin: var(--h-space-2) 0;
     }
   `,
 })
@@ -172,7 +181,8 @@ export class Efficiency {
     },
   ];
 
-  protected asSelect(e: Event): { value: By } {
-    return e.target as unknown as { value: By };
+  protected setBy(value: By | null): void {
+    // A cleared value is ignored: the table always has a grouping.
+    if (value) this.by.set(value);
   }
 }

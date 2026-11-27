@@ -11,14 +11,11 @@
       “n/a”: the client reports no cache tokens.
     </p>
   </app-page-header>
-  <label class="by">
-    <span>Group the cache table by</span>
-    <select (change)="by.set(asSelect($event).value)">
-      @for (o of options; track o) {
-        <option [value]="o" [selected]="o === by()">{{ o }}</option>
-      }
-    </select>
-  </label>
+  <div class="by">
+    <hx-field label="Group the cache table by">
+      <hx-select fluid [options]="options" [value]="by()" (valueChange)="setBy($event)" />
+    </hx-field>
+  </div>
   <app-status
     [loading]="res.isLoading()"
     [error]="res.error()"

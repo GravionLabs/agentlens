@@ -11,14 +11,19 @@
     [errors]="list.value()?.errors ?? []"
   />
   @if (sessions().length > 0) {
-    <label class="pick">
-      <span>Session</span>
-      <select (change)="choose($event)">
-        @for (s of sessions(); track key(s)) {
-          <option [value]="key(s)" [selected]="key(s) === current()">{{ describe(s) }}</option>
-        }
-      </select>
-    </label>
+    <div class="pick">
+      <hx-field label="Session">
+        <hx-select
+          fluid
+          [filter]="sessions().length >= 10"
+          [options]="sessions()"
+          [optionLabel]="describe"
+          [optionValue]="key"
+          [value]="current()"
+          (valueChange)="choose($event)"
+        />
+      </hx-field>
+    </div>
   } @else if (!list.isLoading()) {
     <p class="muted">No sessions with requests for the selected filters.</p>
   }

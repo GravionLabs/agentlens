@@ -18,10 +18,11 @@
     [warnings]="res.value()?.warnings ?? 0"
     [errors]="res.value()?.errors ?? []"
   />
-  <label class="check">
-    <input type="checkbox" [checked]="all()" (change)="all.set(!all())" />
-    Also show items that were used
-  </label>
+  <div class="toggle">
+    <hx-field label="Also show items that were used">
+      <input hx-switch type="checkbox" [checked]="all()" (change)="all.set(!all())" />
+    </hx-field>
+  </div>
   <hx-data-table
     [value]="views()"
     [sortFunction]="sort"

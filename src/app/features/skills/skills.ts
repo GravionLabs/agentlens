@@ -14,7 +14,14 @@ import { StatCards, trendStat } from "../../ui/stat-cards";
 import { TrendCards } from "../../ui/trend-cards";
 import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
-import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  HxField,
+  HxSwitch,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 const COLORS = { baseline: "var(--c-baseline)", load: "var(--c-load)", carry: "var(--c-carry)" };
 
@@ -84,6 +91,8 @@ export function skillView(s: SkillStats): SkillView {
     HxDataTable,
     HxCell,
     HxColumnHeader,
+    HxField,
+    HxSwitch,
     HelpLink,
     StackedBars,
     Legend,
@@ -95,12 +104,8 @@ export function skillView(s: SkillStats): SkillView {
       margin: 20px 0 4px;
       font-size: 1.05rem;
     }
-    .check {
-      display: inline-flex;
-      gap: 6px;
-      margin: 4px 16px 8px 0;
-      color: var(--muted);
-      align-items: center;
+    .toggle {
+      margin: var(--h-space-1) var(--h-space-4) var(--h-space-2) 0;
     }
     .est {
       color: var(--warn);

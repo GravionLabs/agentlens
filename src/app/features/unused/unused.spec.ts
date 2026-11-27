@@ -3,7 +3,7 @@ import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { BrowserTestingModule, platformBrowserTesting } from "@angular/platform-browser/testing";
 import { provideRouter } from "@angular/router";
-import { HxCell, HxColumnHeader, HxDataTable } from "@gravionlabs/helix-ui";
+import { HxCell, HxColumnHeader, HxDataTable, HxField, HxSwitch } from "@gravionlabs/helix-ui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Ipc } from "../../core/ipc";
 import { tokenFormat } from "../../core/token-format.service";
@@ -23,7 +23,7 @@ class FakeIpc extends Ipc {
 async function render() {
   TestBed.overrideComponent(Unused, {
     set: {
-      imports: [HxDataTable, HxCell, HxColumnHeader, HelpLinkStub],
+      imports: [HxDataTable, HxCell, HxColumnHeader, HxField, HxSwitch, HelpLinkStub],
       schemas: [NO_ERRORS_SCHEMA],
     },
   });
@@ -127,9 +127,18 @@ describe("Unused table on helix", () => {
     expect(
       [...el.querySelectorAll("hx-data-table th a.help")].map((a) => a.getAttribute("aria-label")),
     ).toEqual(["Explain Requests", "Explain Idle cost"]);
-    el.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+    const toggle = el.querySelector<HTMLInputElement>("input[hx-switch]")!;
+    expect(el.querySelector(`label[for="${toggle.id}"]`)!.textContent).toContain(
+      "Also show items that were used",
+    );
+    toggle.click();
     fixture.detectChanges();
     expect(column(el, 1)).toHaveLength(4);
+    toggle.click();
+    fixture.detectChanges();
+    expect(column(el, 1)).toHaveLength(3);
+    toggle.click();
+    fixture.detectChanges();
     const filter = el.querySelector<HTMLInputElement>(
       "hx-data-table .hx-data-table-filter-row input",
     )!;

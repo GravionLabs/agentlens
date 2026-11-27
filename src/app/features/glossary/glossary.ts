@@ -17,9 +17,9 @@ import { GLOSSARY_GROUPS, searchGlossary } from "../../core/glossary";
   imports: [HxInput],
   templateUrl: "./glossary.html",
   styles: `
-    input {
-      margin: 8px 0 4px;
-      width: min(320px, 100%);
+    .search {
+      margin: var(--h-space-2) 0 var(--h-space-1);
+      width: min(20rem, 100%);
     }
     h3 {
       margin: 18px 0 6px;

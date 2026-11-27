@@ -6,6 +6,7 @@ import { compact, day, number, sourceLabel, timeOfDay, usd } from "../../core/fo
 import type { SessionSummary, Timeline as TimelineData } from "../../core/types";
 import { Legend } from "../../ui/legend";
 import { Status } from "../../ui/status";
+import { HxField, HxSelect } from "@gravionlabs/helix-ui";
 import {
   HEIGHT,
   MARGIN,
@@ -30,7 +31,7 @@ const MARKER_LEGEND = [
 
 @Component({
   selector: "app-timeline",
-  imports: [PageHeader, Term, Status, Legend],
+  imports: [PageHeader, Term, Status, Legend, HxField, HxSelect],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./timeline.html",
   styles: `
@@ -39,20 +40,10 @@ const MARKER_LEGEND = [
       font-size: 1.05rem;
     }
     .pick {
-      display: inline-flex;
-      flex-direction: column;
-      gap: 2px;
-      color: var(--muted);
-      font-size: 0.85rem;
-      margin: 8px 0;
-    }
-    select {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 5px 8px;
+      width: fit-content;
+      min-width: min(24rem, 100%);
       max-width: 100%;
+      margin: var(--h-space-2) 0;
     }
     .meta {
       color: var(--muted);
@@ -188,8 +179,9 @@ export class Timeline {
     return `${day(s.ended_at)} · ${sourceLabel(s.source)} · ${where} · ${number(s.requests)} requests`;
   }
 
-  protected choose(e: Event): void {
-    this.picked.set((e.target as HTMLSelectElement).value);
+  protected choose(value: unknown): void {
+    // A cleared value is ignored: the view keeps the chosen session.
+    if (typeof value === "string") this.picked.set(value);
   }
 
   protected color(type: keyof typeof MARKER_COLORS): string {
