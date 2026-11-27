@@ -30,6 +30,7 @@ client files ─► Adapter ─► normalized events ─► Analyzer ─► repo
 - The CLI workflow (`ci.yml`) excludes the app crate and needs no system libraries; `app.yml` checks the frontend and the crate; its always-running `app` gate job (green when the checks passed or no app files changed) is the check required on `release/next`.
 - Build forms with `hx-field`, rows of a list with `hx-list-row` and toggles with `hx-select-button`; take text sizes from the type scale (`--h-font-size-*`) and gaps and paddings from the spacing tokens (`--h-space-*`), not from literal values. Global actions go into `topbarActions` of the shell (the page header); the nav rail only navigates.
 - Estimates carry a tilde and missing data is `n/a`, as in the CLI.
+- UI style guide, binding (a deviation needs a reason in the PR): before changing UI, read the base guide `node_modules/@gravionlabs/helix-ui/styleguide/STYLEGUIDE.md`, then [docs/STYLEGUIDE.md](docs/STYLEGUIDE.md) (our rules and deviations), and for feedback, dialogs, empty states and motion the Helix [UX-RULES.md](https://github.com/GravionLabs/helix/blob/v22.10.0/docs/UX-RULES.md); open a guide's deep-dive file when its condition applies.
 - Component templates live in a sibling `.html` file (`templateUrl`); an inline `template:` outside spec files fails `@angular-eslint/component-max-inline-declarations`. Specs run with JIT and without the Angular resource transform, so `vitest.config.mts` inlines a `templateUrl` when Vitest loads a component; test hosts in specs keep inline templates.
 
 ### Lint and format
