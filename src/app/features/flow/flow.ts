@@ -15,7 +15,18 @@ import type { FlowData, SessionGrowth, ToolErrors } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
 import { nullsLast } from "../../ui/sort";
 import { Status } from "../../ui/status";
-import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  HxTab,
+  HxTabContent,
+  HxTabList,
+  HxTabPanel,
+  HxTabPanels,
+  HxTabs,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 type Tab = "growth" | "errors" | "hooks";
 
@@ -49,7 +60,20 @@ export function errorRate(t: ToolErrors): number | null {
 
 @Component({
   selector: "app-flow",
-  imports: [PageHeader, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
+  imports: [
+    PageHeader,
+    Status,
+    HxDataTable,
+    HxCell,
+    HxColumnHeader,
+    HxTabs,
+    HxTabList,
+    HxTab,
+    HxTabPanels,
+    HxTabPanel,
+    HxTabContent,
+    HelpLink,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./flow.html",
   styles: `
@@ -57,25 +81,15 @@ export function errorRate(t: ToolErrors): number | null {
       margin: 20px 0 6px;
       font-size: 1.05rem;
     }
-    .tabs {
-      display: flex;
-      gap: 4px;
-      margin: 12px 0;
-      border-bottom: 1px solid var(--line);
-    }
-    .tabs button {
-      background: none;
-      border: 0;
-      border-bottom: 2px solid transparent;
-      color: var(--muted);
-      padding: 6px 14px;
-      cursor: pointer;
-      font: inherit;
-    }
-    .tabs button.on {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-      font-weight: 600;
+    hx-tabs {
+      display: block;
+      margin-top: var(--h-space-3);
+      /* The panels sit in the page, not in a card: no side padding. */
+      --h-tabs-tabpanel-padding: var(--h-space-3) 0 0;
+      /* The tab scroller clips what hangs below the tabs: keep the active bar inside. */
+      --h-tabs-tab-margin: 0;
+      --h-tabs-active-bar-bottom: 0;
+      --h-tabs-tab-border-color: transparent;
     }
   `,
 })
@@ -83,6 +97,12 @@ export class Flow {
   protected readonly res = analysis<FlowData>("flow");
   protected readonly tab = signal<Tab>("growth");
   protected readonly tabs = TABS;
+
+  /** `hx-tabs` reports a plain string; only one of the offered tabs sets the signal. */
+  protected selectTab(value: string | null): void {
+    const chosen = TABS.find((t) => t.id === value);
+    if (chosen) this.tab.set(chosen.id);
+  }
 
   protected readonly sort = nullsLast;
   protected readonly source = sourceLabel;

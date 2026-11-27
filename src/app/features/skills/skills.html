@@ -123,8 +123,12 @@
     <ng-template hxCell="last_used" let-value="value">{{ day(value) }}</ng-template>
     <ng-template hxCell="action" let-row>
       <button
+        hx-button
         type="button"
         class="what-if"
+        variant="text"
+        severity="secondary"
+        size="small"
         [disabled]="without.has('skill', row.name)"
         (click)="without.add('skill', row.name)"
       >

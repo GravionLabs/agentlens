@@ -47,9 +47,10 @@ describe("PageHeader", () => {
   it("folds the explanation open and closed with the Explain button", () => {
     const fixture = create();
     const el = fixture.nativeElement as HTMLElement;
-    const btn = el.querySelector<HTMLButtonElement>("button.explain")!;
+    const btn = el.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
     expect(btn.textContent?.trim()).toBe("Explain");
     expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(btn.classList).toContain("hx-button-text");
     btn.click();
     fixture.detectChanges();
     expect(btn.textContent?.trim()).toBe("Hide");

@@ -6,7 +6,13 @@ import { exactTokens, number, pathLabel, shortPath, sourceLabel, tokens } from "
 import type { ContextKind, ContextReport, ContextRow, Tokens } from "../../core/types";
 import { HelpLink, termTitle } from "../../ui/help-link";
 import { Status } from "../../ui/status";
-import { HxCell, HxColumnHeader, HxDataTable, type HxColumn } from "@gravionlabs/helix-ui";
+import {
+  HxCell,
+  HxColumnHeader,
+  HxDataTable,
+  HxSelectButton,
+  type HxColumn,
+} from "@gravionlabs/helix-ui";
 
 export interface Note {
   text: string;
@@ -42,6 +48,11 @@ const VIEWS: { id: View; label: string }[] = [
 ];
 
 type Grouping = "owner" | "project";
+
+const GROUPINGS: { id: Grouping; label: string }[] = [
+  { id: "owner", label: "By owner" },
+  { id: "project", label: "By project" },
+];
 
 /** Adds two counts; the sum is measured only if both are. */
 function add(a: Tokens, b: Tokens): Tokens {
@@ -108,29 +119,24 @@ export function inView(kind: ContextKind, view: View): boolean {
 
 @Component({
   selector: "app-context",
-  imports: [PageHeader, Term, Status, HxDataTable, HxCell, HxColumnHeader, HelpLink],
+  imports: [
+    PageHeader,
+    Term,
+    Status,
+    HxDataTable,
+    HxCell,
+    HxColumnHeader,
+    HxSelectButton,
+    HelpLink,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./context.html",
   styles: `
-    .views {
+    hx-select-button {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      margin: 8px 0;
-    }
-    .views button {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      height: auto;
-      padding: 3px 12px;
-      cursor: pointer;
-    }
-    .views button.on {
-      border-color: var(--accent);
-      color: var(--accent);
-      font-weight: 600;
+      width: fit-content;
+      margin: var(--h-space-2) 0;
     }
     .est {
       color: var(--warn);
@@ -143,11 +149,23 @@ export class Context {
   protected readonly views = VIEWS;
 
   protected readonly grouping = signal<Grouping>("owner");
+  protected readonly groupings = GROUPINGS;
 
   protected readonly source = sourceLabel;
   protected readonly shortPath = shortPath;
   protected readonly n = number;
   protected readonly exact = exactTokens;
+
+  /** `hx-select-button` reports an untyped value; only one of the offered options sets the signal. */
+  protected selectView(value: unknown): void {
+    const chosen = VIEWS.find((v) => v.id === value);
+    if (chosen) this.view.set(chosen.id);
+  }
+
+  protected selectGrouping(value: unknown): void {
+    const chosen = GROUPINGS.find((g) => g.id === value);
+    if (chosen) this.grouping.set(chosen.id);
+  }
 
   protected readonly rows = computed(() => {
     const shown = (this.res.value()?.data.rows ?? []).filter((r) => inView(r.kind, this.view()));

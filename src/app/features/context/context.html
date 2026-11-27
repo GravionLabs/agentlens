@@ -18,21 +18,22 @@
     [warnings]="res.value()?.warnings ?? 0"
     [errors]="res.value()?.errors ?? []"
   />
-  <div class="views" role="group" aria-label="Kind of context">
-    @for (v of views; track v.id) {
-      <button type="button" [class.on]="view() === v.id" (click)="view.set(v.id)">
-        {{ v.label }}
-      </button>
-    }
-  </div>
-  <div class="views" role="group" aria-label="Grouping">
-    <button type="button" [class.on]="grouping() === 'owner'" (click)="grouping.set('owner')">
-      By owner
-    </button>
-    <button type="button" [class.on]="grouping() === 'project'" (click)="grouping.set('project')">
-      By project
-    </button>
-  </div>
+  <hx-select-button
+    ariaLabel="Kind of context"
+    [options]="views"
+    optionValue="id"
+    [allowEmpty]="false"
+    [value]="view()"
+    (valueChange)="selectView($event)"
+  />
+  <hx-select-button
+    ariaLabel="Grouping"
+    [options]="groupings"
+    optionValue="id"
+    [allowEmpty]="false"
+    [value]="grouping()"
+    (valueChange)="selectGrouping($event)"
+  />
   <hx-data-table
     [value]="rows()"
     [columns]="columns()"

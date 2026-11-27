@@ -2,8 +2,11 @@
   <div helixPageActions class="actions">
     <span class="window" data-testid="window">{{ filters.windowLabel() }}</span>
     <button
+      hx-button
       type="button"
-      class="explain"
+      variant="text"
+      severity="secondary"
+      size="small"
       [attr.aria-expanded]="open()"
       [attr.aria-controls]="'details-' + title()"
       (click)="open.set(!open())"

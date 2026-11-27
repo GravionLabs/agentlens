@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, input, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { HelixPageHeader } from "@gravionlabs/helix-shell";
+import { HxButton } from "@gravionlabs/helix-ui";
 import { FiltersService } from "../core/filters.service";
 import type { ExportFormat } from "../core/export.service";
 import { ExportMenu } from "./export-menu";
@@ -8,7 +9,7 @@ import { ExportMenu } from "./export-menu";
 /** Title and a one-line summary; the longer explanation is folded away behind “Explain”. */
 @Component({
   selector: "app-page-header",
-  imports: [RouterLink, ExportMenu, HelixPageHeader],
+  imports: [RouterLink, ExportMenu, HelixPageHeader, HxButton],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./page-header.html",
   styles: `
@@ -23,16 +24,6 @@ import { ExportMenu } from "./export-menu";
     .window {
       color: var(--muted);
       font-size: 0.85rem;
-    }
-    .explain {
-      all: unset;
-      cursor: pointer;
-      color: var(--accent);
-      font-size: 0.85rem;
-      text-decoration: underline;
-    }
-    .explain:focus-visible {
-      outline: 2px solid var(--accent);
     }
     .details {
       margin: 8px 0;
