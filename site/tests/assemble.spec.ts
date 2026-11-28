@@ -1,11 +1,18 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { assemble, PIECES } from "../scripts/assemble.mts";
+
+const dirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
 
 function repo(pieces: Array<keyof typeof PIECES>): string {
   const dir = mkdtempSync(join(tmpdir(), "assemble-"));
+  dirs.push(dir);
   for (const piece of pieces) {
     const folder = join(dir, PIECES[piece]);
     mkdirSync(folder, { recursive: true });
