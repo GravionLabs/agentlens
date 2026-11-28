@@ -1,0 +1,103 @@
+{
+  "delivery": [
+    "deliver",
+    "deliver-review",
+    "grill-me",
+    "handoff",
+    "planner",
+    "poimen-lead",
+    "retro",
+    "roadmap",
+    "skills-manage"
+  ],
+  "dotnet": [
+    "dotnet-aspire",
+    "dotnet-create-solution",
+    "dotnet-implementation",
+    "dotnet-mcp-server-generator",
+    "dotnet-test"
+  ],
+  "github": [
+    "github-issue",
+    "github-milestone",
+    "github-pages",
+    "github-project",
+    "github-pull-request",
+    "github-release",
+    "github-triage",
+    "github-workflow-lint"
+  ],
+  "go": [
+    "go-implementation",
+    "go-test"
+  ],
+  "ng": [
+    "ng-ag-grid",
+    "ng-create-project",
+    "ng-helix",
+    "ng-implementation",
+    "ng-test"
+  ],
+  "py": [
+    "py-create-project",
+    "py-implementation",
+    "py-test"
+  ],
+  "rust": [
+    "rust-implementation",
+    "rust-test"
+  ],
+  "school": [
+    "school-exam",
+    "school-exercises",
+    "school-flashcards",
+    "school-summary",
+    "school-timeline"
+  ],
+  "shared": [
+    "adr",
+    "agents-md",
+    "architecture-survey",
+    "ast-grep-rules",
+    "check-prerequisites",
+    "code-review",
+    "detect-techstack",
+    "diagnose",
+    "glossary",
+    "implementation",
+    "lessons",
+    "project-setup",
+    "prototype",
+    "ratchet",
+    "secret-scan",
+    "ui-styleguide",
+    "wizard"
+  ],
+  "skill-tooling": [
+    "skill-audit",
+    "skill-slim",
+    "skill-write"
+  ],
+  "statusline": [
+    "context-statusline"
+  ],
+  "ts": [
+    "setup-oxc-husky",
+    "ts-create-project",
+    "ts-implementation",
+    "ts-mcp-server-generator",
+    "ts-pnpm-workflow",
+    "ts-test"
+  ],
+  "vault": [
+    "vault-clip",
+    "vault-decision",
+    "vault-inbox",
+    "vault-meeting",
+    "vault-pdf",
+    "vault-recipe",
+    "vault-setup",
+    "vault-summarize",
+    "vault-weekly-review"
+  ]
+}
